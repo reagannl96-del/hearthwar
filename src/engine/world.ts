@@ -53,7 +53,7 @@ export interface NewWorldOptions {
 }
 
 export function emptyStats(): PlayerStats {
-  return { loot: 0, killsAtt: 0, killsDef: 0, lostUnits: 0, conquered: 0, attacks: 0, scouted: 0, built: 0, recruited: 0 };
+  return { killsSup: 0, loot: 0, killsAtt: 0, killsDef: 0, lostUnits: 0, conquered: 0, attacks: 0, scouted: 0, built: 0, recruited: 0 };
 }
 
 function genTerrain(size: number, seed: number): string {

@@ -237,6 +237,7 @@ export function forumNewThread(w: World, pid: number, title: string, text: strin
   t.forum ??= [];
   const thread = { id: w.nextId++, title: ti, by: pid, t: w.now, posts: [{ id: w.nextId++, by: pid, t: w.now, text: tx }] };
   t.forum.unshift(thread);
+  (w.players[pid].forumSeen ??= {})[thread.id] = thread.posts[0].id;
   if (t.forum.length > FORUM_MAX_THREADS) t.forum.length = FORUM_MAX_THREADS;
   return { ok: true, data: thread.id };
 }
@@ -247,7 +248,9 @@ export function forumReply(w: World, pid: number, threadId: number, text: string
   if (!t || !th) return fail('That thread is gone.');
   const tx = String(text ?? '').trim().slice(0, 4000);
   if (!tx) return fail('Write something first.');
-  th.posts.push({ id: w.nextId++, by: pid, t: w.now, text: tx });
+  const post = { id: w.nextId++, by: pid, t: w.now, text: tx };
+  th.posts.push(post);
+  (w.players[pid].forumSeen ??= {})[th.id] = post.id;
   if (th.posts.length > FORUM_MAX_POSTS) th.posts.splice(1, th.posts.length - FORUM_MAX_POSTS);
   // active threads rise to the top (pinned ones stay above)
   t.forum = [th, ...t.forum!.filter((x) => x !== th)];
@@ -269,6 +272,29 @@ export function forumDelete(w: World, pid: number, threadId: number, postId?: nu
     th.posts = th.posts.filter((x) => x !== post);
   }
   return { ok: true };
+}
+
+export function forumRead(w: World, pid: number, threadId: number): ActionResult {
+  const t = tribeOf(w, pid);
+  const th = t?.forum?.find((x) => x.id === threadId);
+  if (!t || !th) return { ok: true };
+  const p = w.players[pid];
+  p.forumSeen ??= {};
+  p.forumSeen[threadId] = th.posts[th.posts.length - 1]?.id ?? 0;
+  // forget threads that no longer exist
+  for (const k in p.forumSeen) if (!t.forum!.some((x) => x.id === Number(k))) delete p.forumSeen[k];
+  return { ok: true };
+}
+
+/** Threads with posts this ruler hasn't read yet. */
+export function unreadThreads(w: World, pid: number): number[] {
+  const t = tribeOf(w, pid);
+  if (!t) return [];
+  const seen = w.players[pid]?.forumSeen ?? {};
+  return (t.forum ?? []).filter((th) => {
+    const last = th.posts[th.posts.length - 1];
+    return last && last.by !== pid && last.id > (seen[th.id] ?? 0);
+  }).map((th) => th.id);
 }
 
 export function forumPin(w: World, pid: number, threadId: number, sticky: boolean): ActionResult {

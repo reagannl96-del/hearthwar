@@ -88,7 +88,7 @@ export class VillageRenderer {
   private marches: { members: THREE.Group[]; path: THREE.Vector3[]; t: number; len: number; fadeIn: number; fadeOut: number }[] = [];
   private marchSeen = new Set<number>();
   private builders = new Map<BuildingId, { g: THREE.Group; arms: THREE.Object3D[] }>();
-  private militia: { g: THREE.Group; from: THREE.Vector3; to: THREE.Vector3; delay: number; t: number; face: number }[] = [];
+  private militia: { g: THREE.Group; from: THREE.Vector3; to: THREE.Vector3; delay: number; t: number; face: number; a: number }[] = [];
   private militiaOn = false;
 
   constructor(private container: HTMLElement, private opts: VillageRendererOpts = {}) {
@@ -567,7 +567,7 @@ export class VillageRenderer {
       g.position.copy(from);
       g.visible = false;
       this.scene.add(g);
-      this.militia.push({ g, from, to, delay: i * 0.25, t: 0, face: Math.atan2(Math.cos(a), Math.sin(a)) });
+      this.militia.push({ g, from, to, delay: i * 0.25, t: 0, face: Math.atan2(Math.cos(a), Math.sin(a)), a });
     }
   }
 
@@ -582,10 +582,18 @@ export class VillageRenderer {
         m.g.position.y = m.from.y + (m.to.y - m.from.y) * k + Math.abs(Math.sin(t * 11 + m.delay * 3)) * 0.25;
         m.g.rotation.y = Math.atan2(m.to.x - m.from.x, m.to.z - m.from.z);
       } else {
-        // at the wall: facing out, shaking their pitchforks
-        m.g.position.copy(m.to);
-        m.g.position.y += Math.abs(Math.sin(t * 5 + m.delay * 7)) * 0.12;
-        m.g.rotation.y = m.face + Math.sin(t * 2 + m.delay) * 0.15;
+        // at the wall: pacing back and forth along it, stopping now and then to shake a pitchfork outward
+        const s = m.delay * 3.1;
+        const drift = Math.sin(t * 0.32 + s) * 0.07 + Math.sin(t * 0.11 + s * 2) * 0.05;
+        const speed = Math.cos(t * 0.32 + s) * 0.32 * 0.07 + Math.cos(t * 0.11 + s * 2) * 0.11 * 0.05;
+        const ang = m.a + drift;
+        const R = Math.hypot(m.to.x, m.to.z) + Math.sin(t * 0.5 + s) * 0.6;
+        const x = Math.cos(ang) * R, z = Math.sin(ang) * R;
+        const walking = Math.abs(speed) > 0.006;
+        m.g.position.set(x, heightAt(x, z) + (walking ? Math.abs(Math.sin(t * 8 + s)) * 0.1 : Math.abs(Math.sin(t * 5 + s)) * 0.12), z);
+        // face the way they walk, or out over the fields when they pause
+        const tangent = Math.atan2(-Math.sin(ang) * Math.sign(speed), Math.cos(ang) * Math.sign(speed));
+        m.g.rotation.y = walking ? tangent : m.face + Math.sin(t * 2 + s) * 0.2;
       }
     }
   }

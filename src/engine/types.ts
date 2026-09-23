@@ -249,6 +249,8 @@ export interface PlayerStats {
   loot: number;
   killsAtt: number;             // population of enemy units defeated as attacker (ODA)
   killsDef: number;             // as defender (ODD)
+  /** as a supporter in someone else's village (ODS) */
+  killsSup?: number;
   lostUnits: number;
   conquered: number;
   attacks: number;
@@ -256,6 +258,9 @@ export interface PlayerStats {
   built: number;
   recruited: number;
 }
+
+export type DailyKind = 'attacker' | 'defender' | 'supporter' | 'looter' | 'conqueror';
+export interface DailyAward { kind: DailyKind; day: number; score: number; runnerUp: number | null }
 
 export interface Player {
   id: number;
@@ -278,6 +283,12 @@ export interface Player {
   ai?: AIState;
   notes: Record<number, string>;
   eliminated?: boolean;
+  /** today's tally towards the daily awards */
+  daily?: { day: number } & Record<DailyKind, number>;
+  /** every daily award this ruler has won */
+  dailyAwards?: DailyAward[];
+  /** tribe forum: thread id -> last post id this ruler has read */
+  forumSeen?: Record<number, number>;
 }
 
 /** What a tribe member may do, as in Tribal Wars. */
@@ -349,6 +360,8 @@ export interface World {
   news: NewsItem[];
   exchange: Res;                 // NPC trading post stock
   createdReal: number;
+  /** the day the daily awards are currently being counted for */
+  dayKey?: number;
   /** online worlds: sign-in account id -> player id */
   accounts?: Record<string, number>;
   /** client-side shadow only: attacks on fellow tribe members, as sent by the server */

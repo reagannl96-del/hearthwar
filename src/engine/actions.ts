@@ -20,7 +20,7 @@ import { exchangeQuote } from './market';
 import { restartPlayer } from './world';
 import {
   acceptInvite, cancelInvite, createTribe, declineInvite, disbandTribe, editTribe, forumDelete, forumNewThread, forumPin, forumReply,
-  invitePlayer, kickMember, leaveTribe, setDiplomacy, setRights,
+  invitePlayer, kickMember, leaveTribe, setDiplomacy, setRights, forumRead,
 } from './tribes';
 
 export type Action =
@@ -63,7 +63,8 @@ export type Action =
   | { type: 'forumThread'; title: string; text: string }
   | { type: 'forumReply'; thread: number; text: string }
   | { type: 'forumDelete'; thread: number; post?: number }
-  | { type: 'forumPin'; thread: number; sticky: boolean };
+  | { type: 'forumPin'; thread: number; sticky: boolean }
+  | { type: 'forumRead'; thread: number };
 
 const fail = (error: string): ActionResult => ({ ok: false, error });
 
@@ -488,6 +489,7 @@ export function applyAction(w: World, pid: number, a: Action): ActionResult {
     case 'forumReply': return forumReply(w, pid, a.thread, a.text);
     case 'forumDelete': return forumDelete(w, pid, a.thread, a.post);
     case 'forumPin': return forumPin(w, pid, a.thread, a.sticky);
+    case 'forumRead': return forumRead(w, pid, a.thread);
     case 'restart': {
       if (p.kind !== 'human') return fail('Only rulers can start over.');
       const v = restartPlayer(w, pid, String(a.village ?? ''));

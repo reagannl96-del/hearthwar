@@ -51,6 +51,7 @@ function publicPlayer(p: Player): Player {
     reports: [], intel: {}, questsClaimed: [], achievements: {}, paladin: null, protectedUntil: p.protectedUntil,
     createdAt: p.createdAt, history: p.history.slice(-120), notes: {}, eliminated: p.eliminated,
     ai: p.ai ? ({ personality: p.ai.personality } as Player['ai']) : undefined,
+    dailyAwards: p.dailyAwards,
   };
 }
 

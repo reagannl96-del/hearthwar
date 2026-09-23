@@ -202,14 +202,14 @@ function Nav() {
   const v = view.value!;
   const r = route.value;
   const claimable = v.quests.filter((q) => q.done).length;
-  const items: { r: Route; icon: string; label: string; badge?: number; key: string }[] = [
+  const items: { r: Route; icon: string; label: string; badge?: number; key: string; glow?: boolean }[] = [
     { r: { name: 'village' }, icon: 'village', label: 'Village', key: 'village' },
     { r: { name: 'map' }, icon: 'map', label: 'Map', key: 'map' },
     { r: { name: 'building', id: 'rally' }, icon: 'flag', label: 'Rally point', key: 'rally', badge: v.incoming.filter((c) => c.kind === 'attack').length },
     { r: { name: 'reports' }, icon: 'report', label: 'Reports', key: 'reports', badge: v.unreadReports },
     { r: { name: 'quests' }, icon: 'quest', label: 'Quests', key: 'quests', badge: claimable },
     { r: { name: 'overviews' }, icon: 'overview', label: 'Overview', key: 'overviews' },
-    { r: { name: 'tribe' }, icon: 'tribe', label: 'Tribe', key: 'tribe', badge: v.tribeInvites || undefined },
+    { r: { name: 'tribe' }, icon: 'tribe', label: 'Tribe', key: 'tribe', badge: v.tribeInvites || undefined, glow: v.forumUnread.length > 0 },
     { r: { name: 'ranking' }, icon: 'rank', label: 'Rankings', key: 'ranking' },
     { r: { name: 'news' }, icon: 'news', label: 'Chronicle', key: 'news' },
     { r: { name: 'settings' }, icon: 'settings', label: 'Settings', key: 'settings' },
@@ -218,7 +218,7 @@ function Nav() {
   return (
     <nav class="nav" aria-label="Main">
       {items.map((it) => (
-        <button type="button" class={`nav-item ${activeKey === it.key ? 'is-active' : ''} ${it.key === 'rally' && it.badge ? 'is-alert' : ''}`} onClick={() => go(it.r)}>
+        <button type="button" class={`nav-item ${activeKey === it.key ? 'is-active' : ''} ${it.key === 'rally' && it.badge ? 'is-alert' : ''} ${it.glow ? 'is-unread' : ''}`} title={it.glow ? 'Unread posts in your tribe forum' : undefined} onClick={() => go(it.r)}>
           <Icon name={it.icon} size={18} />
           <span class="nav-label">{it.label}</span>
           {it.badge ? <span class="badge">{it.badge}</span> : null}

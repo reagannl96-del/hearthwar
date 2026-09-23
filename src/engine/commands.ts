@@ -1,5 +1,6 @@
 // Troop & merchant movements: sending, arrival, battles, conquest and reports.
 
+import { bumpDaily } from './awards';
 import { computeLoot, resolveBattle, type DefStackInput } from './combat';
 import { BUILDINGS, BUILDING_ORDER } from './data/buildings';
 import { ITEM_BY_ID, MERCHANT_CARRY, MERCHANT_SPEED, UNITS, type ItemDef } from './data/units';
@@ -480,14 +481,26 @@ function resolveAttack(w: World, c: Command, hooks: ArrivalHooks): void {
   const attLostPop = unitsPop(result.attLost);
   attacker.stats.killsAtt += defLostPop;
   attacker.stats.lostUnits += unitsCount(result.attLost);
+  bumpDaily(w, attacker, 'attacker', defLostPop);
+  // the kills are shared by everyone who stood in the village, by their part in the fight
+  const shareOf = (i: number) => (defLostPop > 0 ? unitsPop(result.defLost[i] ?? {}) / defLostPop : i === 0 ? 1 : 0);
   if (defender) {
-    defender.stats.killsDef += attLostPop;
+    const mine = Math.round(attLostPop * shareOf(0));
+    defender.stats.killsDef += mine;
     defender.stats.lostUnits += unitsCount(result.defLost[0] ?? {});
+    bumpDaily(w, defender, 'defender', mine);
   }
   stacks.slice(1).forEach((st, i) => {
-    if (st.ownerId !== null && st.ownerId !== target.ownerId) {
-      const sp = w.players[st.ownerId];
-      if (sp) sp.stats.killsDef += Math.round(attLostPop * (unitsPop(result.defLost[i + 1]) / Math.max(1, defLostPop)));
+    if (st.ownerId === null) return;
+    const sp = w.players[st.ownerId];
+    if (!sp) return;
+    const part = Math.round(attLostPop * shareOf(i + 1));
+    if (st.ownerId === target.ownerId) {
+      sp.stats.killsDef += part;
+      bumpDaily(w, sp, 'defender', part);
+    } else {
+      sp.stats.killsSup = (sp.stats.killsSup ?? 0) + part;
+      bumpDaily(w, sp, 'supporter', part);
     }
   });
 
@@ -522,6 +535,7 @@ function resolveAttack(w: World, c: Command, hooks: ArrivalHooks): void {
     loot = computeLoot(avail, capacity);
     for (const k of RES_KEYS) target.res[k] -= loot[k];
     attacker.stats.loot += resSum(loot);
+    bumpDaily(w, attacker, 'looter', resSum(loot));
   }
 
   // loyalty
@@ -696,6 +710,7 @@ export function conquer(w: World, v: Village, newOwner: number, hooks?: ArrivalH
   newP.villages.push(v.id);
   newP.points += v.points;
   newP.stats.conquered++;
+  bumpDaily(w, newP, 'conqueror', 1);
   v.buildQueue = [];
   for (const rb in v.recruit) v.recruit[rb as keyof typeof v.recruit] = [];
   v.research = [];

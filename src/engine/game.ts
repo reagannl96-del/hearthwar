@@ -3,6 +3,7 @@
 // multiplayer server can run exactly the same code.
 
 import { hasPaladin } from './actions';
+import { rolloverDay } from './awards';
 import { aiOnBattle, aiOnConquest, aiThink } from './ai/ai';
 import { handleArrival, addReport, type ArrivalHooks, sendTroops, updateIntel } from './commands';
 import { BUILDINGS } from './data/buildings';
@@ -175,6 +176,7 @@ export function processEvent(w: World, e: GameEvent): void {
       break;
     case 'sample':
       sample(w);
+      rolloverDay(w);
       pushEvent(w, 'sample', w.now + sampleInterval(w), 0);
       break;
     case 'item': paladinItem(w, e); break;

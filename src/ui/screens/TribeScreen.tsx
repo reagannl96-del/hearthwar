@@ -1,4 +1,4 @@
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import { RIGHT_LABEL, TRIBE_MAX_MEMBERS, TRIBE_RIGHTS } from '../../engine/tribes';
 import type { Diplomacy, TribeRight } from '../../engine/types';
 import type { MyTribeView, TribeProfileView } from '../../engine/view';
@@ -336,6 +336,10 @@ function Forum({ t }: { t: MyTribeView }) {
   const me = view.value!.me.id;
   const mod = t.myRights.includes('forum') || t.myRights.includes('lead');
   const th = open !== null ? t.forum.find((x) => x.id === open) : undefined;
+  const unread = new Set(view.value!.forumUnread);
+  const openThread = (id: number) => { setOpen(id); if (unread.has(id)) act({ type: 'forumRead', thread: id }); };
+  // replies that arrive while the thread is open count as read
+  useEffect(() => { if (th && unread.has(th.id)) act({ type: 'forumRead', thread: th.id }); });
   if (th) {
     return (
       <Section title={th.title} actions={<Btn small variant="ghost" onClick={() => setOpen(null)}>‹ All threads</Btn>}>
@@ -370,7 +374,7 @@ function Forum({ t }: { t: MyTribeView }) {
               const last = x.posts[x.posts.length - 1];
               return (
                 <li>
-                  <button type="button" class="link" onClick={() => setOpen(x.id)}>{x.sticky && <span class="pill">Pinned</span>} <b>{x.title}</b></button>
+                  <button type="button" class={`link ${unread.has(x.id) ? 'is-unread' : ''}`} onClick={() => openThread(x.id)}>{unread.has(x.id) && <span class="unread-dot" aria-label="New posts" />}{x.sticky && <span class="pill">Pinned</span>} <b>{x.title}</b></button>
                   <div class="muted small">{x.posts.length} post{x.posts.length === 1 ? '' : 's'} · last by {t.names[last?.by ?? x.by]} {fmtAgo(last?.t ?? x.t, now.value)}</div>
                 </li>
               );

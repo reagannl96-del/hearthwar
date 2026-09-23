@@ -9,7 +9,8 @@ import {
   armyMsPerField, distance, hideCap, merchantCount, storageCap, unitsCount, watchtowerRange,
 } from './formulas';
 import { achievementLevels, questStatus } from './quests';
-import { TRIBE_RIGHTS, invitesFor, relation, tribeAlerts, tribePoints } from './tribes';
+import { TRIBE_RIGHTS, invitesFor, relation, tribeAlerts, tribePoints, unreadThreads } from './tribes';
+import { awardsSummary, dayOf } from './awards';
 import type {
   BonusType, BuildJob, Buildings, Intel, PaladinState, PlayerStats, RecruitBuilding, RecruitJob, Report, Res,
   ResearchJob, ScavengeRun, UnitId, Units, World, WorldConfig, Diplomacy, ForumThread, TribeAlert, TribeRight } from './types';
@@ -104,6 +105,8 @@ export interface PlayerView {
   villages: VillageView[];
   /** tribe invitations waiting for me */
   tribeInvites: number;
+  /** tribe forum threads with posts I haven't read */
+  forumUnread: number[];
   commands: CommandView[];
   incoming: CommandView[];
   unreadReports: number;
@@ -245,6 +248,7 @@ export function buildView(w: World, pid: number): PlayerView {
     },
     villages,
     tribeInvites: invitesFor(w, pid).length,
+    forumUnread: unreadThreads(w, pid),
     commands,
     incoming,
     unreadReports: p.reports.reduce((n, r) => n + (r.read ? 0 : 1), 0),
@@ -365,6 +369,10 @@ export function playerProfile(w: World, pid: number) {
     stats: { ...p.stats },
     personality: p.ai?.personality,
     history: p.history,
+    achievements: achievementLevels(w, p),
+    awards: awardsSummary(p),
+    /** the world's calendar day, for 'yesterday' in award histories */
+    today: dayOf(w),
   };
 }
 

@@ -1,6 +1,6 @@
 import { useState } from 'preact/hooks';
 import { Icon } from '../art/icons';
-import { Btn, Empty, Section, Tabs } from '../components/common';
+import { Btn, Empty, Modal, Section, Tabs } from '../components/common';
 import { Sparkline } from '../components/Sparkline';
 import { coords, fmt } from '../format';
 import { go, host, view } from '../store';
@@ -97,6 +97,7 @@ function Profile({ pid }: { pid: number }) {
             <dt>Villages</dt><dd class="num">{p.villages.length}</dd>
             <dt>Enemy troops defeated attacking</dt><dd class="num">{fmt(p.stats.killsAtt)}</dd>
             <dt>Enemy troops defeated defending</dt><dd class="num">{fmt(p.stats.killsDef)}</dd>
+            <dt>Enemy troops defeated supporting</dt><dd class="num">{fmt(p.stats.killsSup ?? 0)}</dd>
             <dt>Villages conquered</dt><dd class="num">{p.stats.conquered}</dd>
             {p.personality && <><dt>Temperament</dt><dd>{PERSONA[p.personality]}</dd></>}
           </dl>
@@ -105,6 +106,7 @@ function Profile({ pid }: { pid: number }) {
           {p.history.length > 1 ? <Sparkline points={p.history} /> : <p class="muted">Not enough history yet.</p>}
         </Section>
       </div>
+      <Awards p={p} />
       <Section title="Villages">
         <div class="table-scroll">
           <table class="rank-table">
@@ -123,5 +125,88 @@ function Profile({ pid }: { pid: number }) {
         </div>
       </Section>
     </div>
+  );
+}
+
+const MEDAL = ['None yet', 'Bronze', 'Silver', 'Gold', 'Diamond'];
+const MEDAL_CLASS = ['m0', 'm1', 'm2', 'm3', 'm4'];
+
+type ProfileData = NonNullable<ReturnType<NonNullable<typeof host.value>['profile']>>;
+
+function Medal({ tier, size = 34 }: { tier: number; size?: number }) {
+  return (
+    <span class={`medal ${MEDAL_CLASS[tier]}`} style={{ width: `${size}px`, height: `${size}px` }} aria-label={MEDAL[tier]}>
+      <Icon name="star" size={Math.round(size * 0.55)} />
+    </span>
+  );
+}
+
+/** Opponents defeated, achievements and daily awards, the way a Tribal Wars profile shows them. */
+function Awards({ p }: { p: ProfileData }) {
+  const [open, setOpen] = useState<ProfileData['awards'][number] | null>(null);
+  const fights = ['oda', 'odd', 'ods'].map((id) => p.achievements.find((a) => a.id === id)!).filter(Boolean);
+  const others = p.achievements.filter((a) => !['oda', 'odd', 'ods'].includes(a.id));
+  const today = p.today;
+  const when = (day: number) => (day === today - 1 ? 'yesterday' : `on ${new Date(day * 86_400_000).toLocaleDateString(undefined, { day: '2-digit', month: '2-digit', year: 'numeric' })}`);
+  const label: Record<string, string> = { oda: 'As attacker', odd: 'As defender', ods: 'As supporter' };
+  return (
+    <>
+      <Section title="Opponents defeated">
+        <div class="fight-grid">
+          {fights.map((a) => (
+            <div class="fight-card">
+              <Medal tier={a.tier} size={42} />
+              <div>
+                <div class="muted small">{label[a.id]}</div>
+                <div class="big num">{fmt(a.value)}</div>
+                <div class="small">{MEDAL[a.tier]}{a.next !== null && <span class="muted"> · next at {fmt(a.next)}</span>}</div>
+                {a.next !== null && <div class="bar"><span style={{ width: `${Math.min(100, (a.value / a.next) * 100)}%` }} /></div>}
+              </div>
+            </div>
+          ))}
+        </div>
+      </Section>
+      <div class="grid-2">
+        <Section title="Daily awards">
+          {p.awards.length === 0 ? <Empty>No daily awards yet. Top the day's attackers, defenders, supporters, plunderers or conquerors to win one.</Empty> : (
+            <div class="daily-grid">
+              {p.awards.map((a) => (
+                <button type="button" class="daily-card" onClick={() => setOpen(a)}>
+                  <span class={`daily-badge daily-${a.kind}`}><Icon name={a.kind === 'defender' ? 'shield' : a.kind === 'supporter' ? 'support' : a.kind === 'looter' ? 'wood' : a.kind === 'conqueror' ? 'noble' : 'attack'} size={22} /></span>
+                  <span class="grow"><b>{a.title}</b><span class="muted small">won {a.count} time{a.count === 1 ? '' : 's'}</span></span>
+                  <span class="daily-count">×{a.count}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </Section>
+        <Section title="Achievements">
+          <ul class="ach-list">
+            {others.map((a) => (
+              <li>
+                <Medal tier={a.tier} size={28} />
+                <div class="grow">
+                  <b>{a.title}</b> <span class="muted small">· {a.text}</span>
+                  <div class="small num">{fmt(a.value)}{a.next !== null ? <span class="muted"> / {fmt(a.next)} for {MEDAL[a.tier + 1]}</span> : <span class="muted"> · top level</span>}</div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </Section>
+      </div>
+      {open && (
+        <Modal title={open.title} onClose={() => setOpen(null)}>
+          <p class="muted">{open.text}</p>
+          <table class="table award-table">
+            <thead><tr><th>Achieved</th><th class="right">{p.name.split(' ')[0]}'s score</th><th class="right">Runner-up</th></tr></thead>
+            <tbody>
+              {open.history.map((h) => (
+                <tr><td>{when(h.day)}</td><td class="right num">{fmt(h.score)}</td><td class="right num">{h.runnerUp === null ? 'unknown' : fmt(h.runnerUp)}</td></tr>
+              ))}
+            </tbody>
+          </table>
+        </Modal>
+      )}
+    </>
   );
 }
