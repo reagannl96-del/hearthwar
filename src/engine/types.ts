@@ -137,6 +137,8 @@ export interface Command {
   tag?: string;
   /** owner of the target when the command was sent (support turns back if it changes) */
   targetOwner?: number | null;
+  /** returns: some of the army fell in the battle (drawn yellow on the map instead of white) */
+  losses?: boolean;
 }
 
 export type ReportColor = 'green' | 'yellow' | 'red' | 'blue' | 'grey';

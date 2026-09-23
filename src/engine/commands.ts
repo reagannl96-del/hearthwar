@@ -654,6 +654,7 @@ function resolveAttack(w: World, c: Command, hooks: ArrivalHooks): void {
       id: w.nextId++, kind: 'return', ownerId: c.ownerId, fromVid: c.fromVid, toVid: c.fromVid, origin: target.id,
       units: survivors, depart: w.now, arrive: w.now + (c.arrive - c.depart), res: loot,
     };
+    if (hasUnits(result.attLost)) back.losses = true;
     if (c.repeat) back.repeat = true;
     if (c.tag) back.tag = c.tag;
     if (c.catTarget) back.catTarget = c.catTarget;

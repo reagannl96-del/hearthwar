@@ -237,21 +237,34 @@ export function MapScreen({ focus }: { focus?: number }) {
       if (!from || !to) continue;
       const p = Math.max(0, Math.min(1, (t - c.depart) / Math.max(1, c.arrive - c.depart)));
       const ax = sx(from.x + 0.5), ay = sy(from.y + 0.5), bx2 = sx(to.x + 0.5), by2 = sy(to.y + 0.5);
-      const color = c.dir === 'in' && c.kind === 'attack' ? col['--danger'] : c.kind === 'attack' ? col['--danger'] : c.kind === 'support' ? col['--support-c'] : col['--ok'];
+      // attacks: bright red; returns: white after a clean sweep, yellow if troops were lost
+      const color = c.kind === 'attack' ? '#ff2b2b' : c.kind === 'return' ? (c.losses ? '#ffd23f' : '#ffffff') : c.kind === 'support' ? col['--support-c'] : col['--ok'];
+      const dotted = c.kind === 'attack' || c.kind === 'return';
+      const lw = c.dir === 'in' ? 3.6 : 3;
+      ctx.lineCap = 'round';
+      ctx.setLineDash(dotted ? [0.1, lw * 2.4] : c.dir === 'in' ? [6, 4] : []);
+      // a dark rim under the dots keeps them readable on grass and snow alike
+      ctx.strokeStyle = 'rgba(20, 10, 0, 0.55)';
+      ctx.lineWidth = lw + 1.6;
+      ctx.beginPath();
+      ctx.moveTo(ax, ay);
+      ctx.lineTo(bx2, by2);
+      ctx.stroke();
       ctx.strokeStyle = color;
-      ctx.globalAlpha = 0.55;
-      ctx.lineWidth = c.dir === 'in' ? 2 : 1.5;
-      ctx.setLineDash(c.dir === 'in' ? [6, 4] : c.kind === 'return' ? [2, 4] : []);
+      ctx.lineWidth = lw;
       ctx.beginPath();
       ctx.moveTo(ax, ay);
       ctx.lineTo(bx2, by2);
       ctx.stroke();
       ctx.setLineDash([]);
-      ctx.globalAlpha = 1;
+      ctx.lineCap = 'butt';
+      ctx.strokeStyle = 'rgba(20, 10, 0, 0.7)';
+      ctx.lineWidth = 1.2;
       ctx.fillStyle = color;
       ctx.beginPath();
-      ctx.arc(ax + (bx2 - ax) * p, ay + (by2 - ay) * p, Math.max(2.5, Math.min(5, z * 0.15)), 0, Math.PI * 2);
+      ctx.arc(ax + (bx2 - ax) * p, ay + (by2 - ay) * p, Math.max(3, Math.min(6, z * 0.17)), 0, Math.PI * 2);
       ctx.fill();
+      ctx.stroke();
     }
     drawMini();
   };

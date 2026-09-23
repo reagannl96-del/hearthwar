@@ -74,6 +74,8 @@ export interface CommandView {
   origin?: number;
   originName?: string;
   tag?: string;
+  /** returns: the army lost troops on the way */
+  losses?: boolean;
 }
 
 export interface PlayerView {
@@ -190,7 +192,7 @@ export function buildView(w: World, pid: number): PlayerView {
     const base = {
       id: c.id, kind: c.kind, fromVid: from.id, fromName: from.name, fromX: from.x, fromY: from.y,
       toVid: to.id, toName: to.name, toX: to.x, toY: to.y, ownerId: c.ownerId, ownerName: playerName(w, c.ownerId),
-      depart: c.depart, arrive: c.arrive, origin: c.origin,
+      depart: c.depart, arrive: c.arrive, origin: c.origin, losses: c.losses,
       originName: c.origin !== undefined ? w.villages[c.origin]?.name : undefined,
     };
     if (c.ownerId === pid) {
