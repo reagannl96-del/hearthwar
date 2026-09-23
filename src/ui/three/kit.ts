@@ -98,12 +98,20 @@ const THEMES: Record<Theme, Record<number, number>> = {
     [C.tile]: 0x4b2f86, [C.tileDark]: 0x36205f, [C.tileWarm]: 0x5d3b9e, [C.thatch]: 0x3d4f9a, [C.thatchDark]: 0x2d3a73,
     [C.plaster]: 0xdcd6ee, [C.plasterWarm]: 0xcfc6e6, [C.timber]: 0x2c2340, [C.timberLight]: 0x4a3d66,
     [C.stone]: 0x9d9bb3, [C.stoneDark]: 0x747290, [C.stoneLight]: 0xc4c2d8, [C.red]: 0x6a3fa0, [C.slate]: 0x3a3163, [C.door]: 0x2a1d40,
+    // the ground turns to an enchanted twilight meadow
+    [C.grass]: 0x5f7568, [C.grassLight]: 0x708879, [C.grassDark]: 0x4b5f57, [C.grassRust]: 0x8a7aa8,
+    [C.dirt]: 0xbcaecb, [C.dirtDark]: 0x9585ad, [C.water]: 0x4f7fd0,
+    0x97a24e: 0x74907c, 0x7f8d43: 0x5d7468, 0x8b984a: 0x688272,
   },
   // moss and turf roofs, weathered wood, lichen-green stone, leaf-green banners
   druid: {
     [C.tile]: 0x5e7d32, [C.tileDark]: 0x445c24, [C.tileWarm]: 0x6f8f3a, [C.thatch]: 0x7c8f3e, [C.thatchDark]: 0x5b6b2c,
     [C.plaster]: 0xd8cfae, [C.plasterWarm]: 0xcdbf98, [C.timber]: 0x4a3420, [C.timberLight]: 0x6e5134,
     [C.stone]: 0x8e9a80, [C.stoneDark]: 0x6c775f, [C.stoneLight]: 0xb0b99f, [C.red]: 0x4f7a2e, [C.slate]: 0x4c5a3a,
+    // the ground turns to a deep, lush glade
+    [C.grass]: 0x5a8a36, [C.grassLight]: 0x6fa044, [C.grassDark]: 0x40692a, [C.grassRust]: 0x7f8a38,
+    [C.dirt]: 0x7a6446, [C.dirtDark]: 0x5e4a33, [C.water]: 0x3a7f86,
+    0x97a24e: 0x6aa044, 0x7f8d43: 0x4f7f32, 0x8b984a: 0x5d9038,
   },
   // rusty patched roofs, grimy walls, soot-dark wood, goblin-green rags
   goblin: {

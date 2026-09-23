@@ -90,6 +90,7 @@ export class VillageRenderer {
   private builders = new Map<BuildingId, { g: THREE.Group; arms: THREE.Object3D[] }>();
   private militia: { g: THREE.Group; from: THREE.Vector3; to: THREE.Vector3; delay: number; t: number; face: number; a: number }[] = [];
   private militiaOn = false;
+  private motes: THREE.Object3D[] = [];
 
   constructor(private container: HTMLElement, private opts: VillageRendererOpts = {}) {
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
@@ -140,7 +141,9 @@ export class VillageRenderer {
     this.scene.add(this.fireLight);
 
     this.scene.add(buildTerrain());
-    this.scene.add(buildScenery());
+    const scenery = buildScenery();
+    this.scene.add(scenery);
+    scenery.traverse((o) => { if (o.userData.mote) this.motes.push(o); });
 
     const ringGeo = new THREE.RingGeometry(0.86, 1, 40);
     ringGeo.rotateX(-Math.PI / 2);
@@ -809,6 +812,12 @@ export class VillageRenderer {
     for (const b of this.builders.values()) b.arms.forEach((a, i) => { a.rotation.x = 0.9 + Math.sin(t * 9 + i * 1.7) * 0.9; });
     this.stepMarches(dt, t);
     this.stepMilitia(dt, t);
+    for (const m of this.motes) {
+      const d = m.userData.mote as { x: number; y: number; z: number; phase: number; speed: number };
+      const p = t * d.speed + d.phase;
+      m.position.set(d.x + Math.sin(p * 0.7) * 1.2, d.y + Math.sin(p) * 0.6, d.z + Math.cos(p * 0.5) * 1.2);
+      m.scale.setScalar(0.7 + Math.abs(Math.sin(p * 2.3)) * 0.6);
+    }
     this.stepLeaves(dt, t);
     // smoke puffs
     for (const s of this.smoke) {

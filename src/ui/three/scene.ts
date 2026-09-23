@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import type { BuildingId } from '../../engine/types';
 import { C, bake, box, cone, cyl, darker, getSeason, getTheme, mat, rng, roundTower, seasonal } from './kit';
 import { rock, tree, pumpkin, hayBale, barrel, crate, crystalSpire, greatTree, skullTotem } from './props';
+import { blob, mesh } from './kit';
 import { distToPaths } from './paths';
 
 export const WALL_R = 44;
@@ -151,7 +152,13 @@ export function buildTerrain(seed = 7): THREE.Mesh {
       if (rr > WALL_R + 5 && bog > 0.74) c = C.water;
       else if (bog > 0.7) c = C.dirtDark;
     }
-    col.set(seasonal(c));
+    if (getSeason() !== 'winter' && !onRoad(cx, cz) && sd >= 4.2 && cy <= 3) {
+      const patch = noise(cx * 1.4 - 7, cz * 1.4 + 3, 8);
+      if (getTheme() === 'sorcerer' && patch > 0.72) c = rr > WALL_R ? 0x8a7aa8 : 0x7f86a8; // lavender heather
+      else if (getTheme() === 'druid' && patch > 0.7) c = 0x3f6d2a; // deep moss
+      else if (getTheme() === 'druid' && patch < 0.24) c = 0x86a84a; // sunlit clover
+    }
+    col.set(getTheme() !== 'classic' && (c === 0x8a7aa8 || c === 0x7f86a8 || c === 0x3f6d2a || c === 0x86a84a) ? c : seasonal(c));
     const v = 0.97 + r() * 0.05;
     for (let k = 0; k < 3; k++) {
       colors[(i + k) * 3] = col.r * v;
@@ -252,7 +259,132 @@ export function buildScenery(seed = 11): THREE.Group {
     else g.add(crate(it.x, it.z));
   }
   if (getTheme() === 'goblin') addSwamp(g, r);
+  if (getTheme() === 'sorcerer') addArcane(g, r);
+  if (getTheme() === 'druid') addGlade(g, r);
   return bake(g);
+}
+
+/** Floating motes of light (arcane sparks, fireflies): animated by the renderer. */
+function motes(g: THREE.Group, r: () => number, n: number, color: number, emissive: number, around: (i: number) => [number, number, number]) {
+  for (let i = 0; i < n; i++) {
+    const [x, y, z] = around(i);
+    const m = mesh(new THREE.OctahedronGeometry(0.16, 0), color, { emissive });
+    m.position.set(x, y, z);
+    m.userData.dynamic = true;
+    m.userData.mote = { x, y, z, phase: r() * Math.PI * 2, speed: 0.6 + r() * 0.8 };
+    g.add(m);
+  }
+}
+
+/** The sorcerers' twilight meadow: crystal outcrops, rune stones, rune circles and drifting sparks. */
+function addArcane(g: THREE.Group, r: () => number): void {
+  const crystal = (x: number, z: number, s: number) => {
+    const c = new THREE.Group();
+    const n = 3 + Math.floor(r() * 3);
+    for (let i = 0; i < n; i++) {
+      const h = (0.8 + r() * 1.6) * s;
+      const sh = mesh(new THREE.OctahedronGeometry(0.3 * s, 0), r() < 0.5 ? 0xb58cff : 0x8fb8ff, { emissive: r() < 0.5 ? 0x4a2a9a : 0x2a4a9a });
+      sh.scale.set(1, h / (0.3 * s) / 2, 1);
+      sh.position.set((r() - 0.5) * 0.9 * s, h / 2, (r() - 0.5) * 0.9 * s);
+      sh.rotation.z = (r() - 0.5) * 0.6;
+      c.add(sh);
+    }
+    c.add(blob(0.5 * s, 0x6d6a82, 0, 0.1, 0, 1.3, 0.4, 1.1));
+    c.position.set(x, heightAt(x, z), z);
+    g.add(c);
+  };
+  const runeStone = (x: number, z: number) => {
+    const st = new THREE.Group();
+    const h = 2 + r() * 1.2;
+    st.add(box(0.7, h, 0.45, 0x8f8ca8));
+    const rune = mesh(new THREE.BoxGeometry(0.28, 0.5, 0.04), 0xb58cff, { emissive: 0x6a3fd0 });
+    rune.position.set(0, h * 0.55, 0.24);
+    st.add(rune);
+    st.position.set(x, heightAt(x, z), z);
+    st.rotation.y = r() * Math.PI * 2;
+    g.add(st);
+  };
+  let placed = 0;
+  for (let tries = 0; tries < 900 && placed < 26; tries++) {
+    const a = r() * Math.PI * 2, d = WALL_R + 7 + r() * 75;
+    const x = Math.cos(a) * d, z = Math.sin(a) * d;
+    if (!freeForTree(x, z)) continue;
+    if (placed % 3 === 0) runeStone(x, z);
+    else crystal(x, z, 0.8 + r() * 0.8);
+    placed++;
+  }
+  // glowing rune circles around the spires inside the walls
+  for (const [x, z] of [[-34, 2], [-24, -24], [28, -18], [32, 14], [10, -31], [-5, 31]]) {
+    const ring = mesh(new THREE.TorusGeometry(2.1, 0.07, 4, 28), 0xb58cff, { emissive: 0x5a2fb0 });
+    ring.rotation.x = Math.PI / 2;
+    ring.position.set(x, 0.06, z);
+    g.add(ring);
+  }
+  motes(g, r, 40, 0xd9c2ff, 0x7a4ad0, () => {
+    const a = r() * Math.PI * 2, d = 8 + r() * 80;
+    const x = Math.cos(a) * d, z = Math.sin(a) * d;
+    return [x, (Math.hypot(x, z) > WALL_R ? heightAt(x, z) : 0) + 1.5 + r() * 4, z];
+  });
+}
+
+/** The druids' glade: great oaks, mossy boulders, ferns, mushroom rings, wildflowers and fireflies. */
+function addGlade(g: THREE.Group, r: () => number): void {
+  const flowers = (x: number, z: number, y: number) => {
+    const cols = [0xf2e46a, 0xf4f1e6, 0xb58cd8, 0xe88aa6];
+    for (let i = 0; i < 6; i++) g.add(blob(0.13, cols[Math.floor(r() * cols.length)], x + (r() - 0.5) * 2.4, y + 0.12, z + (r() - 0.5) * 2.4));
+  };
+  const fern = (x: number, z: number, y: number) => {
+    const f = new THREE.Group();
+    for (let i = 0; i < 5; i++) {
+      const leaf = box(0.28, 0.05, 1.1, 0x4f8a32, 0, 0.25, 0.45);
+      const arm = new THREE.Group();
+      arm.add(leaf);
+      arm.rotation.y = (i / 5) * Math.PI * 2;
+      arm.rotation.x = -0.35;
+      f.add(arm);
+    }
+    f.position.set(x, y, z);
+    g.add(f);
+  };
+  const shrooms = (x: number, z: number, y: number) => {
+    for (let i = 0; i < 7; i++) {
+      const a = (i / 7) * Math.PI * 2;
+      const mx = x + Math.cos(a) * 1.3, mz = z + Math.sin(a) * 1.3;
+      g.add(cyl(0.07, 0.09, 0.32, 0xefe6d0, 5, mx, y, mz));
+      g.add(blob(0.19, i % 3 === 0 ? 0xd96b3a : 0xc0392b, mx, y + 0.36, mz, 1, 0.5, 1));
+    }
+  };
+  let placed = 0;
+  for (let tries = 0; tries < 1200 && placed < 90; tries++) {
+    const a = r() * Math.PI * 2, d = WALL_R + 6 + r() * 80;
+    const x = Math.cos(a) * d, z = Math.sin(a) * d;
+    if (!freeForTree(x, z)) continue;
+    const y = heightAt(x, z);
+    const k = placed % 6;
+    if (k === 0) {
+      // another great oak
+      const t = tree('oak', r, 1.5 + r() * 0.6);
+      t.position.set(x, y - 0.1, z);
+      g.add(t);
+    } else if (k === 1) {
+      const b = blob(0.9 + r() * 0.8, 0x7d8570, x, y + 0.3, z, 1.3, 0.8, 1.1);
+      g.add(b);
+      g.add(blob(0.7, 0x4f7f32, x, y + 0.85, z, 1.2, 0.35, 1));
+    } else if (k === 2) fern(x, z, y);
+    else if (k === 3) shrooms(x, z, y);
+    else flowers(x, z, y);
+    placed++;
+  }
+  // flowers, ferns and toadstools around the great trees inside the walls
+  for (const [x, z] of [[-34, 2], [-24, -24], [28, -18], [32, 14], [10, -31], [-5, 31]]) {
+    flowers(x + 2, z + 1.5, 0);
+    fern(x - 2, z - 1, 0);
+  }
+  motes(g, r, 34, 0xf4ff9a, 0x9aff3a, () => {
+    const a = r() * Math.PI * 2, d = 10 + r() * 75;
+    const x = Math.cos(a) * d, z = Math.sin(a) * d;
+    return [x, (Math.hypot(x, z) > WALL_R ? heightAt(x, z) : 0) + 1 + r() * 2.5, z];
+  });
 }
 
 /** Reeds, cattails and drifting mist for a goblin swamp, kept off the paths and away from buildings. */
