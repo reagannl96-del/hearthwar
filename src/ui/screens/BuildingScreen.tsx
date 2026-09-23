@@ -394,6 +394,7 @@ function StatuePanel({ v }: { v: VillageView }) {
   const home = HEROES.find((u) => (v.units[u] ?? 0) > 0);
   const training = v.recruit.statue.find((j) => HEROES.includes(j.unit))?.unit;
   const current = home ?? training;
+  const sworn = v.hero;
   const chk0 = h.recruitCheck(v.id, 'sorcerer', 1);
   const away = !current && !chk0.ok && /already has a hero/.test(chk0.reason ?? '');
   return (
@@ -410,6 +411,10 @@ function StatuePanel({ v }: { v: VillageView }) {
           </p>
         )}
         {away && <p class="hero-current"><Icon name="attack" size={18} /> This village's hero is away from home.</p>}
+        {sworn && !current && !away && (
+          <p class="hero-current"><Icon name={sworn} size={22} /> This statue is sworn to the <b>{UNITS[sworn].name}</b>. It can raise a new one, but never another kind of hero.</p>
+        )}
+        {!sworn && <p class="muted small">Choose carefully: the first hero trained here is the only kind this village will ever raise, and its look becomes the village's.</p>}
         <div class="hero-grid">
           {HEROES.map((u) => {
             const d = UNITS[u];
@@ -417,7 +422,7 @@ function StatuePanel({ v }: { v: VillageView }) {
             const chk = h.recruitCheck(v.id, u, 1);
             const mine = current === u;
             return (
-              <article class={`hero-card hero-${u} ${mine ? 'is-mine' : ''}`}>
+              <article class={`hero-card hero-${u} ${mine ? 'is-mine' : ''} ${sworn && sworn !== u ? 'is-locked' : ''}`}>
                 <header>
                   <span class="hero-portrait"><Icon name={u} size={44} /></span>
                   <div>
@@ -435,7 +440,9 @@ function StatuePanel({ v }: { v: VillageView }) {
                   <dt>Speed</dt><dd class="num">{d.speed} min/field</dd>
                   {d.carry > 0 && <><dt>Carries</dt><dd class="num">{d.carry}</dd></>}
                 </dl>
-                {mine ? <span class="pill">Your hero</span> : (
+                {mine ? <span class="pill">Your hero</span> : sworn && sworn !== u ? (
+                  <span class="muted small">This village is sworn to the {UNITS[sworn].name}.</span>
+                ) : (
                   <>
                     <Cost cost={d.cost} have={have} pop={d.pop} time={h.recruitTime(v.id, u)} />
                     <div class="row gap">

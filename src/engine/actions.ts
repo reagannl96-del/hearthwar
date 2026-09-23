@@ -168,6 +168,7 @@ export function recruitCheck(w: World, v: Village, u: UnitId, count: number): { 
   for (const k of RES_KEYS) if (d.cost[k] > 0) max = Math.min(max, Math.floor(v.res[k] / d.cost[k]));
   max = Math.min(max, Math.floor(popFree(v) / Math.max(1, d.pop)));
   if (isHero(u)) {
+    if (v.heroKind && v.heroKind !== u) return { ok: false, reason: `This village's statue is sworn to the ${UNITS[v.heroKind].name}. It can only ever raise that hero.`, max: 0 };
     const hero = villageHero(w, v);
     if (hero) return { ok: false, reason: `This village already has a hero (${UNITS[hero].name}). Each village keeps one.`, max: 0 };
     max = Math.min(max, 1);
@@ -246,6 +247,7 @@ function recruit(w: World, pid: number, vid: number, u: UnitId, count: number): 
   const per = recruitTime(u, v.buildings[d.building], w.config.speed, v.bonus);
   const start = recruitQueueEnd(w, v, d.building);
   v.recruit[d.building].push({ id: w.nextId++, unit: u, count, done: 0, start, per, cost: { ...d.cost } });
+  if (isHero(u)) v.heroKind = u;
   if (u === 'paladin') {
     const p = w.players[pid];
     if (!p.paladin) p.paladin = { name: 'Sir Aldous', items: [], equipped: null, nextItemAt: 0, vid: null };

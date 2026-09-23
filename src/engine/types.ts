@@ -113,6 +113,8 @@ export interface Village {
   merchantsOut: number;
   /** barbarians: last time growth was applied */
   grownAt?: number;
+  /** the hero this village's statue is sworn to: the first one trained here, for good */
+  heroKind?: UnitId;
 }
 
 export type CommandKind = 'attack' | 'support' | 'return' | 'trade' | 'tradeback';

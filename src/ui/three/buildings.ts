@@ -36,7 +36,9 @@ export function visualTier(id: BuildingId, level: number): number {
 
 export function buildModel(id: BuildingId, level: number, color: number): Built {
   const t = visualTier(id, level);
-  return themed(id, t, baseModel(id, t, color));
+  const b = themed(id, t, baseModel(id, t, color));
+  hangSign(id, b, getTheme());
+  return b;
 }
 
 function baseModel(id: BuildingId, t: number, color: number): Built {
@@ -971,6 +973,146 @@ function themed(id: BuildingId, t: number, b: Built): Built {
       break;
   }
   return b;
+}
+
+// ---------- door signs: what each building is, in the village's style ----------
+
+type SignKind = 'barracks' | 'smithy' | 'stable' | 'academy' | 'warehouse';
+
+/** A flat bar lying in the sign's plane (XY), centred at (x, y), turned by `a`. */
+function bar(len: number, thick: number, color: number, x: number, y: number, a: number, glow = false): THREE.Mesh {
+  const m = glow ? mesh(new THREE.BoxGeometry(thick, len, thick), color, { emissive: 0x5a2fb0 }) : box(thick, len, thick, color);
+  if (!glow) m.geometry.translate(0, -len / 2, 0);
+  m.position.set(x, y, 0.12);
+  m.rotation.z = a;
+  return m;
+}
+
+/** The board behind the emblem. */
+function plaque(theme: Theme): THREE.Group {
+  const g = new THREE.Group();
+  if (theme === 'sorcerer') {
+    const d = cyl(0.62, 0.62, 0.08, 0x3c2470, 16);
+    d.rotation.x = Math.PI / 2;
+    g.add(d);
+    const rim = mesh(new THREE.TorusGeometry(0.62, 0.05, 4, 20), C.gold);
+    g.add(rim);
+  } else if (theme === 'druid') {
+    const d = cyl(0.6, 0.6, 0.12, 0xc9a36a, 12);
+    d.rotation.x = Math.PI / 2;
+    g.add(d);
+    const bark = mesh(new THREE.TorusGeometry(0.6, 0.08, 4, 14), 0x5a3f28);
+    g.add(bark);
+    const ring = mesh(new THREE.TorusGeometry(0.32, 0.025, 3, 14), 0x9c7a4a);
+    ring.position.z = 0.07;
+    g.add(ring);
+  } else if (theme === 'goblin') {
+    const p = box(1.2, 1.0, 0.08, 0x8a4b24, 0, -0.5, 0);
+    p.rotation.z = 0.08;
+    g.add(p);
+    for (const [x, y] of [[-0.48, 0.38], [0.48, 0.38], [-0.48, -0.38], [0.48, -0.38]]) g.add(blob(0.06, 0x3b3530, x, y, 0.06));
+  } else {
+    g.add(box(1.25, 1.05, 0.1, C.timberLight, 0, -0.52, 0));
+    g.add(box(1.35, 0.1, 0.12, C.timber, 0, 0.5, 0.01), box(1.35, 0.1, 0.12, C.timber, 0, -0.55, 0.01));
+  }
+  return g;
+}
+
+/** The emblem itself: crossed weapons for the barracks, a hammer for the smithy, and so on. */
+function signEmblem(kind: SignKind, theme: Theme): THREE.Group {
+  const g = new THREE.Group();
+  const X = 0.62;
+  if (kind === 'barracks') {
+    if (theme === 'sorcerer') {
+      for (const s of [-1, 1]) {
+        g.add(bar(1.45, 0.08, 0x6e4a2a, s * -0.5, 0.52, s * X));
+        const orb = mesh(new THREE.IcosahedronGeometry(0.14, 1), 0xb58cff, { emissive: 0x5a2fb0 });
+        orb.position.set(s * -0.5, 0.6, 0.14);
+        g.add(orb);
+      }
+    } else if (theme === 'druid') {
+      for (const s of [-1, 1]) {
+        g.add(bar(1.45, 0.09, 0x5a3f28, s * -0.5, 0.52, s * X));
+        g.add(blob(0.16, 0x6f9a3a, s * -0.52, 0.58, 0.14));
+        g.add(blob(0.1, 0x4f7a2e, s * -0.36, 0.5, 0.16));
+      }
+    } else if (theme === 'goblin') {
+      for (const s of [-1, 1]) {
+        g.add(bar(1.3, 0.1, 0x4e3620, s * -0.45, 0.45, s * X));
+        const head = cyl(0.13, 0.17, 0.36, 0x4e3620, 5, s * -0.45, 0.35, 0.12);
+        head.rotation.z = s * X;
+        g.add(head);
+        for (const k of [-1, 1]) g.add(cone(0.04, 0.16, 0x3b3530, 4, s * -0.45 + k * 0.14, 0.5, 0.12));
+      }
+      g.add(blob(0.2, 0xe8dfc8, 0, 0, 0.2));
+      g.add(box(0.06, 0.06, 0.04, 0x1a1a1a, -0.07, 0.02, 0.38), box(0.06, 0.06, 0.04, 0x1a1a1a, 0.07, 0.02, 0.38));
+    } else {
+      for (const s of [-1, 1]) {
+        g.add(bar(1.35, 0.07, 0xc9d2d8, s * -0.47, 0.5, s * X));
+        const guard = box(0.3, 0.06, 0.06, C.gold, s * 0.33, -0.33, 0.14);
+        guard.rotation.z = s * X;
+        g.add(guard);
+      }
+      const sh = cyl(0.26, 0.26, 0.06, C.red, 10, 0, 0, 0.18);
+      sh.rotation.x = Math.PI / 2;
+      g.add(sh);
+    }
+  } else if (kind === 'smithy') {
+    const metal = theme === 'goblin' ? 0x5c554a : theme === 'sorcerer' ? 0xb58cff : 0xa7b3bb;
+    g.add(bar(1.1, 0.08, theme === 'druid' ? 0x5a3f28 : 0x6e4a2a, -0.25, 0.42, 0.55));
+    const head = box(0.5, 0.26, 0.16, metal, -0.02, 0.28, 0.14);
+    head.rotation.z = 0.55;
+    g.add(head);
+    g.add(box(0.7, 0.14, 0.14, 0x4c555d, 0, -0.42, 0.12), box(0.3, 0.2, 0.14, 0x4c555d, 0, -0.34, 0.12));
+    if (theme === 'druid') g.add(blob(0.14, 0x6f9a3a, 0.35, 0.3, 0.16));
+  } else if (kind === 'stable') {
+    const col = theme === 'sorcerer' ? C.gold : theme === 'druid' ? 0x8b5a2b : theme === 'goblin' ? 0x8a4b24 : 0xa7b3bb;
+    const shoe = mesh(new THREE.TorusGeometry(0.3, 0.07, 4, 12, Math.PI * 1.35), col);
+    shoe.rotation.z = -Math.PI * 0.18 + Math.PI;
+    shoe.position.set(0, 0.02, 0.14);
+    g.add(shoe);
+    if (theme === 'druid') for (const s of [-1, 1]) { const a = box(0.05, 0.35, 0.05, 0xd9cfae, s * 0.2, 0.35, 0.16); a.rotation.z = -s * 0.5; g.add(a); }
+    if (theme === 'goblin') for (const s of [-1, 1]) g.add(cone(0.04, 0.14, 0x3b3530, 4, s * 0.34, -0.12, 0.16));
+  } else if (kind === 'academy') {
+    const page = theme === 'goblin' ? 0xc9b98a : 0xf4ecd8;
+    for (const s of [-1, 1]) {
+      const p = box(0.42, 0.55, 0.05, page, s * 0.22, -0.27, 0.13);
+      p.rotation.y = -s * 0.25;
+      g.add(p);
+    }
+    g.add(box(0.06, 0.58, 0.08, theme === 'sorcerer' ? 0x3c2470 : 0x6e4a2a, 0, -0.29, 0.12));
+    if (theme === 'sorcerer') { const r = mesh(new THREE.OctahedronGeometry(0.1, 0), 0xb58cff, { emissive: 0x5a2fb0 }); r.position.set(0, 0.28, 0.16); g.add(r); }
+    if (theme === 'druid') g.add(blob(0.12, 0x6f9a3a, 0.3, 0.2, 0.16));
+    if (theme === 'goblin') g.add(blob(0.12, 0xe8dfc8, 0, 0.22, 0.16));
+  } else {
+    // warehouse: a fat sack tied at the neck
+    g.add(blob(0.3, theme === 'goblin' ? 0x8a6a3e : 0xd8c08a, 0, -0.1, 0.14, 1, 1.1, 0.6));
+    g.add(box(0.16, 0.12, 0.1, 0x6e4a2a, 0, 0.26, 0.16));
+    g.add(blob(0.1, theme === 'sorcerer' ? 0xb58cff : theme === 'druid' ? 0x6f9a3a : C.gold, 0.26, -0.28, 0.2));
+  }
+  return g;
+}
+
+/** Where each building's sign hangs (above its front door) and how the walls are built there. */
+const SIGN_SPOTS: Partial<Record<BuildingId, { h: number; front: number; x?: number; tower?: boolean }>> = {
+  barracks: { h: 3, front: 2.5 },
+  smithy: { h: 3, front: 2.5 },
+  stable: { h: 2.6, front: 2.3 },
+  warehouse: { h: 3.6, front: 3.0 },
+  academy: { h: 3.3, front: 1.62, x: 6.2, tower: true },
+};
+
+function hangSign(id: BuildingId, b: Built, theme: Theme): void {
+  const spot = SIGN_SPOTS[id];
+  if (!spot) return;
+  const sign = new THREE.Group();
+  sign.add(plaque(theme), signEmblem(id as SignKind, theme));
+  // gabled walls take the sign on the gable; the druids' round cottages under the turf eave
+  const y = spot.tower ? spot.h + 0.5 : theme === 'druid' ? spot.h - 0.6 : spot.h + 0.6;
+  const z = spot.tower && theme === 'sorcerer' ? 1.45 : spot.front + (theme === 'druid' && !spot.tower ? 0.05 : 0.06);
+  sign.position.set(spot.x ?? 0, y, z);
+  if (theme === 'druid' && !spot.tower) sign.scale.setScalar(0.8);
+  b.obj.add(sign);
 }
 
 export { tree };

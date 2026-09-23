@@ -8,6 +8,7 @@ import { invalidateSpatial } from './spatial';
 import type { AIState, BonusType, BuildingId, Player, PlayerStats, Village, World, WorldConfig } from './types';
 import { commandsOf, removeCommand } from './cmdindex';
 import { addReport, news, withdrawSupport } from './commands';
+import { villageHero } from './actions';
 import { createVillage, updateVillage } from './village';
 
 export const WORLD_VERSION = 1;
@@ -95,6 +96,10 @@ export const protectionEnd = (w: World) => w.now + PROTECTION_MS;
  */
 export function migrateWorld(w: World): void {
   const cap = protectionEnd(w);
+  for (const id in w.villages) {
+    const v = w.villages[id];
+    if (!v.heroKind && v.ownerId !== null) v.heroKind = villageHero(w, v) ?? undefined;
+  }
   for (const id in w.players) {
     const p = w.players[id];
     if (p.protectedUntil > cap) p.protectedUntil = cap;

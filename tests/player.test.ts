@@ -299,6 +299,23 @@ describe('a human player', () => {
     expect(many?.defUnits?.spear).toBe(50); // the troops inside are seen too
   });
 
+  it('a statue stays sworn to the first hero trained there, even after it dies', () => {
+    const w = peacefulWorld();
+    const { p, v } = human(w);
+    v.buildings.statue = 1;
+    v.buildings.farm = 20;
+    v.res = { wood: 50000, clay: 50000, iron: 50000 };
+    expect(applyAction(w, p.id, { type: 'recruit', vid: v.id, unit: 'sorcerer', count: 1 }).ok).toBe(true);
+    advance(w, w.now + 12 * HOUR);
+    updateVillage(w, v, w.now);
+    expect(v.units.sorcerer).toBe(1);
+    expect(v.heroKind).toBe('sorcerer');
+    delete v.units.sorcerer; // fell in battle
+    expect(applyAction(w, p.id, { type: 'recruit', vid: v.id, unit: 'druid', count: 1 }).ok).toBe(false);
+    expect(applyAction(w, p.id, { type: 'recruit', vid: v.id, unit: 'sorcerer', count: 1 }).ok).toBe(true);
+    expect(buildView(w, p.id).villages[0].hero).toBe('sorcerer');
+  });
+
   it('restarts: old village turns barbarian as-is, a new one is founded', () => {
     const w = peacefulWorld();
     const { p, v } = human(w);

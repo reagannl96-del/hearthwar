@@ -152,7 +152,7 @@ function villageView(w: World, pid: number, vid: number): VillageView {
     scavenge: v.scavenge.map((r) => (r ? { ...r, units: { ...r.units }, loot: { ...r.loot } } : null)),
     militiaUntil: v.militiaUntil,
     watchtower: v.buildings.watchtower,
-    hero: villageHero(w, v),
+    hero: villageHero(w, v) ?? v.heroKind ?? null,
   };
 }
 

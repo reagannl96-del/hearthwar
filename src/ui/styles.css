@@ -1175,3 +1175,4 @@ input.tiny { width: 56px; padding: 2px 4px; }
 .move-group + .move-group { margin-top: 10px; }
 .move-group h4 { margin: 0 0 4px; }
 .scene-col > .panel { margin-top: 12px; }
+.hero-card.is-locked { opacity: 0.55; filter: saturate(0.5); }
