@@ -1,0 +1,148 @@
+// Geometry checks for the 3D village: buildings must not clip into each other or
+// the wall at any size, and nobody should stroll through a tree or a house.
+
+import * as THREE from 'three';
+import { describe, expect, it } from 'vitest';
+import { BUILDINGS } from '../src/engine/data/buildings';
+import type { BuildingId } from '../src/engine/types';
+import { buildModel, visualTier } from '../src/ui/three/buildings';
+import { LAYOUT, OUTSIDE, WALL_R, buildingScale, sceneryPlan } from '../src/ui/three/scene';
+import { WALK_PATHS } from '../src/ui/three/paths';
+
+type P = [number, number];
+
+/** Convex hull (monotone chain) of points in the XZ plane. */
+function hull(pts: P[]): P[] {
+  const s = [...pts].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const cross = (o: P, a: P, b: P) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const lo: P[] = [], hi: P[] = [];
+  for (const p of s) { while (lo.length >= 2 && cross(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop(); lo.push(p); }
+  for (const p of [...s].reverse()) { while (hi.length >= 2 && cross(hi[hi.length - 2], hi[hi.length - 1], p) <= 0) hi.pop(); hi.push(p); }
+  return lo.slice(0, -1).concat(hi.slice(0, -1));
+}
+
+/** Separating-axis test for two convex polygons, with a small gap allowed to count as touching. */
+function overlaps(a: P[], b: P[], slack = 0.3): boolean {
+  for (const poly of [a, b]) {
+    for (let i = 0; i < poly.length; i++) {
+      const p = poly[i], q = poly[(i + 1) % poly.length];
+      const nx = q[1] - p[1], nz = p[0] - q[0];
+      const len = Math.hypot(nx, nz) || 1;
+      const proj = (pts: P[]) => pts.map(([x, z]) => (x * nx + z * nz) / len);
+      const pa = proj(a), pb = proj(b);
+      if (Math.max(...pa) - slack <= Math.min(...pb) || Math.max(...pb) - slack <= Math.min(...pa)) return false;
+    }
+  }
+  return true;
+}
+
+function inside(poly: P[], [x, z]: P, pad = 0): boolean {
+  // inside a convex polygon grown by `pad`
+  for (let i = 0; i < poly.length; i++) {
+    const p = poly[i], q = poly[(i + 1) % poly.length];
+    const ex = q[0] - p[0], ez = q[1] - p[1];
+    const len = Math.hypot(ex, ez) || 1;
+    const side = (ex * (z - p[1]) - ez * (x - p[0])) / len;
+    if (side < -pad) return false;
+  }
+  return true;
+}
+
+/** Ground footprint of a building as placed in the village. */
+function footprint(id: BuildingId, level: number): P[] {
+  const obj = buildModel(id, level, 0xe0a526).obj;
+  const [x, z, ry] = LAYOUT[id];
+  obj.position.set(x, 0, z);
+  obj.rotation.y = ry;
+  obj.scale.setScalar(buildingScale(id));
+  obj.updateMatrixWorld(true);
+  const pts: P[] = [];
+  const v = new THREE.Vector3();
+  obj.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh || o.userData.dynamic) return;
+    const pos = m.geometry.getAttribute('position');
+    for (let i = 0; i < pos.count; i += 1) {
+      v.fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld);
+      if (v.y > 0.05) pts.push([v.x, v.z]);
+    }
+  });
+  return hull(pts);
+}
+
+/** One level for every visual size a building goes through. */
+function tierLevels(id: BuildingId): number[] {
+  const seen = new Map<number, number>();
+  for (let l = 1; l <= BUILDINGS[id].max; l++) seen.set(visualTier(id, l), l);
+  return [...seen.values()];
+}
+
+const IDS = (Object.keys(LAYOUT) as BuildingId[]).filter((id) => id !== 'wall');
+const shapes = new Map<BuildingId, P[][]>(IDS.map((id) => [id, tierLevels(id).map((l) => footprint(id, l))]));
+
+describe('village layout', () => {
+  it('no two buildings clip into each other at any size', () => {
+    const clashes: string[] = [];
+    for (let i = 0; i < IDS.length; i++) {
+      for (let j = i + 1; j < IDS.length; j++) {
+        const a = IDS[i], b = IDS[j];
+        for (const sa of shapes.get(a)!) for (const sb of shapes.get(b)!) {
+          if (overlaps(sa, sb)) { clashes.push(`${a} × ${b}`); break; }
+        }
+      }
+    }
+    expect([...new Set(clashes)]).toEqual([]);
+  });
+
+  it('buildings inside the walls stay clear of the wall', () => {
+    const bad: string[] = [];
+    for (const id of IDS) {
+      if (OUTSIDE.includes(id)) continue;
+      for (const s of shapes.get(id)!) {
+        const far = Math.max(...s.map(([x, z]) => Math.hypot(x, z)));
+        if (far > WALL_R - 3) { bad.push(`${id} reaches ${far.toFixed(1)}`); break; }
+      }
+    }
+    expect(bad).toEqual([]);
+  });
+
+  it('buildings outside the walls stay clear of the wall', () => {
+    const bad: string[] = [];
+    for (const id of OUTSIDE) {
+      for (const s of shapes.get(id)!) {
+        const near = Math.min(...s.map(([x, z]) => Math.hypot(x, z)));
+        if (near < WALL_R + 4) { bad.push(`${id} comes within ${near.toFixed(1)}`); break; }
+      }
+    }
+    expect(bad).toEqual([]);
+  });
+
+  it('no tree, rock or prop stands inside a building', () => {
+    const bad: string[] = [];
+    for (const t of sceneryPlan()) {
+      for (const id of IDS) for (const sh of shapes.get(id)!) {
+        if (inside(sh, [t.x, t.z], t.r)) { bad.push(`${t.kind} at ${t.x.toFixed(0)},${t.z.toFixed(0)} in the ${id}`); break; }
+      }
+    }
+    expect(bad).toEqual([]);
+  });
+
+  it('walkers never pass through trees, rocks or buildings', () => {
+    const plan = sceneryPlan();
+    const biggest = IDS.map((id) => ({ id, s: shapes.get(id)![shapes.get(id)!.length - 1] }));
+    const bad = new Set<string>();
+    for (const [name, path] of Object.entries(WALK_PATHS)) {
+      const closed = [...path, path[0]];
+      for (let i = 0; i < closed.length - 1; i++) {
+        const [x1, z1] = closed[i], [x2, z2] = closed[i + 1];
+        const n = Math.max(2, Math.ceil(Math.hypot(x2 - x1, z2 - z1) / 0.5));
+        for (let k = 0; k <= n; k++) {
+          const x = x1 + ((x2 - x1) * k) / n, z = z1 + ((z2 - z1) * k) / n;
+          for (const t of plan) if (Math.hypot(t.x - x, t.z - z) < t.r + 0.6) bad.add(`${name} hits a ${t.kind} at ${t.x.toFixed(0)},${t.z.toFixed(0)}`);
+          for (const b of biggest) if (inside(b.s, [x, z], 0.4)) bad.add(`${name} walks through the ${b.id}`);
+        }
+      }
+    }
+    expect([...bad]).toEqual([]);
+  });
+});

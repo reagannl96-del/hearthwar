@@ -21,7 +21,7 @@ import { privatePacket, publicSnapshot } from '../src/engine/shadow';
 import { invalidateSpatial } from '../src/engine/spatial';
 import type { Difficulty, World } from '../src/engine/types';
 import { recomputeCounters, recomputePlayerPoints } from '../src/engine/village';
-import { SIZE_PRESETS, WORLD_VERSION, createWorld, defaultConfig, respawnHuman, spawnPlayer } from '../src/engine/world';
+import { SIZE_PRESETS, WORLD_VERSION, createWorld, defaultConfig, migrateWorld, respawnHuman, spawnPlayer } from '../src/engine/world';
 import type { ClientMsg, ServerMsg } from '../src/net/protocol';
 
 const env = process.env;
@@ -69,6 +69,7 @@ async function loadWorld(): Promise<World> {
     const w = await readStored();
     if (w && w.version === WORLD_VERSION) {
       recomputeCounters(w);
+      migrateWorld(w);
       recomputePlayerPoints(w);
       w.accounts ??= {};
       console.log(`Loaded world "${w.name}" with ${Object.keys(w.accounts).length} players.`);

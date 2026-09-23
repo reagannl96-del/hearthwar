@@ -8,7 +8,8 @@ import type { BuildingId, Buildings, Units } from '../../engine/types';
 import { buildModel, visualTier } from './buildings';
 import { C, bake, disposeTree, mat, rng, setSeason, type Season } from './kit';
 import { isRider, person, plot, scaffold, troop, type TroopModel } from './props';
-import { LAYOUT, WALL_R, buildScenery, buildTerrain, buildWall, heightAt } from './scene';
+import { FOOT_LOOPS, PEOPLE_LOOPS, RIDE_LOOPS } from './paths';
+import { LAYOUT, OUTSIDE, WALL_R, buildScenery, buildTerrain, buildWall, buildingScale, heightAt } from './scene';
 
 export interface VillageRendererOpts {
   onPick?: (b: BuildingId) => void;
@@ -27,7 +28,6 @@ interface Slot {
   label?: HTMLDivElement;
 }
 
-const OUTSIDE: BuildingId[] = ['timber', 'claypit', 'ironmine', 'farm'];
 const ALL: BuildingId[] = ['main', 'barracks', 'stable', 'workshop', 'academy', 'smithy', 'rally', 'statue', 'market', 'warehouse', 'hiding', 'watchtower', 'timber', 'claypit', 'ironmine', 'farm', 'wall'];
 
 const TROOP_KINDS: TroopModel[] = ['spear', 'sword', 'axe', 'archer', 'scout', 'light', 'marcher', 'heavy', 'paladin', 'sorcerer', 'druid', 'goblin', 'noble'];
@@ -318,7 +318,7 @@ export class VillageRenderer {
     group.traverse((o) => {
       if (o.userData.smoke) this.smoke.push({ src: o, puffs: [] });
     });
-    const scale = OUTSIDE.includes(id) ? 1.25 : 1.4;
+    const scale = buildingScale(id);
     group.position.set(x, y, z);
     group.rotation.y = ry;
     group.scale.setScalar(scale);
@@ -375,13 +375,7 @@ export class VillageRenderer {
 
   private updatePeople(points: number): void {
     const want = this.opts.showcase ? 14 : Math.min(18, 3 + Math.floor(points / 180));
-    const loops: THREE.Vector3[][] = [
-      circlePath(0, 8, 7.5, 16),
-      circlePath(0, 0, 31, 40),
-      [[0, 38], [0, 16], [-9, 14], [-20, 11], [-9, 14], [0, 16]].map(([x, z]) => new THREE.Vector3(x, 0, z)),
-      [[0, 16], [11, 13], [18, 26], [11, 13]].map(([x, z]) => new THREE.Vector3(x, 0, z)),
-      [[0, 38], [0, 60], [-20, 42], [-40, 44], [-20, 42], [0, 60]].map(([x, z]) => new THREE.Vector3(x, heightAt(x, z), z)),
-    ];
+    const loops: THREE.Vector3[][] = PEOPLE_LOOPS.map((p) => p.map(([x, z]) => new THREE.Vector3(x, Math.hypot(x, z) > WALL_R ? heightAt(x, z) : 0, z)));
     while (this.people.length < want) {
       const r = rng(this.people.length * 97 + 5);
       const g = person(TUNICS[this.people.length % TUNICS.length]);
@@ -422,16 +416,8 @@ export class VillageRenderer {
       disposeTree(t.g);
     }
     this.troops = [];
-    const foot: THREE.Vector3[][] = [
-      circlePath(0, 8, 9.5, 18),
-      [[0, 36], [0, 16], [-10, 12], [-20, 10], [-10, 12], [0, 16]].map(([x, z]) => new THREE.Vector3(x, 0, z)),
-      [[0, 16], [12, 12], [19, 24], [12, 12]].map(([x, z]) => new THREE.Vector3(x, 0, z)),
-      circlePath(0, 0, 28, 36),
-    ];
-    const ride: THREE.Vector3[][] = [
-      circlePath(0, 0, 34, 44).map((p) => new THREE.Vector3(p.x, heightAt(p.x, p.z), p.z)),
-      [[0, 40], [0, 62], [-22, 44], [-42, 46], [-22, 44], [0, 62]].map(([x, z]) => new THREE.Vector3(x, heightAt(x, z), z)),
-    ];
+    const foot: THREE.Vector3[][] = FOOT_LOOPS.map((p) => p.map(([x, z]) => new THREE.Vector3(x, Math.hypot(x, z) > WALL_R ? heightAt(x, z) : 0, z)));
+    const ride: THREE.Vector3[][] = RIDE_LOOPS.map((p) => p.map(([x, z]) => new THREE.Vector3(x, Math.hypot(x, z) > WALL_R ? heightAt(x, z) : 0, z)));
     want.forEach((kind, i) => {
       const r = rng(i * 131 + kind.length * 7);
       const g = troop(kind);
@@ -672,9 +658,6 @@ function makeLantern(): THREE.Group {
   return g;
 }
 
-function circlePath(cx: number, cz: number, r: number, n: number): THREE.Vector3[] {
-  return Array.from({ length: n }, (_, i) => new THREE.Vector3(cx + Math.cos((i / n) * Math.PI * 2) * r, 0, cz + Math.sin((i / n) * Math.PI * 2) * r));
-}
 
 function pathLength(p: THREE.Vector3[]): number {
   let l = 0;

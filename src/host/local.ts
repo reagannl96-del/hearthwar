@@ -5,7 +5,7 @@ import { advance, nextEventTime } from '../engine/game';
 import { invalidateSpatial } from '../engine/spatial';
 import type { ActionResult, World } from '../engine/types';
 import { recomputeCounters, recomputePlayerPoints } from '../engine/village';
-import { createWorld, respawnHuman, WORLD_VERSION, type NewWorldOptions } from '../engine/world';
+import { createWorld, migrateWorld, respawnHuman, WORLD_VERSION, type NewWorldOptions } from '../engine/world';
 import { HostBase } from './base';
 import { idbDel, idbGet, idbSet } from './storage';
 
@@ -69,6 +69,7 @@ export class LocalHost extends HostBase {
     const w = blob.world;
     if (!w || w.version !== WORLD_VERSION) throw new Error('This save was made by an incompatible version.');
     recomputeCounters(w);
+    migrateWorld(w);
     recomputePlayerPoints(w);
     const h = new LocalHost(w);
     h.offline = blob.offline !== false;

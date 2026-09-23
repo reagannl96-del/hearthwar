@@ -4,50 +4,59 @@ import * as THREE from 'three';
 import type { BuildingId } from '../../engine/types';
 import { C, bake, box, cone, cyl, darker, getSeason, mat, rng, roundTower, seasonal } from './kit';
 import { rock, tree, pumpkin, hayBale, barrel, crate } from './props';
+import { distToPaths } from './paths';
 
-export const WALL_R = 40;
+export const WALL_R = 44;
 export const GATE_A = Math.PI / 2; // gate faces +Z (towards the viewer)
 const GATE_HALF = 0.12;
 
-/** Where each building stands (x, z, rotation y). */
+/**
+ * Where each building stands (x, z, rotation y). Worked out so that no two
+ * buildings touch at any size, everything clears the wall, and the plaza, main
+ * street and ring road stay open; tests/scene.test.ts keeps it that way.
+ */
 export const LAYOUT: Record<BuildingId, [number, number, number]> = {
-  main: [0, -10, 0],
-  statue: [0, 7, 0],
-  rally: [-9, 16, 0.3],
-  market: [11, 15, -0.2],
-  barracks: [-21, -8, Math.PI / 2],
-  stable: [-24, 12, Math.PI / 2 - 0.2],
-  workshop: [-14, 28, 0.5],
-  smithy: [-12, -26, 0.25],
-  academy: [20, -16, -Math.PI / 2],
-  warehouse: [19, 29, -0.5],
-  hiding: [5, 31, 0],
-  watchtower: [31, 6, 0],
+  main: [1.9, -13.4, 0],
+  statue: [0, 3.8, 0],
+  rally: [-8.1, 7.9, -1.2708],
+  market: [14.9, 6.5, -1.77],
+  barracks: [-22, -13.1, 0],
+  stable: [-24.6, 8.8, -0.2],
+  workshop: [-14.5, 28, 2.07],
+  smithy: [-6, -31.1, 3.39],
+  academy: [20.3, -14.6, -1.5708],
+  warehouse: [11.7, 20.2, -2.07],
+  hiding: [6.4, 33.8, 0],
+  watchtower: [29.9, 5.7, -1.5708],
   wall: [0, 0, 0],
-  timber: [-58, 4, 0.2],
-  claypit: [-44, 46, 0.4],
-  ironmine: [-40, -54, 0.5],
-  farm: [48, -46, -0.3],
+  timber: [-63, 4, 0.2],
+  claypit: [-48, 50, 0.4],
+  ironmine: [-43, -58, 0.5],
+  farm: [50, -50, -0.3],
 };
 
+/** Buildings that stand outside the wall, on the rolling land. */
+export const OUTSIDE: BuildingId[] = ['timber', 'claypit', 'ironmine', 'farm'];
+/** Models are built at a small unit size and scaled up where they stand. */
+export const buildingScale = (id: BuildingId) => (OUTSIDE.includes(id) ? 1.25 : 1.3);
+
+/** The ring road just inside the wall. */
+export const RING_R = WALL_R - 4;
+
+// x1, z1, x2, z2, width
 const ROADS: [number, number, number, number, number][] = [
-  // x1, z1, x2, z2, width
-  [0, 15, 0, 95, 5],
-  [0, 15, 0, -4, 4.5],
-  [0, 8, -9, 16, 3],
-  [0, 8, 11, 15, 3],
-  [-4, 4, -18, -6, 2.6],
-  [-4, 10, -21, 12, 2.6],
-  [-3, 20, -14, 27, 2.4],
-  [3, 20, 18, 28, 2.4],
-  [-3, -3, -11, -22, 2.4],
-  [4, -4, 17, -15, 2.4],
-  [6, 10, 29, 6, 2.2],
-  [0, 44, -30, 46, 3],
-  [-30, 46, -40, 46, 3],
-  [-39, 6, -50, 4, 3],
-  [-28, -28, -36, -44, 3],
-  [28, -28, 42, -38, 3],
+  [0, 10, 0, 100, 5], // main street out through the gate
+  [0, 4, 0, -4, 4.5],
+  // lanes from the plaza to the buildings around it
+  ...(['rally', 'market', 'barracks', 'stable', 'workshop', 'academy', 'warehouse', 'watchtower', 'hiding'] as BuildingId[]).map(
+    (id) => [0, 4, LAYOUT[id][0], LAYOUT[id][1], 2.4] as [number, number, number, number, number],
+  ),
+  // tracks out to the timber camp, clay pit, iron mine and farm
+  ...(['timber', 'claypit', 'ironmine', 'farm'] as BuildingId[]).map((id) => {
+    const [x, z] = LAYOUT[id];
+    const d = Math.hypot(x, z);
+    return [(x / d) * (WALL_R + 2), (z / d) * (WALL_R + 2), x, z, 3] as [number, number, number, number, number];
+  }),
 ];
 
 function distToSeg(px: number, pz: number, x1: number, z1: number, x2: number, z2: number): number {
@@ -65,7 +74,7 @@ function noise(x: number, z: number, s: number): number {
 const streamX = (z: number) => 76 + Math.sin(z / 18) * 7 + Math.sin(z / 7) * 1.5;
 
 function onRoad(x: number, z: number): boolean {
-  if (Math.abs(Math.hypot(x, z) - 31) < 1.4 && !(z > 28)) return true;
+  if (Math.abs(Math.hypot(x, z) - RING_R) < 1.4) return true;
   for (const [x1, z1, x2, z2, w] of ROADS) if (w > 0 && distToSeg(x, z, x1, z1, x2, z2) < w / 2) return true;
   return false;
 }
@@ -154,17 +163,28 @@ function freeForTree(x: number, z: number): boolean {
   const r = Math.hypot(x, z);
   if (r < WALL_R + 5) return false;
   if (onRoad(x, z)) return false;
+  if (distToPaths(x, z) < 3) return false;
   if (Math.abs(x - streamX(z)) < 6) return false;
   for (const id of ['timber', 'claypit', 'ironmine', 'farm'] as BuildingId[]) {
     const [bx, bz] = LAYOUT[id];
-    const rad = id === 'farm' ? 24 : id === 'timber' ? 12 : 13;
+    const rad = id === 'farm' ? 27 : id === 'ironmine' ? 19 : id === 'timber' ? 16 : 15;
     if (Math.hypot(x - bx, z - bz) < rad) return false;
   }
   return true;
 }
 
-export function buildScenery(seed = 11): THREE.Group {
-  const g = new THREE.Group();
+export interface SceneryItem {
+  kind: 'oak' | 'pine' | 'birch' | 'rock' | 'pumpkin' | 'hay' | 'barrel' | 'crate';
+  x: number;
+  z: number;
+  /** how much room it takes (radius) */
+  r: number;
+  scale: number;
+}
+
+/** Where every tree, rock and prop goes. Deterministic, so tests can check it. */
+export function sceneryPlan(seed = 11): SceneryItem[] {
+  const out: SceneryItem[] = [];
   const r = rng(seed);
   let placed = 0;
   for (let tries = 0; placed < 230 && tries < 6000; tries++) {
@@ -177,28 +197,47 @@ export function buildScenery(seed = 11): THREE.Group {
     if (x > 20 && r() < 0.35) continue;
     if (x > 20 && z < -20 && Math.hypot(x - 48, z + 46) < 34) continue;
     const kind = r() < (getSeason() === 'winter' ? 0.6 : 0.28) ? 'pine' : r() < 0.18 ? 'birch' : 'oak';
-    const t = tree(kind, r, 1.1 + (d > 100 ? 0.3 : 0));
-    t.position.set(x, heightAt(x, z) - 0.1, z);
-    g.add(t);
+    const scale = 1.1 + (d > 100 ? 0.3 : 0);
+    out.push({ kind, x, z, r: (kind === 'pine' ? 1.3 : 1.7) * scale, scale });
     placed++;
   }
   for (let i = 0; i < 40; i++) {
     const x = (r() - 0.5) * 280, z = (r() - 0.5) * 280;
     if (!freeForTree(x, z)) continue;
-    const rk = rock(r, 1 + r());
-    rk.position.set(x, heightAt(x, z), z);
-    g.add(rk);
+    const scale = 1 + r();
+    out.push({ kind: 'rock', x, z, r: 1.1 * scale, scale });
   }
   // a few trees and bits of life inside the walls
-  for (const [x, z, k] of [[-30, -20, 'oak'], [26, -30, 'birch'], [-31, 20, 'oak'], [28, 18, 'oak'], [9, -30, 'birch'], [-6, 34, 'oak']] as const) {
-    const t = tree(k, r, 0.9);
-    t.position.set(x, 0, z);
-    g.add(t);
+  for (const [x, z, k] of [[-34, 2, 'oak'], [-24, -24, 'birch'], [28, -18, 'oak'], [32, 14, 'oak'], [10, -31, 'birch'], [-5, 31, 'oak']] as const) {
+    out.push({ kind: k, x, z, r: 1.5, scale: 0.9 });
   }
-  g.add(pumpkin(5, 20), pumpkin(5.8, 20.6, 0.8), pumpkin(-4.6, 22, 1.1));
-  g.add(hayBale(-28, 2, 0.5), barrel(8, -24), crate(9, -23.4), crate(24, 10));
-  const baked = bake(g);
-  return baked;
+  out.push(
+    { kind: 'pumpkin', x: -4, z: 18, r: 0.5, scale: 1 }, { kind: 'pumpkin', x: -4.8, z: 18.8, r: 0.4, scale: 0.8 }, { kind: 'pumpkin', x: -3.6, z: 19.6, r: 0.55, scale: 1.1 },
+    { kind: 'hay', x: -30, z: -2, r: 1, scale: 0.5 }, { kind: 'barrel', x: 4, z: -26, r: 0.5, scale: 1 }, { kind: 'crate', x: 5.2, z: -26.8, r: 0.5, scale: 1 }, { kind: 'crate', x: 24, z: 10, r: 0.5, scale: 1 },
+  );
+  return out;
+}
+
+export function buildScenery(seed = 11): THREE.Group {
+  const g = new THREE.Group();
+  const r = rng(seed + 1000);
+  for (const it of sceneryPlan(seed)) {
+    const inside = Math.hypot(it.x, it.z) < WALL_R;
+    const y = inside ? 0 : heightAt(it.x, it.z);
+    if (it.kind === 'oak' || it.kind === 'pine' || it.kind === 'birch') {
+      const t = tree(it.kind, r, it.scale);
+      t.position.set(it.x, inside ? 0 : y - 0.1, it.z);
+      g.add(t);
+    } else if (it.kind === 'rock') {
+      const rk = rock(r, it.scale);
+      rk.position.set(it.x, y, it.z);
+      g.add(rk);
+    } else if (it.kind === 'pumpkin') g.add(pumpkin(it.x, it.z, it.scale));
+    else if (it.kind === 'hay') g.add(hayBale(it.x, it.z, it.scale));
+    else if (it.kind === 'barrel') g.add(barrel(it.x, it.z));
+    else g.add(crate(it.x, it.z));
+  }
+  return bake(g);
 }
 
 /** The wall ring for a given level. */

@@ -89,6 +89,18 @@ export const aiThinkInterval = (w: World) => Math.min(300_000, Math.max(10_000, 
 export const PROTECTION_MS = 30 * 60_000;
 export const protectionEnd = (w: World) => w.now + PROTECTION_MS;
 
+/**
+ * Bring an older saved world up to today's rules. Beginner protection used to
+ * last hours; anyone still holding more than the current allowance keeps only that.
+ */
+export function migrateWorld(w: World): void {
+  const cap = protectionEnd(w);
+  for (const id in w.players) {
+    const p = w.players[id];
+    if (p.protectedUntil > cap) p.protectedUntil = cap;
+  }
+}
+
 export const barbInterval = (w: World) => Math.max(15_000, Math.round((2 * HOUR) / w.config.speed));
 export const sampleInterval = (w: World) => Math.max(30_000, Math.round((5 * HOUR) / w.config.speed));
 export const itemInterval = (w: World) => Math.max(60_000, Math.round((24 * HOUR) / w.config.speed));
