@@ -25,7 +25,7 @@ function cssVar(name: string): string {
 }
 
 function tier(points: number): number {
-  return points < 100 ? 0 : points < 500 ? 1 : points < 2000 ? 2 : points < 5000 ? 3 : points < 9000 ? 4 : 5;
+  return points < 300 ? 0 : points < 1000 ? 1 : points < 3000 ? 2 : points < 9000 ? 3 : 4;
 }
 
 export function MapScreen({ focus }: { focus?: number }) {
@@ -224,7 +224,9 @@ export function MapScreen({ focus }: { focus?: number }) {
         } else {
           const t = tier(v.points);
           const sprite = villageSprite(t, v.ownerId === null ? 'barb' : 'player', snow[y * data.size + x] === 1, snow[y * data.size + x] === 2);
-          ctx.drawImage(sprite, px - z * 0.12, py - z * 0.2, z * 1.24, z * 1.24);
+          // the painted village fills its field: the plot is centred on the square, its walls rising above it
+          const S = z * 1.95;
+          ctx.drawImage(sprite, px + z / 2 - S / 2, py + z * 0.62 - S * 0.62, S, S);
           // owner marker, Tribal Wars style
           const d = Math.max(4, z * 0.16);
           ctx.fillStyle = fill;
