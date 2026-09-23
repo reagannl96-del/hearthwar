@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { THEMED_UNITS, themeOfHero, unitNameAt } from '../src/engine/data/themes';
 import { sideInfo } from '../src/engine/commands';
 import { UNITS } from '../src/engine/data/units';
+import { applyAction } from '../src/engine/actions';
+import { advance } from '../src/engine/game';
 import { buildable, createWorld, defaultConfig, inRealm, isVolcanic, migrateWorld, realmGrowth, terrainAt } from '../src/engine/world';
 
 describe('the realm keeps growing', () => {
@@ -111,5 +113,27 @@ describe('each kind of village fields its own troops', () => {
     v.heroKind = 'sorcerer';
     expect(sideInfo(w, v).theme).toBe('sorcerer');
     expect(unitNameAt(v, 'scout')).toBe('Owl Familiar');
+  });
+});
+
+describe('the necromancer', () => {
+  it('raises one in ten fallen enemy foot soldiers as skeleton spearmen for his side', () => {
+    const w = createWorld({ worldName: 'T', playerName: 'P', villageName: 'H', seed: 31, config: { ...defaultConfig(), difficulty: 'peaceful', aiCount: 2, size: 60 } });
+    const p = w.players[w.humanId];
+    const v = w.villages[p.villages[0]];
+    Object.assign(v.buildings, { main: 20, barracks: 10, farm: 30, rally: 1, statue: 1 });
+    v.units = { axe: 600, necromancer: 1 };
+    v.heroKind = 'necromancer';
+    const target = Object.values(w.villages).filter((b) => b.ownerId === null).sort((a, b) => Math.hypot(a.x - v.x, a.y - v.y) - Math.hypot(b.x - v.x, b.y - v.y))[0];
+    target.units = { spear: 200, sword: 50 };
+    target.buildings.wall = 0;
+    expect(applyAction(w, p.id, { type: 'send', vid: v.id, target: target.id, kind: 'attack', units: { axe: 600, necromancer: 1 } }).ok).toBe(true);
+    const out = Object.values(w.commands).find((c) => c.ownerId === p.id)!;
+    advance(w, out.arrive + 1);
+    const back = Object.values(w.commands).find((c) => c.ownerId === p.id && c.kind === 'return')!;
+    expect(back.units.spear).toBe(25);
+    const rep = p.reports.find((r) => r.battle?.risen);
+    expect(rep?.battle?.risen).toEqual({ side: 'attacker', n: 25 });
+    expect(unitNameAt(v, 'spear', true)).toBe('Skeleton Spearmen');
   });
 });

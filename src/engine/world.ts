@@ -593,6 +593,7 @@ export function restartPlayer(w: World, pid: number, villageNameText: string): V
     delete v.units.sorcerer;
     delete v.units.druid;
     delete v.units.goblin;
+    delete v.units.necromancer;
     delete v.units.militia;
   }
   news(w, `${p.name} abandoned their lands to the barbarians and set out to start anew.`, 'player');

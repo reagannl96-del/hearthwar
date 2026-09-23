@@ -91,7 +91,7 @@ const VOLCANIC: Record<number, number> = {
 };
 
 /** Each statue hero gives the village its own look. */
-export type Theme = 'classic' | 'sorcerer' | 'druid' | 'goblin';
+export type Theme = 'classic' | 'sorcerer' | 'druid' | 'goblin' | 'necromancer';
 let theme: Theme = 'classic';
 export function setTheme(t: Theme) {
   theme = t;
@@ -121,6 +121,17 @@ const THEMES: Record<Theme, Record<number, number>> = {
     [C.grass]: 0x5a8a36, [C.grassLight]: 0x6fa044, [C.grassDark]: 0x40692a, [C.grassRust]: 0x7f8a38,
     [C.dirt]: 0x7a6446, [C.dirtDark]: 0x5e4a33, [C.water]: 0x3a7f86,
     0x97a24e: 0x6aa044, 0x7f8d43: 0x4f7f32, 0x8b984a: 0x5d9038,
+  },
+  // black slate roofs, bone-grey walls, pitch-dark timber, ghost-green banners
+  necromancer: {
+    [C.tile]: 0x2e2a33, [C.tileDark]: 0x221f27, [C.tileWarm]: 0x3a3540, [C.thatch]: 0x3a3a36, [C.thatchDark]: 0x2a2a27,
+    [C.plaster]: 0xa9a59a, [C.plasterWarm]: 0x9c978b, [C.timber]: 0x1e1a1c, [C.timberLight]: 0x3a3234,
+    [C.stone]: 0x6e6c72, [C.stoneDark]: 0x4e4c52, [C.stoneLight]: 0x8e8c92, [C.red]: 0x2f7a4a, [C.slate]: 0x26232b, [C.door]: 0x141214,
+    // the ground turns to a grey, dead meadow; the trees keep only a few withered leaves
+    [C.grass]: 0x5d6250, [C.grassLight]: 0x6a6e5a, [C.grassDark]: 0x4a4e40, [C.grassRust]: 0x6e6450,
+    [C.dirt]: 0x6a6258, [C.dirtDark]: 0x544d45, [C.water]: 0x2e4a3a,
+    [C.leafOrange]: 0x6a5a40, [C.leafRed]: 0x5a3a30, [C.leafYellow]: 0x7a7050, [C.leafGold]: 0x6a5a3a, [C.leafGreen]: 0x4a5040,
+    0x97a24e: 0x646a55, 0x7f8d43: 0x52584a, 0x8b984a: 0x5c6150,
   },
   // rusty patched roofs, grimy walls, soot-dark wood, goblin-green rags
   goblin: {
@@ -225,6 +236,11 @@ export function house(o: {
   if (theme === 'sorcerer') return sorcererHouse(o);
   if (theme === 'druid') return druidHouse(o);
   if (theme === 'goblin') return goblinHouse(o);
+  if (theme === 'necromancer') return necroHouse(o);
+  return baseHouse(o);
+}
+
+function baseHouse(o: HouseOpts): THREE.Group {
   const g = new THREE.Group();
   const wall = o.wall ?? (o.stone ? C.stone : C.plaster);
   const roof = o.roof ?? C.tile;
@@ -312,6 +328,11 @@ export function roundTower(r: number, h: number, o: TowerOpts = {}): THREE.Group
   if (theme === 'sorcerer') return sorcererTower(r, h, o);
   if (theme === 'druid') return druidTower(r, h, o);
   if (theme === 'goblin') return goblinTower(r, h, o);
+  if (theme === 'necromancer') return necroTower(r, h, o);
+  return baseTower(r, h, o);
+}
+
+function baseTower(r: number, h: number, o: TowerOpts): THREE.Group {
   const g = new THREE.Group();
   const color = o.color ?? C.stone;
   g.add(cyl(r, r * 1.08, h, color, 10));
@@ -542,6 +563,31 @@ function goblinHouse(o: HouseOpts): THREE.Group {
   const nw = Math.min(2, o.windows ?? 1);
   for (let i = 0; i < nw; i++) g.add(windowAt(-w / 2 + ((i + 1) * w) / (nw + 1) + 0.6, h * 0.55, d / 2 + 0.09));
   if (o.chimney) g.add(cyl(0.3, 0.35, o.roofH + 1.2, C.iron, 5, w * 0.25, h, -d * 0.2));
+  return g;
+}
+
+const GHOST_GREEN = 0x5cff9a, GHOST_EMIT = 0x1f9a4a;
+
+/** Necromancer house: the old stone house under a steep black roof, iron spikes on the ridge, windows lit ghost-green. */
+function necroHouse(o: HouseOpts): THREE.Group {
+  const g = baseHouse({ ...o, roofH: o.roofH * 1.45, frame: null, chimney: false });
+  g.traverse((c) => {
+    if (c.userData.window && c instanceof THREE.Mesh) c.material = mat(GHOST_GREEN, { emissive: GHOST_EMIT });
+  });
+  const top = o.h + o.roofH * 1.45;
+  const n = Math.max(2, Math.round(o.d / 1.6));
+  for (let i = 0; i < n; i++) g.add(cone(0.09, 0.6, C.iron, 4, 0, top + 0.1, -o.d / 2 + ((i + 0.5) * o.d) / n));
+  return g;
+}
+
+/** Necromancer tower: dark stone under a needle-thin black spire, a green light burning in the slits. */
+function necroTower(r: number, h: number, o: TowerOpts): THREE.Group {
+  const g = baseTower(r, h, { ...o, roof: null, merlons: o.merlons });
+  g.add(cone(r * 1.1, r * 3.4, C.slate, 8, 0, h + 0.3));
+  g.add(cone(0.08, 1.2, C.iron, 4, 0, h + 0.3 + r * 3.4));
+  const glow = mesh(new THREE.CylinderGeometry(r * 1.02, r * 1.02, 0.18, 10), GHOST_GREEN, { emissive: GHOST_EMIT });
+  glow.position.y = h * 0.72;
+  g.add(glow);
   return g;
 }
 

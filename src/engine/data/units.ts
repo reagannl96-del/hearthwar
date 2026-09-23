@@ -114,6 +114,12 @@ export const UNITS: Record<UnitId, UnitDef> = {
     cost: r(30, 30, 30), pop: 10, attack: 120, def: [120, 120, 80], speed: 8, carry: 300, time: 21600,
     cls: 'inf', building: 'statue', req: { statue: 1 }, research: false, smithy: 0,
   },
+  necromancer: {
+    id: 'necromancer', name: 'Necromancer', plural: 'Necromancers',
+    description: 'A hero of the statue. Death answers his call: the fallen rise again to fight for him.',
+    cost: r(50, 40, 50), pop: 10, attack: 150, def: [200, 150, 200], speed: 12, carry: 0, time: 21600,
+    cls: 'inf', building: 'statue', req: { statue: 1 }, research: false, smithy: 0,
+  },
   noble: {
     id: 'noble', name: 'Nobleman', plural: 'Noblemen',
     description: 'Lowers the loyalty of a village. At zero loyalty the village is yours.',
@@ -129,11 +135,11 @@ export const UNITS: Record<UnitId, UnitDef> = {
 };
 
 export const UNIT_ORDER: UnitId[] = [
-  'spear', 'sword', 'axe', 'archer', 'scout', 'light', 'marcher', 'heavy', 'ram', 'catapult', 'paladin', 'sorcerer', 'druid', 'goblin', 'noble',
+  'spear', 'sword', 'axe', 'archer', 'scout', 'light', 'marcher', 'heavy', 'ram', 'catapult', 'paladin', 'sorcerer', 'druid', 'goblin', 'necromancer', 'noble',
 ];
 
 /** Heroes of the statue: each village may keep one. */
-export const HEROES: UnitId[] = ['paladin', 'sorcerer', 'druid', 'goblin'];
+export const HEROES: UnitId[] = ['paladin', 'sorcerer', 'druid', 'goblin', 'necromancer'];
 export const isHero = (u: UnitId) => HEROES.includes(u);
 
 export interface HeroInfo {
@@ -149,6 +155,7 @@ export const HERO_INFO: Record<string, HeroInfo> = {
   paladin: { vs: 'cav', vsLabel: 'Cavalry', perks: ['+25% strength against cavalry', 'Carries your legendary items into battle'] },
   sorcerer: { vs: 'inf', vsLabel: 'Infantry', perks: ['+25% strength against infantry'] },
   druid: { vs: 'arc', vsLabel: 'Archers', perks: ['+25% strength against archers', 'Defending: enemy rams and catapults work at half power'] },
+  necromancer: { vsLabel: 'the fallen', perks: ['Raise the dead: when his side wins, one in ten enemy foot soldiers who fell rise as skeleton spearmen in his army (farm space permitting)', 'Wins in attack or in defense both count'] },
   goblin: { vsLabel: 'Scouts', perks: ['Scouts fight twice as hard, in attack and defense', 'The army carries 25% more loot', 'The fastest hero on the road'] },
 };
 

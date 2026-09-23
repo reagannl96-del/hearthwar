@@ -42,7 +42,7 @@ interface Slot {
 
 const ALL: BuildingId[] = ['main', 'barracks', 'stable', 'workshop', 'academy', 'smithy', 'rally', 'statue', 'market', 'warehouse', 'hiding', 'watchtower', 'timber', 'claypit', 'ironmine', 'farm', 'wall'];
 
-const TROOP_KINDS: TroopModel[] = ['spear', 'sword', 'axe', 'archer', 'scout', 'light', 'marcher', 'heavy', 'paladin', 'sorcerer', 'druid', 'goblin', 'noble'];
+const TROOP_KINDS: TroopModel[] = ['spear', 'sword', 'axe', 'archer', 'scout', 'light', 'marcher', 'heavy', 'paladin', 'sorcerer', 'druid', 'goblin', 'necromancer', 'noble'];
 const TUNICS = [0x8e3a1f, 0x2f5d99, 0x6f7c35, 0xc98f2e, 0x5a3a22, 0x7a2f4a, 0xd9c7a0];
 
 /** default camera: polar angle, azimuth, distance */
@@ -447,7 +447,7 @@ export class VillageRenderer {
     for (const k of TROOP_KINDS) {
       const n = units[k] ?? 0;
       if (n > 0) want.push(k);
-      if (n >= 100 && !['paladin', 'sorcerer', 'druid', 'goblin', 'noble'].includes(k)) want.push(k);
+      if (n >= 100 && !['paladin', 'sorcerer', 'druid', 'goblin', 'necromancer', 'noble'].includes(k)) want.push(k);
     }
     const key = want.join(',');
     if (key === this.troopKey) return;
@@ -925,7 +925,7 @@ function marchFigures(units: Units): TroopModel[] {
     if (i > 20) break;
   }
   // the heroes and noblemen always ride along if present
-  for (const [k] of kinds) { const m = map[k]; if (m && ['paladin', 'sorcerer', 'druid', 'goblin', 'noble'].includes(m) && !out.includes(m)) out.push(m); }
+  for (const [k] of kinds) { const m = map[k]; if (m && ['paladin', 'sorcerer', 'druid', 'goblin', 'necromancer', 'noble'].includes(m) && !out.includes(m)) out.push(m); }
   return out;
 }
 

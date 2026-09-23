@@ -103,7 +103,7 @@ function columns(b: BattleData): UnitId[] {
   const seen = (u: UnitId) => [b.attUnits, b.defUnits, b.scout?.unitsOutside].some((x) => (x?.[u] ?? 0) > 0);
   return ARMY_ORDER.filter((u) => {
     if ((u === 'archer' || u === 'marcher') && !pv.config.archers) return seen(u);
-    if (u === 'militia' || u === 'sorcerer' || u === 'druid' || u === 'goblin') return seen(u);
+    if (u === 'militia' || u === 'sorcerer' || u === 'druid' || u === 'goblin' || u === 'necromancer') return seen(u);
     return true;
   });
 }
@@ -188,6 +188,7 @@ function Battle({ b, kind }: { b: BattleData; kind: Report['kind'] }) {
         {b.wall && <div class="factor"><Icon name="b_wall" size={16} /><span>Wall</span><b class="num">{b.wall.before}{b.wall.before !== b.wall.after && <> → {b.wall.after}</>}</b></div>}
         {b.nightOwl && <div class="factor"><span>Night bonus</span><b class="good-text">×2 defense</b></div>}
         {b.militia && <div class="factor"><Icon name="militia" size={16} /><span>Militia fought</span></div>}
+        {b.risen && <div class="factor"><Icon name="necromancer" size={16} /><span>{b.risen.n} of the fallen rose again for the {b.risen.side}</span></div>}
         {b.paladinItem && <div class="factor"><Icon name="paladin" size={16} /><span>{ITEM_BY_ID[b.paladinItem]?.name}</span></div>}
       </div>
 

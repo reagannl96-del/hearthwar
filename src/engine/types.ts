@@ -12,7 +12,7 @@ export type BuildingId =
 
 export type UnitId =
   | 'spear' | 'sword' | 'axe' | 'archer' | 'scout' | 'light' | 'marcher'
-  | 'heavy' | 'ram' | 'catapult' | 'paladin' | 'sorcerer' | 'druid' | 'goblin' | 'noble' | 'militia';
+  | 'heavy' | 'ram' | 'catapult' | 'paladin' | 'sorcerer' | 'druid' | 'goblin' | 'necromancer' | 'noble' | 'militia';
 
 export type Units = { [K in UnitId]?: number };
 export type Buildings = Record<BuildingId, number>;
@@ -149,7 +149,7 @@ export type ReportColor = 'green' | 'yellow' | 'red' | 'blue' | 'grey';
 
 export interface SideInfo {
   /** the village's look, so reports can name its troops (goblin, sorcerer, druid or classic) */
-  theme?: 'classic' | 'sorcerer' | 'druid' | 'goblin';
+  theme?: 'classic' | 'sorcerer' | 'druid' | 'goblin' | 'necromancer';
   playerId: number | null;
   playerName: string;
   vid: number;
@@ -185,6 +185,8 @@ export interface BattleData {
   scout?: ScoutInfo;
   paladinItem?: string;
   militia?: boolean;
+  /** a necromancer raised some of the fallen as skeleton spearmen for his side */
+  risen?: { side: 'attacker' | 'defender'; n: number };
   nightOwl?: boolean;
 }
 

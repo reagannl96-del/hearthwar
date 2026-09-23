@@ -315,6 +315,8 @@ export function horse(color: number = C.horse): THREE.Group {
 const DRUID_ROBES = [0x6b5a44, 0x55503c, 0x7a6a4e, 0x4d4436, 0x6a5e46];
 const DRUID_COWLS = [0x2e2a22, 0x3a2f24, 0x262b22, 0x3b3328];
 const SORCERER_CLOAKS = [0x3c2470, 0x1f2f6e, 0x5b3596, 0x2a1d4a, 0x46307a];
+const NECRO_CLOAKS = [0x2e2a33, 0x3a2f3f, 0x26302a, 0x352a2a, 0x1f1d24];
+const BONE = 0xe6dfcc, BONE_DARK = 0xb9b19c;
 /** hands out a little variety between otherwise identical villagers */
 let figureCount = 0;
 
@@ -383,6 +385,28 @@ export function person(tunic: number): THREE.Group {
       }
     }
     g.add(box(0.6, 0.05, 0.06, pattern === 1 ? 0xdfe6ef : 0xf3d36a, 0, 0.05, -0.28)); // hem
+  } else if (theme === 'necromancer') {
+    // the risen: bare bones under a tattered cape, a green light where the eyes were
+    const k = figureCount++;
+    const cloak = NECRO_CLOAKS[k % NECRO_CLOAKS.length];
+    for (const x of [-0.09, 0.09]) g.add(box(0.07, 0.34, 0.07, BONE, x, 0, 0));
+    g.add(box(0.26, 0.08, 0.14, BONE, 0, 0.32, 0));
+    g.add(cyl(0.035, 0.035, 0.5, BONE_DARK, 5, 0, 0.36));
+    g.add(blob(0.19, BONE, 0, 0.74, 0, 1, 1.15, 0.8));
+    for (const y of [0.64, 0.74, 0.84]) g.add(box(0.34, 0.035, 0.22, 0x2a2424, 0, y, 0));
+    for (const x of [-0.24, 0.24]) g.add(box(0.06, 0.52, 0.06, BONE, x, 0.46, 0));
+    g.add(blob(0.18, BONE, 0, 1.18, 0.02, 1, 1.05, 1));
+    g.add(box(0.13, 0.08, 0.12, BONE_DARK, 0, 1.02, 0.06)); // jaw
+    for (const x of [-0.07, 0.07]) {
+      g.add(box(0.07, 0.07, 0.04, 0x141010, x, 1.19, 0.17));
+      g.add(mesh(new THREE.OctahedronGeometry(0.025, 0), 0x5cff9a, { emissive: 0x1f9a4a }).translateX(x).translateY(1.22).translateZ(0.19));
+    }
+    // the cape, ragged at the hem, and for some a hood
+    const cape = box(0.5, 0.95, 0.04, cloak, 0, 0.25, -0.2);
+    cape.rotation.x = 0.1;
+    g.add(cape);
+    for (const x of [-0.18, 0, 0.18]) g.add(box(0.12, 0.14, 0.04, cloak, x + (k % 2 ? 0.04 : -0.03), 0.12, -0.19));
+    if (k % 2 === 0) g.add(blob(0.23, cloak, 0, 1.22, -0.06, 1, 1.1, 1));
   } else {
     const body = cyl(0.2, 0.28, 0.75, tunic, 6, 0, 0.3);
     const head = blob(0.2, C.skin, 0, 1.25, 0);
@@ -482,7 +506,7 @@ const STEEL = 0xb9c4cc;
 const STEEL_DK = 0x6a7782;
 const SHAFT = 0x7a5230;
 
-export type TroopModel = 'spear' | 'sword' | 'axe' | 'archer' | 'scout' | 'noble' | 'light' | 'marcher' | 'heavy' | 'paladin' | 'sorcerer' | 'druid' | 'goblin';
+export type TroopModel = 'spear' | 'sword' | 'axe' | 'archer' | 'scout' | 'noble' | 'light' | 'marcher' | 'heavy' | 'paladin' | 'sorcerer' | 'druid' | 'goblin' | 'necromancer';
 
 function helmet(g: THREE.Group, color = STEEL) {
   g.add(cyl(0.16, 0.23, 0.2, color, 7, 0, 1.3));
@@ -500,6 +524,7 @@ const GEAR = {
   goblin: { blade: 0x978d74, shield: 0x6e4a2a, glow: 0 },
   sorcerer: { blade: 0xb58cff, shield: 0x3f6ad8, glow: 0x5a2fb0 },
   druid: { blade: 0xd6cdb0, shield: 0x4f7a2e, glow: 0 },
+  necromancer: { blade: 0x7d8480, shield: 0x2e2a33, glow: 0 },
 };
 const bladeMesh = (geo: THREE.BufferGeometry) => {
   const k = GEAR[getTheme()];
@@ -548,15 +573,35 @@ function bird(owl: boolean): THREE.Group {
   return g;
 }
 
+/** A necromancer's scouts: a little swarm of bats flitting about. */
+function bats(): THREE.Group {
+  const g = new THREE.Group();
+  for (const [x, y, z, s] of [[0, 2.0, 0, 1], [0.5, 2.4, -0.3, 0.7], [-0.45, 1.7, 0.25, 0.75]]) {
+    const b = new THREE.Group();
+    b.add(blob(0.12, 0x2e2a33, 0, 0, 0, 1, 1.2, 1));
+    for (const side of [-1, 1]) {
+      const wing = box(0.36, 0.03, 0.2, 0x221f27, side * 0.2, 0, 0);
+      wing.rotation.z = side * 0.45;
+      b.add(wing);
+      b.add(mesh(new THREE.OctahedronGeometry(0.025, 0), 0x5cff9a, { emissive: 0x1f9a4a }).translateX(side * 0.04).translateY(0.06).translateZ(0.1));
+    }
+    b.position.set(x, y, z);
+    b.scale.setScalar(s);
+    g.add(b);
+  }
+  return g;
+}
+
 /** One of your soldiers on foot, carrying what their unit is known for. */
 function footSoldier(kind: TroopModel): THREE.Group {
   if (kind === 'goblin') return goblin();
   const theme = getTheme();
   if (kind === 'scout' && (theme === 'sorcerer' || theme === 'druid')) return bird(theme === 'sorcerer');
+  if (kind === 'scout' && theme === 'necromancer') return bats();
   const gear = GEAR[theme];
   // helmets are a village-folk thing; goblins, sorcerers and druids go bare-headed, hatted or hooded
   const helm = (g: THREE.Group) => { if (theme === 'classic') helmet(g); };
-  const tunic = { spear: 0x2f5d99, sword: 0x8e3a1f, axe: 0x5a3a22, archer: 0x4f7a2e, scout: 0x3b3a30, noble: C.red, sorcerer: 0x5b3596, druid: 0x4f7a2e }[kind as 'spear'] ?? 0x6f7c35;
+  const tunic = { spear: 0x2f5d99, sword: 0x8e3a1f, axe: 0x5a3a22, archer: 0x4f7a2e, scout: 0x3b3a30, noble: C.red, sorcerer: 0x5b3596, druid: 0x4f7a2e, necromancer: 0x221f27 }[kind as 'spear'] ?? 0x6f7c35;
   const g = person(tunic);
   switch (kind) {
     case 'spear':
@@ -644,8 +689,27 @@ function footSoldier(kind: TroopModel): THREE.Group {
       g.add(blob(0.12, C.leafGold, 0.3, 2.15, 0.2));
       break;
     }
+    case 'necromancer': {
+      // a skeleton lord in a long black robe and hood, his staff crowned by a skull burning green
+      g.add(cyl(0.3, 0.42, 0.62, 0x221f27, 7, 0, -0.02));
+      g.add(blob(0.25, 0x221f27, 0, 1.22, -0.07, 1, 1.15, 1));
+      const cape = box(0.6, 1.2, 0.05, 0x221f27, 0, 0.05, -0.26);
+      cape.rotation.x = 0.12;
+      g.add(cape);
+      g.add(box(0.62, 0.06, 0.07, 0x2f7a4a, 0, 0.06, -0.27));
+      g.add(cyl(0.035, 0.04, 2.0, 0x221c1b, 5, 0.36, 0, 0.1));
+      g.add(blob(0.13, BONE, 0.36, 2.06, 0.1, 1, 1.05, 1));
+      const flame = mesh(new THREE.IcosahedronGeometry(0.12, 0), 0x5cff9a, { emissive: 0x1f9a4a });
+      flame.position.set(0.36, 2.3, 0.1);
+      g.add(flame);
+      break;
+    }
     case 'noble':
       if (theme === 'classic') g.add(cyl(0.17, 0.17, 0.14, C.gold, 6, 0, 1.4));
+      if (theme === 'necromancer') for (let i = 0; i < 5; i++) {
+        const a = (i / 5) * Math.PI * 2;
+        g.add(cone(0.035, 0.2, 0x2e2a33, 4, Math.cos(a) * 0.15, 1.3, Math.sin(a) * 0.15));
+      }
       if (theme === 'goblin') g.add(cyl(0.15, 0.15, 0.14, 0xb07a3a, 5, 0, 1.22));
       if (theme === 'sorcerer' || theme === 'druid') {
         g.add(cyl(0.035, 0.04, 1.9, 0x5a3f28, 5, 0.36, 0, 0.1));
@@ -682,6 +746,18 @@ function goblin(): THREE.Group {
   g.add(club);
   g.add(blob(0.24, 0xc9ad72, -0.1, 0.55, -0.26, 1, 1.1, 0.9));
   for (const c of g.children) c.castShadow = true;
+  return g;
+}
+
+/** A skeletal horse: bone-white, ribs showing, green light in the eye; the knights' in black barding. */
+function boneHorse(barded: boolean): THREE.Group {
+  const g = horse(BONE);
+  for (let i = 0; i < 4; i++) for (const z of [-0.26, 0.26]) g.add(box(0.1, 0.46, 0.02, 0x2a2424, -0.35 + i * 0.22, 0.97, z));
+  for (const z of [-0.15, 0.15]) g.add(mesh(new THREE.OctahedronGeometry(0.05, 0), 0x5cff9a, { emissive: 0x1f9a4a }).translateX(1.18).translateY(1.92).translateZ(z));
+  if (barded) {
+    g.add(box(1.3, 0.4, 0.56, 0x221f27, 0, 0.84, 0));
+    for (const x of [-0.4, 0, 0.4]) for (const z of [-0.29, 0.29]) g.add(mesh(new THREE.OctahedronGeometry(0.05, 0), 0x5cff9a, { emissive: 0x1f9a4a }).translateX(x).translateY(1.05).translateZ(z));
+  }
   return g;
 }
 
@@ -782,6 +858,8 @@ function rider(kind: TroopModel): THREE.Group {
     seat = kind === 'heavy' ? 1.42 : 1.3;
   } else if (theme === 'sorcerer') {
     mount = horse({ light: 0x3a2f6a, marcher: 0x2a2350, heavy: 0xe6e0f6 }[kind as 'light'] ?? 0x3a2f6a);
+  } else if (theme === 'necromancer') {
+    mount = boneHorse(kind === 'heavy');
   } else {
     mount = horse({ light: C.horse, marcher: 0x4a3222, heavy: 0xd8d0c0 }[kind as 'light'] ?? C.horse);
   }
@@ -924,6 +1002,37 @@ export function greatTree(r: () => number): THREE.Group {
   return g;
 }
 
+/** A black obelisk among leaning gravestones, a green flame on top (necromancer villages). */
+export function necroObelisk(r: () => number): THREE.Group {
+  const g = new THREE.Group();
+  g.add(box(1.2, 0.3, 1.2, 0x4e4c52));
+  g.add(box(0.7, 3.4, 0.7, 0x2e2a33, 0, 0.3, 0));
+  g.add(cone(0.5, 0.9, 0x2e2a33, 4, 0, 3.7, 0).rotateY(Math.PI / 4));
+  const flame = mesh(new THREE.IcosahedronGeometry(0.22, 0), 0x5cff9a, { emissive: 0x1f9a4a });
+  flame.position.y = 4.85;
+  g.add(flame);
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2 + 0.4;
+    g.add(gravestone(r, Math.cos(a) * 1.9, Math.sin(a) * 1.9, -a));
+  }
+  return g;
+}
+
+/** A leaning gravestone with a rounded top. */
+export function gravestone(r: () => number, x: number, z: number, face = 0): THREE.Group {
+  const g = new THREE.Group();
+  const col = r() < 0.5 ? 0x8a8890 : 0x74727a;
+  g.add(box(0.6, 0.75, 0.16, col));
+  const top = cyl(0.3, 0.3, 0.16, col, 8, 0, 0.75, 0);
+  top.rotation.x = Math.PI / 2;
+  top.position.set(0, 0.75, 0);
+  g.add(top);
+  g.add(box(0.05, 0.3, 0.02, 0x3a3840, 0, 0.45, 0.09), box(0.2, 0.05, 0.02, 0x3a3840, 0, 0.62, 0.09));
+  g.position.set(x, 0, z);
+  g.rotation.set((r() - 0.5) * 0.25, face, (r() - 0.5) * 0.25);
+  return g;
+}
+
 /** A crooked pole of skulls and green rags (goblin camps). */
 export function skullTotem(): THREE.Group {
   const g = new THREE.Group();
@@ -944,8 +1053,27 @@ export function skullTotem(): THREE.Group {
 }
 
 /** What crowns the headquarters in each hero's village. */
-export function hqCrown(theme: 'sorcerer' | 'druid' | 'goblin', r: () => number): THREE.Group {
+export function hqCrown(theme: 'sorcerer' | 'druid' | 'goblin' | 'necromancer', r: () => number): THREE.Group {
   const g = new THREE.Group();
+  if (theme === 'necromancer') {
+    // a black gothic spire with a great skull, green fire in its eyes and crown
+    g.add(cyl(1.5, 1.8, 0.4, 0x2e2a33, 8));
+    g.add(cone(1.1, 3.6, 0x221f27, 8, 0, 0.35));
+    for (const a of [0, Math.PI / 2, Math.PI, Math.PI * 1.5]) g.add(cone(0.35, 1.6, 0x221f27, 6, Math.cos(a) * 1.25, 0.35, Math.sin(a) * 1.25));
+    const sk = new THREE.Group();
+    sk.add(blob(0.62, BONE, 0, 0, 0, 1, 0.95, 1));
+    sk.add(box(0.5, 0.3, 0.36, BONE_DARK, 0, -0.62, 0.16));
+    for (const x of [-0.22, 0.22]) {
+      sk.add(box(0.2, 0.2, 0.1, 0x141010, x, -0.05, 0.56));
+      sk.add(mesh(new THREE.OctahedronGeometry(0.09, 0), 0x5cff9a, { emissive: 0x1f9a4a }).translateX(x).translateY(0.05).translateZ(0.6));
+    }
+    sk.position.set(0, 2.0, 0.95);
+    g.add(sk);
+    const fire = mesh(new THREE.IcosahedronGeometry(0.35, 0), 0x5cff9a, { emissive: 0x1f9a4a });
+    fire.position.set(0, 4.2, 0);
+    g.add(fire);
+    return g;
+  }
   if (theme === 'sorcerer') {
     // a giant wizard hat, bent at the tip, with a gold band and stars
     g.add(cyl(2.3, 2.3, 0.22, 0x3c2470, 16));

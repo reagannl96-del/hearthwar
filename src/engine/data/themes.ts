@@ -7,10 +7,10 @@
 import type { UnitId } from '../types';
 import { UNITS } from './units';
 
-export type VillageTheme = 'classic' | 'sorcerer' | 'druid' | 'goblin';
+export type VillageTheme = 'classic' | 'sorcerer' | 'druid' | 'goblin' | 'necromancer';
 
 export function themeOfHero(hero: UnitId | null | undefined): VillageTheme {
-  return hero === 'sorcerer' || hero === 'druid' || hero === 'goblin' ? hero : 'classic';
+  return hero === 'sorcerer' || hero === 'druid' || hero === 'goblin' || hero === 'necromancer' ? hero : 'classic';
 }
 
 type Names = Partial<Record<UnitId, [name: string, plural: string]>>;
@@ -57,6 +57,21 @@ export const THEMED_UNITS: Record<Exclude<VillageTheme, 'classic'>, Names> = {
     catapult: ['Boulder Treant', 'Boulder Treants'],
     noble: ['Elder', 'Elders'],
     militia: ['Grove Folk', 'Grove Folk'],
+  },
+  // the paladin's army, dug back up: skeletons in rusted mail, bats for eyes, bone horses
+  necromancer: {
+    spear: ['Skeleton Spearman', 'Skeleton Spearmen'],
+    sword: ['Bone Swordsman', 'Bone Swordsmen'],
+    axe: ['Grave Reaver', 'Grave Reavers'],
+    archer: ['Skeleton Archer', 'Skeleton Archers'],
+    scout: ['Bat Swarm', 'Bat Swarms'],
+    light: ['Bone Rider', 'Bone Riders'],
+    marcher: ['Wraith Archer', 'Wraith Archers'],
+    heavy: ['Death Knight', 'Death Knights'],
+    ram: ['Bone Ram', 'Bone Rams'],
+    catapult: ['Skull Catapult', 'Skull Catapults'],
+    noble: ['Lich Lord', 'Lich Lords'],
+    militia: ['Risen Dead', 'Risen Dead'],
   },
 };
 

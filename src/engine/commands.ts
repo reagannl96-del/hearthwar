@@ -18,7 +18,7 @@ import type {
   Village, World,
 } from './types';
 import { RES_KEYS } from './types';
-import { refreshPoints, storageOf, updateVillage } from './village';
+import { popFree, refreshPoints, storageOf, updateVillage } from './village';
 
 export const REPORT_CAP = 600;
 
@@ -522,8 +522,29 @@ function resolveAttack(w: World, c: Command, hooks: ArrivalHooks): void {
   }
   if (wallChange || buildingChange) refreshPoints(w, target);
 
-  // loot
   const survivors = result.attSurvivors;
+
+  // a necromancer on the winning side raises one in ten fallen enemy foot soldiers as skeleton spearmen
+  let risen: BattleData['risen'];
+  if (!result.pureScout) {
+    const fallen = (u: Units) => RAISABLE.reduce((n, k) => n + (u[k] ?? 0), 0);
+    if (result.winner === 'attacker' && (survivors.necromancer ?? 0) > 0 && home && home.ownerId === c.ownerId) {
+      const n = Math.min(Math.floor(fallen(defLostTotal) * 0.1), Math.max(0, popFree(home)));
+      if (n > 0) {
+        survivors.spear = (survivors.spear ?? 0) + n;
+        home.outPop += n * UNITS.spear.pop;
+        risen = { side: 'attacker', n };
+      }
+    } else if (result.winner === 'defender' && target.ownerId !== null && stacks.some((st) => (st.units.necromancer ?? 0) > 0)) {
+      const n = Math.min(Math.floor(fallen(result.attLost) * 0.1), Math.max(0, popFree(target)));
+      if (n > 0) {
+        target.units.spear = (target.units.spear ?? 0) + n;
+        risen = { side: 'defender', n };
+      }
+    }
+  }
+
+  // loot
   let loot: Res | undefined;
   let capacity = 0;
   if (result.winner === 'attacker' && !result.pureScout) {
@@ -594,6 +615,7 @@ function resolveAttack(w: World, c: Command, hooks: ArrivalHooks): void {
     scout,
     paladinItem: attItem?.id,
     militia: (defUnitsHome.militia ?? 0) > 0,
+    risen,
   };
   if (home) data.attacker = { ...sideInfo(w, home, c.ownerId) };
 
@@ -681,6 +703,9 @@ function resolveAttack(w: World, c: Command, hooks: ArrivalHooks): void {
     pushEvent(w, 'arrive', back.arrive, back.id);
   }
 }
+
+/** foot soldiers a necromancer can raise from the dead */
+const RAISABLE: UnitId[] = ['spear', 'sword', 'axe', 'archer', 'militia'];
 
 function shiftQueuedLevels(v: Village, b: BuildingId, by: number): void {
   if (by <= 0) return;

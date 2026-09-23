@@ -824,6 +824,19 @@ function skullOnPole(h: number): THREE.Group {
   return g;
 }
 
+/** An iron lantern post burning ghost-green: the necromancers' mark at a doorstep. */
+function gravePost(h: number): THREE.Group {
+  const g = new THREE.Group();
+  g.add(cyl(0.06, 0.08, h, 0x2e2a33, 4));
+  g.add(box(0.5, 0.06, 0.06, 0x2e2a33, 0.2, h - 0.2, 0));
+  g.add(box(0.26, 0.34, 0.26, 0x221f27, 0.4, h - 0.62, 0));
+  g.add(mesh(new THREE.IcosahedronGeometry(0.1, 0), 0x5cff9a, { emissive: 0x1f9a4a }).translateX(0.4).translateY(h - 0.45));
+  const sk = skull(0.35);
+  sk.position.set(0, h + 0.12, 0);
+  g.add(sk);
+  return g;
+}
+
 function antlerPole(h: number): THREE.Group {
   const g = new THREE.Group();
   g.add(cyl(0.08, 0.11, h, C.timber, 5));
@@ -856,6 +869,10 @@ function dressMount(hg: THREE.Object3D, theme: Theme): void {
     }
   } else if (theme === 'goblin') {
     for (let i = 0; i < 4; i++) hg.add(cone(0.07, 0.35, 0x3b3530, 4, -0.55 + i * 0.35, 1.2, 0));
+  } else if (theme === 'necromancer') {
+    // bare ribs and a green eye: the stable keeps bone horses
+    for (let i = 0; i < 4; i++) for (const z of [-0.26, 0.26]) hg.add(box(0.1, 0.46, 0.02, 0x2a2424, -0.35 + i * 0.22, 0.97, z));
+    for (const z of [-0.15, 0.15]) hg.add(glowBit(new THREE.OctahedronGeometry(0.05, 0), 0x5cff9a, 0x1f9a4a).translateX(1.18).translateY(1.92).translateZ(z));
   }
 }
 
@@ -880,6 +897,11 @@ function themedWatchtower(t: number, theme: Theme): Built {
     const sk = skull(0.9);
     sk.position.set(0, py - 0.9, 1.35);
     g.add(sk);
+  }
+  if (theme === 'necromancer') {
+    const fire = glowBit(new THREE.IcosahedronGeometry(0.5, 0), 0x5cff9a, 0x1f9a4a);
+    fire.position.set(0, py + 1.0, 0);
+    g.add(fire, cyl(0.55, 0.35, 0.5, 0x2e2a33, 6, 0, py + 0.2, 0));
   }
   return { obj: g, h: h + 7, w: 4, d: 4 };
 }
@@ -910,6 +932,18 @@ function themedStatue(theme: Theme): Built {
       fig.add(a);
     }
     fig.add(blob(0.35, 0x6f9a3a, -0.8, 3.2, 0.1));
+  } else if (theme === 'necromancer') {
+    // a hooded figure of dark bronze, a skull-topped staff burning green
+    fig.add(cyl(0.45, 0.8, 2.1, 0x3a3440, 8));
+    fig.add(blob(0.42, 0x3a3440, 0, 2.3, -0.05, 1, 1.15, 1));
+    fig.add(blob(0.26, 0xd8d0bc, 0, 2.25, 0.22, 1, 1.05, 0.8));
+    fig.add(box(0.1, 3.1, 0.1, 0x221c1b, 0.8, 0, 0.1));
+    const sk = skull(0.4);
+    sk.position.set(0.8, 3.2, 0.1);
+    fig.add(sk);
+    const fire = glowBit(new THREE.IcosahedronGeometry(0.2, 0), 0x5cff9a, 0x1f9a4a);
+    fire.position.set(0.8, 3.55, 0.1);
+    fig.add(fire);
   } else {
     fig.add(cyl(0.45, 0.55, 1.3, bronze, 7));
     fig.add(blob(0.42, bronze, 0, 1.6, 0));
@@ -945,22 +979,31 @@ function themed(id: BuildingId, t: number, b: Built): Built {
       g.add(extra);
       if (theme === 'druid') { const m = mushrooms(6, r, 2); m.position.set(3.8, 0, -1.8); g.add(m); }
       if (theme === 'goblin') { const s = skullOnPole(2.8); s.position.set(-4.2, 0, -1.4); g.add(s); g.add(crate(4.2, -2.2), crate(4.0, -1.4)); }
+      if (theme === 'necromancer') {
+        const pile = new THREE.Group();
+        for (let i = 0; i < 5; i++) { const sk = skull(0.32); sk.position.set((i % 3) * 0.36 - 0.36, i < 3 ? 0 : 0.3, (r() - 0.5) * 0.3); pile.add(sk); }
+        pile.position.set(-2.8, 1.25, 0.2);
+        g.add(pile);
+        const p = gravePost(2.8); p.position.set(-4.2, 0, -1.4); g.add(p);
+      }
       break;
     }
     case 'workshop':
       if (theme === 'sorcerer') { const rc = runeCircle(2.2); rc.position.set(0.5, 0, 0.2); g.add(rc); }
       if (theme === 'druid') for (const [x, z] of [[-3.5, -2], [3.5, -2], [-3.5, 2], [3.5, 2]]) g.add(blob(0.55, 0x6f9a3a, x, 3.5, z, 1, 0.7, 1));
       if (theme === 'goblin') { const s = skullOnPole(3.4); s.position.set(-3.9, 0, 2.6); g.add(s); }
+      if (theme === 'necromancer') { const p = gravePost(3.4); p.position.set(-3.9, 0, 2.6); g.add(p); }
       break;
     case 'rally':
       if (theme === 'sorcerer') { const rc = runeCircle(1.6); rc.position.set(2.6, 0, 1.6); g.add(rc); }
       if (theme === 'druid') { const a = antlerPole(3.2); a.position.set(-1.4, 0, 1.2); g.add(a); }
       if (theme === 'goblin') { const s = skullOnPole(3.2); s.position.set(-1.4, 0, 1.2); g.add(s); }
+      if (theme === 'necromancer') { const p = gravePost(3.2); p.position.set(-1.4, 0, 1.2); g.add(p); }
       break;
     case 'hiding':
       if (theme === 'sorcerer') { const rune = glowBit(new THREE.BoxGeometry(0.6, 0.04, 0.6)); rune.position.set(0, 0.66, 0.1); rune.rotation.y = Math.PI / 4; g.add(rune); }
       if (theme === 'druid') g.add(mushrooms(4, r, 2.2));
-      if (theme === 'goblin') { const sk = skull(0.5); sk.position.set(0.8, 0.8, 0.3); g.add(sk); }
+      if (theme === 'goblin' || theme === 'necromancer') { const sk = skull(0.5); sk.position.set(0.8, 0.8, 0.3); g.add(sk); }
       break;
     case 'barracks':
     case 'smithy':
@@ -969,6 +1012,7 @@ function themed(id: BuildingId, t: number, b: Built): Built {
       // a small banner-post of the theme at the doorstep
       if (theme === 'druid') { const a = antlerPole(2.6); a.position.set(b.w * 0.42, 0, b.d * 0.42); g.add(a); }
       if (theme === 'goblin') { const s = skullOnPole(2.6); s.position.set(b.w * 0.42, 0, b.d * 0.42); g.add(s); }
+      if (theme === 'necromancer') { const p = gravePost(2.6); p.position.set(b.w * 0.42, 0, b.d * 0.42); g.add(p); }
       if (theme === 'sorcerer') { const cr = glowBit(new THREE.OctahedronGeometry(0.3, 0)); cr.scale.set(1, 2, 1); cr.position.set(b.w * 0.42, 1.6, b.d * 0.42); g.add(cr); g.add(cyl(0.25, 0.35, 0.9, C.stone, 6, b.w * 0.42, 0, b.d * 0.42)); }
       break;
   }
@@ -1006,6 +1050,12 @@ function plaque(theme: Theme): THREE.Group {
     const ring = mesh(new THREE.TorusGeometry(0.32, 0.025, 3, 14), 0x9c7a4a);
     ring.position.z = 0.07;
     g.add(ring);
+  } else if (theme === 'necromancer') {
+    const d = cyl(0.6, 0.6, 0.08, 0x2e2a33, 6);
+    d.rotation.x = Math.PI / 2;
+    g.add(d);
+    const rim = mesh(new THREE.TorusGeometry(0.6, 0.05, 4, 6), 0xd8d0bc);
+    g.add(rim);
   } else if (theme === 'goblin') {
     const p = box(1.2, 1.0, 0.08, 0x8a4b24, 0, -0.5, 0);
     p.rotation.z = 0.08;
@@ -1036,6 +1086,14 @@ function signEmblem(kind: SignKind, theme: Theme): THREE.Group {
         g.add(blob(0.16, 0x6f9a3a, s * -0.52, 0.58, 0.14));
         g.add(blob(0.1, 0x4f7a2e, s * -0.36, 0.5, 0.16));
       }
+    } else if (theme === 'necromancer') {
+      for (const s of [-1, 1]) {
+        g.add(bar(1.3, 0.1, 0xd8d0bc, s * -0.45, 0.45, s * X));
+        g.add(blob(0.09, 0xd8d0bc, s * -0.45, 0.45, 0.12), blob(0.09, 0xd8d0bc, s * 0.45, -0.45, 0.12));
+      }
+      const sk = skull(0.42);
+      sk.position.set(0, 0.05, 0.22);
+      g.add(sk);
     } else if (theme === 'goblin') {
       for (const s of [-1, 1]) {
         g.add(bar(1.3, 0.1, 0x4e3620, s * -0.45, 0.45, s * X));

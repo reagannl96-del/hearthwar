@@ -1,4 +1,5 @@
 import { BUILDINGS } from '../../engine/data/buildings';
+import { themeOfHero } from '../../engine/data/themes';
 import type { BuildingId, RecruitBuilding } from '../../engine/types';
 import { Icon } from '../art/icons';
 import { Village3D } from '../three/Village3D';
@@ -46,7 +47,7 @@ export function VillageScreen() {
             ]}
             now={now.value}
             militia={!!v.militiaUntil && v.militiaUntil > now.value}
-            theme={v.hero === 'sorcerer' || v.hero === 'druid' || v.hero === 'goblin' ? v.hero : 'classic'}
+            theme={themeOfHero(v.hero)}
             onToggleNight={() => setPrefs({ sceneTime: night ? 'day' : 'night' })}
           />
         </div>

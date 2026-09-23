@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import type { BuildingId } from '../../engine/types';
 import { C, bake, box, cone, cyl, darker, getSeason, getTheme, mat, rng, roundTower, seasonal } from './kit';
-import { rock, tree, pumpkin, hayBale, barrel, crate, crystalSpire, greatTree, skullTotem } from './props';
+import { rock, tree, pumpkin, hayBale, barrel, crate, crystalSpire, greatTree, skullTotem, necroObelisk, gravestone } from './props';
 import { blob, mesh } from './kit';
 import { distToPaths } from './paths';
 
@@ -247,7 +247,7 @@ export function buildScenery(seed = 11): THREE.Group {
     const y = inside ? 0 : heightAt(it.x, it.z);
     const theme = getTheme();
     if (inside && theme !== 'classic' && (it.kind === 'oak' || it.kind === 'birch')) {
-      const lm = theme === 'sorcerer' ? crystalSpire() : theme === 'druid' ? greatTree(r) : skullTotem();
+      const lm = theme === 'sorcerer' ? crystalSpire() : theme === 'druid' ? greatTree(r) : theme === 'necromancer' ? necroObelisk(r) : skullTotem();
       if (theme === 'goblin') lm.scale.setScalar(1.5);
       lm.position.set(it.x, 0, it.z);
       lm.rotation.y = r() * Math.PI * 2;
@@ -268,8 +268,61 @@ export function buildScenery(seed = 11): THREE.Group {
   if (getTheme() === 'goblin') addSwamp(g, r);
   if (getTheme() === 'sorcerer') addArcane(g, r);
   if (getTheme() === 'druid') addGlade(g, r);
+  if (getTheme() === 'necromancer') addGraveyard(g, r);
   if (getSeason() === 'volcanic') addVolcanic(g, r);
   return bake(g);
+}
+
+/** The necromancers' grounds: rows of gravestones, iron fences, open graves, drifting fog and green wisps. */
+function addGraveyard(g: THREE.Group, r: () => number): void {
+  let placed = 0;
+  for (let tries = 0; tries < 900 && placed < 70; tries++) {
+    const a = r() * Math.PI * 2, d = WALL_R + 6 + r() * 70;
+    const x = Math.cos(a) * d, z = Math.sin(a) * d;
+    if (!freeForTree(x, z)) continue;
+    const y = heightAt(x, z);
+    const k = placed % 7;
+    if (k < 4) {
+      const st = gravestone(r, x, z, r() * 0.6 - 0.3);
+      st.position.y = y;
+      g.add(st);
+    } else if (k === 4) {
+      // an open grave: a dark pit and its mound of earth
+      g.add(box(0.9, 0.06, 1.8, 0x1a1614, x, y + 0.02, z));
+      g.add(blob(0.7, 0x544d45, x + 0.9, y + 0.1, z, 0.8, 0.45, 1.3));
+    } else if (k === 5) {
+      // a length of iron railing
+      const fence = new THREE.Group();
+      fence.add(box(2.4, 0.06, 0.06, 0x2e2a33, 0, 0.9, 0));
+      for (let i = 0; i < 7; i++) fence.add(box(0.05, 1.05, 0.05, 0x2e2a33, -1.1 + i * 0.37, 0, 0), cone(0.05, 0.15, 0x2e2a33, 4, -1.1 + i * 0.37, 1.05, 0));
+      fence.position.set(x, y, z);
+      fence.rotation.y = r() * Math.PI;
+      g.add(fence);
+    } else {
+      const t = tree('oak', r, 1);
+      t.position.set(x, y - 0.1, z);
+      g.add(t);
+    }
+    placed++;
+  }
+  // a gravestone or two by each obelisk inside the walls
+  for (const [x, z] of [[-34, 2], [-24, -24], [28, -18], [32, 14], [10, -31], [-5, 31]]) g.add(gravestone(r, x + 2.4, z + 1.2, 0.2));
+  // fog lying low over the graves
+  const fogMat = new THREE.MeshBasicMaterial({ color: 0xb8c8bc, transparent: true, opacity: 0.14, depthWrite: false });
+  for (let i = 0; i < 14; i++) {
+    const a = r() * Math.PI * 2, d = WALL_R + 8 + r() * 60;
+    const m = new THREE.Mesh(new THREE.CircleGeometry(6 + r() * 6, 12), fogMat);
+    m.rotation.x = -Math.PI / 2;
+    const x = Math.cos(a) * d, z = Math.sin(a) * d;
+    m.position.set(x, heightAt(x, z) + 0.8 + r() * 0.6, z);
+    m.userData.dynamic = true;
+    g.add(m);
+  }
+  motes(g, r, 30, 0x8dffb4, 0x1f9a4a, () => {
+    const a = r() * Math.PI * 2, d = 8 + r() * 78;
+    const x = Math.cos(a) * d, z = Math.sin(a) * d;
+    return [x, (Math.hypot(x, z) > WALL_R ? heightAt(x, z) : 0) + 1 + r() * 3, z];
+  });
 }
 
 /** The volcanic west: basalt columns, black boulders, smoking vents and drifting embers. */
