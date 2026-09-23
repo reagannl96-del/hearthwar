@@ -13,6 +13,8 @@ interface Props {
   points: number;
   villageId: number;
   winter: boolean;
+  /** the village lies in the volcanic west */
+  volcanic?: boolean;
   night: boolean;
   /** troops at home; a few of them walk around the village */
   units?: Units;
@@ -43,7 +45,7 @@ export function Village3D(p: Props) {
       r.current = new VillageRenderer(host.current, {
         onPick: (b) => pick.current(b),
         onHover: (id, x, y) => setTip(id ? { id, x, y } : null),
-        season: p.winter ? 'winter' : 'fall',
+        season: p.winter ? 'winter' : p.volcanic ? 'volcanic' : 'fall',
         night: p.night,
         theme: p.theme,
       });
@@ -57,7 +59,7 @@ export function Village3D(p: Props) {
       r.current?.dispose();
       r.current = null;
     };
-  }, [p.winter, p.theme]);
+  }, [p.winter, p.volcanic, p.theme]);
 
   useEffect(() => {
     r.current?.update(p.buildings, p.building, p.color, p.points);

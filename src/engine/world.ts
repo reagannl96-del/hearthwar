@@ -21,17 +21,17 @@ export const SPEED_PRESETS = {
 } as const;
 
 export const SIZE_PRESETS = {
-  small: { label: 'Small', size: 80, aiCount: 12 },
-  medium: { label: 'Medium', size: 120, aiCount: 20 },
-  large: { label: 'Large', size: 170, aiCount: 34 },
+  small: { label: 'Small', size: 120, aiCount: 16 },
+  medium: { label: 'Medium', size: 180, aiCount: 34 },
+  large: { label: 'Large', size: 240, aiCount: 60 },
 } as const;
 
 export function defaultConfig(): WorldConfig {
   return {
     speed: 150,
     unitSpeed: 80,
-    size: 120,
-    aiCount: 20,
+    size: 180,
+    aiCount: 34,
     barbDensity: 0.045,
     difficulty: 'normal',
     morale: true,
@@ -56,15 +56,37 @@ export function emptyStats(): PlayerStats {
   return { killsSup: 0, loot: 0, killsAtt: 0, killsDef: 0, lostUnits: 0, conquered: 0, attacks: 0, scouted: 0, built: 0, recruited: 0 };
 }
 
-function genTerrain(size: number, seed: number): string {
+/** The realm is a round island: past its ragged shore there is only open sea. */
+export function inRealm(x: number, y: number, size: number): boolean {
+  const c = size / 2;
+  const shore = c - 2 - fractalNoise(x, y, 4242, 7) * 4;
+  return Math.hypot(x + 0.5 - c, y + 0.5 - c) < shore;
+}
+
+/** The far west of every realm is a volcanic waste: ash plains, lava lakes and smoking peaks. */
+export function isVolcanic(x: number, y: number, size: number): boolean {
+  const edge = size * 0.22 + (fractalNoise(0, y, 613, 9) - 0.5) * size * 0.1 + (fractalNoise(x, y, 719, 4) - 0.5) * 3;
+  return x < edge;
+}
+
+/**
+ * Terrain codes: '.' meadow, 'f' forest, 'w' water, 'm' mountains,
+ * 'v' volcanic ash (open ground), 'l' lava. Villages stand on '.', 'f' or 'v'.
+ */
+export const buildable = (t: string | undefined) => t === '.' || t === 'f' || t === 'v';
+
+/** `off` shifts the noise so a grown realm keeps its old landscape in the middle, seamlessly. */
+export function genTerrain(size: number, seed: number, off = 0): string {
   const rows: string[] = [];
   for (let y = 0; y < size; y++) {
     let row = '';
     for (let x = 0; x < size; x++) {
-      const e = fractalNoise(x, y, seed, 22);
-      const m = fractalNoise(x, y, seed + 101, 14);
+      const e = fractalNoise(x - off, y - off, seed, 22);
+      const m = fractalNoise(x - off, y - off, seed + 101, 14);
       let c = '.';
-      if (e < 0.26) c = 'w';
+      if (!inRealm(x, y, size)) c = 'w';
+      else if (isVolcanic(x, y, size)) c = e < 0.24 ? 'l' : e > 0.72 ? 'm' : 'v';
+      else if (e < 0.26) c = 'w';
       else if (e > 0.76) c = 'm';
       else if (m > 0.6) c = 'f';
       row += c;
@@ -76,6 +98,7 @@ function genTerrain(size: number, seed: number): string {
 
 /** The northern frontier of every realm lies under snow. */
 export function isWinter(x: number, y: number, size: number): boolean {
+  if (isVolcanic(x, y, size)) return false;
   const edge = size * 0.28 + (fractalNoise(x, 0, 911, 9) - 0.5) * size * 0.12 + (fractalNoise(x, y, 377, 4) - 0.5) * 3;
   return y < edge;
 }
@@ -96,6 +119,7 @@ export const protectionEnd = (w: World) => w.now + PROTECTION_MS;
  * last hours; anyone still holding more than the current allowance keeps only that.
  */
 export function migrateWorld(w: World): void {
+  if (!w.round) growRealm(w);
   const cap = protectionEnd(w);
   normalizeTribes(w);
   for (const id in w.villages) {
@@ -142,6 +166,7 @@ export function createWorld(o: NewWorldOptions): World {
   const size = cfg.size;
   const w: World = {
     version: WORLD_VERSION,
+    round: true,
     id: `w${seed.toString(36)}${Date.now().toString(36)}`,
     name: o.worldName || 'New realm',
     seed,
@@ -169,7 +194,7 @@ export function createWorld(o: NewWorldOptions): World {
   const free = (x: number, y: number) => {
     if (x < 2 || y < 2 || x >= size - 2 || y >= size - 2) return false;
     const t = w.terrain[key(x, y)];
-    return (t === '.' || t === 'f') && !occupied.has(key(x, y));
+    return buildable(t) && !occupied.has(key(x, y));
   };
   const place = (x: number, y: number) => occupied.add(key(x, y));
   const findSpotNear = (cx: number, cy: number, rMin: number, rMax: number): [number, number] | null => {
@@ -322,7 +347,7 @@ export function respawnHuman(w: World, villageName: string, pid = w.humanId): Vi
     const x = edge === 0 ? d : edge === 1 ? size - 1 - d : t;
     const y = edge === 2 ? d : edge === 3 ? size - 1 - d : t;
     const ter = terrainAt(w, x, y);
-    if (ter !== '.' && ter !== 'f') continue;
+    if (!buildable(ter)) continue;
     if (Object.values(w.villages).some((v) => Math.abs(v.x - x) < 2 && Math.abs(v.y - y) < 2)) continue;
     const v = createVillage(w, x, y, villageName, human.id);
     v.res = res(1500, 1500, 1500);
@@ -356,7 +381,7 @@ function freshSpot(w: World, strict = false): [number, number] | null {
     for (let tries = 0; tries < 800; tries++) {
       const x = randInt(w, 5, size - 6), y = randInt(w, 5, size - 6);
       const ter = terrainAt(w, x, y);
-      if (ter !== '.' && ter !== 'f') continue;
+      if (!buildable(ter)) continue;
       if (!clear(x, y, room)) continue;
       if (gap > 0 && humanVillages.some((v) => Math.hypot(v.x - x, v.y - y) < gap)) continue;
       return [x, y];
@@ -380,7 +405,7 @@ function settle(w: World, p: Player, villageNameText: string, strict = false): V
   for (let k = 0; k < 80 && made < 5; k++) {
     const bx = x + randInt(w, -6, 6), by = y + randInt(w, -6, 6);
     const bt = terrainAt(w, bx, by);
-    if ((bt !== '.' && bt !== 'f') || Math.hypot(bx - x, by - y) < 2) continue;
+    if (!buildable(bt) || Math.hypot(bx - x, by - y) < 2) continue;
     if (Object.values(w.villages).some((o) => o.x === bx && o.y === by)) continue;
     const b = createVillage(w, bx, by, 'Barbarian village', null);
     b.buildings.timber = randInt(w, 1, 5); b.buildings.claypit = randInt(w, 1, 5); b.buildings.ironmine = randInt(w, 1, 4);
@@ -410,15 +435,9 @@ export function realmGrowth(w: World): void {
   const rulerGap = Math.min(6 * HOUR, Math.max(20 * 60_000, (180 * HOUR) / w.config.speed));
   const crowding = Math.max(0, 1 - rulers / cap);
   if (w.config.aiCount > 0 && nextRandom(w) < (tick / rulerGap) * crowding) {
-    const taken = new Set(Object.values(w.players).map((p) => p.color));
-    const color = PLAYER_COLORS.find((col) => !taken.has(col)) ?? pick(w, PLAYER_COLORS);
-    const p = newPlayer(w, uniqueName(w), 'ai', color);
-    const v = settle(w, p, villageName(w), true);
-    if (!v) {
-      delete w.players[p.id];
-    } else {
-      p.ai = aiState(w, pick(w, PERSONALITIES));
-      pushEvent(w, 'ai', w.now + randInt(w, 1000, aiThinkInterval(w)), p.id);
+    const p = foundAiRuler(w);
+    if (p) {
+      const v = w.villages[p.villages[0]];
       news(w, `${p.name} has arrived in the realm and founded ${v.name}.`, 'player', v.id);
     }
   }
@@ -430,22 +449,98 @@ export function realmGrowth(w: World): void {
   for (const id in w.villages) if (w.villages[id].ownerId === null) barbs++;
   if (barbs < target && nextRandom(w) < tick / barbGap) {
     for (let tries = 0; tries < 60; tries++) {
-      const x = randInt(w, 3, size - 4), y = randInt(w, 3, size - 4);
-      const t = terrainAt(w, x, y);
-      if (t !== '.' && t !== 'f') continue;
-      if (Object.values(w.villages).some((o) => Math.abs(o.x - x) <= 2 && Math.abs(o.y - y) <= 2)) continue;
-      const b = createVillage(w, x, y, 'Barbarian village', null);
-      b.buildings.timber = randInt(w, 1, 3); b.buildings.claypit = randInt(w, 1, 3); b.buildings.ironmine = randInt(w, 1, 2);
-      b.buildings.warehouse = randInt(w, 1, 3); b.buildings.main = 1; b.buildings.farm = 1;
-      b.points = villagePoints(b.buildings);
-      b.res = res(randInt(w, 50, 300), randInt(w, 50, 300), randInt(w, 50, 300));
-      b.grownAt = w.now;
-      invalidateSpatial();
-      w.mapRev++;
-      break;
+      if (sproutBarbarian(w, 2)) break;
     }
   }
 }
+
+/** Found an AI ruler at a spot with real elbow room; null when the realm has none left. */
+function foundAiRuler(w: World, headStart = 0): Player | null {
+  const taken = new Set(Object.values(w.players).map((p) => p.color));
+  const color = PLAYER_COLORS.find((col) => !taken.has(col)) ?? pick(w, PLAYER_COLORS);
+  const p = newPlayer(w, uniqueName(w), 'ai', color);
+  const v = settle(w, p, villageName(w), true);
+  if (!v) {
+    delete w.players[p.id];
+    return null;
+  }
+  p.ai = aiState(w, pick(w, PERSONALITIES));
+  if (headStart > 0) {
+    const b = v.buildings;
+    b.timber = headStart + randInt(w, 0, 2); b.claypit = headStart + randInt(w, 0, 2); b.ironmine = headStart + randInt(w, 0, 1);
+    b.main = Math.max(1, headStart - 1); b.farm = Math.max(1, headStart - 2); b.warehouse = headStart; b.barracks = Math.max(1, Math.floor(headStart / 2));
+    v.points = villagePoints(b);
+    p.points = v.points;
+  }
+  pushEvent(w, 'ai', w.now + randInt(w, 1000, aiThinkInterval(w)), p.id);
+  return p;
+}
+
+/** A small barbarian village on a random open field with no neighbour within `room` fields. */
+function sproutBarbarian(w: World, room: number): Village | null {
+  const size = w.config.size;
+  const x = randInt(w, 3, size - 4), y = randInt(w, 3, size - 4);
+  if (!buildable(terrainAt(w, x, y))) return null;
+  for (const o of Object.values(w.villages)) if (Math.abs(o.x - x) <= room && Math.abs(o.y - y) <= room) return null;
+  const b = createVillage(w, x, y, 'Barbarian village', null);
+  b.buildings.timber = randInt(w, 1, 3); b.buildings.claypit = randInt(w, 1, 3); b.buildings.ironmine = randInt(w, 1, 2);
+  b.buildings.warehouse = randInt(w, 1, 3); b.buildings.main = 1; b.buildings.farm = 1;
+  b.points = villagePoints(b.buildings);
+  b.res = res(randInt(w, 50, 300), randInt(w, 50, 300), randInt(w, 50, 300));
+  b.grownAt = w.now;
+  if (nextRandom(w) < 0.06) b.bonus = pick(w, ['wood', 'clay', 'iron', 'all', 'farm', 'storage', 'recruit'] as BonusType[]);
+  invalidateSpatial();
+  w.mapRev++;
+  return b;
+}
+
+/**
+ * Turn an older square realm into today's bigger round one. Everything shifts to
+ * the middle of the new island (villages and the coordinates written in reports),
+ * the land is laid out afresh around them (with the volcanic west), every existing
+ * village keeps solid ground under its feet, and the new land is settled: AI
+ * rulers with a modest head start, and barbarian villages at the usual density.
+ */
+function growRealm(w: World): void {
+  const old = w.config.size;
+  const size = Math.max(180, Math.ceil(old * Math.SQRT2) + 10);
+  const d = Math.floor((size - old) / 2);
+  for (const id in w.villages) {
+    w.villages[id].x += d;
+    w.villages[id].y += d;
+  }
+  const shift = (o: unknown): void => {
+    if (!o || typeof o !== 'object') return;
+    const r = o as Record<string, unknown>;
+    if (typeof r.vid === 'number' && typeof r.x === 'number' && typeof r.y === 'number') { r.x += d; r.y += d; }
+    for (const k in r) if (r[k] && typeof r[k] === 'object') shift(r[k]);
+  };
+  for (const id in w.players) for (const rep of w.players[id].reports) shift(rep);
+  w.config.size = size;
+  const t = genTerrain(size, w.seed, d).split('');
+  for (const v of Object.values(w.villages)) {
+    t[v.y * size + v.x] = isVolcanic(v.x, v.y, size) ? 'v' : '.';
+    // nobody wakes up with lava lapping at the gate
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (t[(v.y + dy) * size + v.x + dx] === 'l') t[(v.y + dy) * size + v.x + dx] = 'v';
+  }
+  w.terrain = t.join('');
+  w.round = true;
+  invalidateSpatial();
+  w.mapRev++;
+  // settle the new land in proportion to the old
+  const scale = (Math.PI * (size / 2 - 4) ** 2) / (old * old);
+  const oldAi = Object.values(w.players).filter((p) => p.kind === 'ai').length;
+  const wantAi = Math.round(Math.max(w.config.aiCount, oldAi) * scale);
+  w.config.aiCount = wantAi;
+  const head = Math.min(10, 4 + Math.floor(w.now / (24 * HOUR)));
+  for (let i = oldAi; i < wantAi; i++) if (!foundAiRuler(w, head)) break;
+  const wantBarbs = Math.round(Math.PI * (size / 2 - 4) ** 2 * w.config.barbDensity);
+  let barbs = Object.values(w.villages).filter((v) => v.ownerId === null).length;
+  for (let tries = 0; barbs < wantBarbs && tries < wantBarbs * 40; tries++) if (sproutBarbarian(w, 1)) barbs++;
+}
+
+/**
+ * Bring a new human ruler into a running world:
 
 /**
  * Bring a new human ruler into a running world: a fresh village somewhere with

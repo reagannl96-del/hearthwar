@@ -62,7 +62,7 @@ export const C = {
 
 const cache = new Map<string, THREE.MeshLambertMaterial>();
 
-export type Season = 'fall' | 'winter';
+export type Season = 'fall' | 'winter' | 'volcanic';
 let season: Season = 'fall';
 export function setSeason(s: Season) {
   season = s;
@@ -79,6 +79,15 @@ const WINTER: Record<number, number> = {
   [C.grass]: 0xe8eef2, [C.grassLight]: 0xf1f5f8, [C.grassDark]: 0xd6dfe6, [C.grassRust]: 0xdce3e8, [C.pine]: 0x2e4a2e,
   [C.pineDark]: 0x243d26, [C.clay]: 0x9c7a62, [C.clayDark]: 0x85695a, [C.water]: 0x9fc3d8,
   [C.dirt]: 0xcfc5b3, [C.dirtDark]: 0xb3a791, [C.rock]: 0xd0d5da, [C.rockDark]: 0x9aa0a6,
+};
+
+/** In the volcanic west the ground is ash and black rock, water runs as lava and the trees are burnt. */
+const VOLCANIC: Record<number, number> = {
+  [C.grass]: 0x4c4846, [C.grassLight]: 0x5a5552, [C.grassDark]: 0x3b3736, [C.grassRust]: 0x5e4034,
+  [C.dirt]: 0x3f3a38, [C.dirtDark]: 0x2e2a29, [C.water]: 0xe0561c, [C.rock]: 0x3d3533, [C.rockDark]: 0x2b2422,
+  [C.leafOrange]: 0x3a302c, [C.leafRed]: 0x4a2a22, [C.leafYellow]: 0x4a403a, [C.leafGold]: 0x3f3530, [C.leafGreen]: 0x3a3632,
+  [C.pine]: 0x2e2826, [C.pineDark]: 0x241e1c, [C.clay]: 0x6a3a28, [C.clayDark]: 0x4e2a1e, [C.pumpkin]: 0x9a4a1e,
+  0x97a24e: 0x55504c, 0x7f8d43: 0x46423f, 0x8b984a: 0x4e4945,
 };
 
 /** Each statue hero gives the village its own look. */
@@ -128,6 +137,7 @@ const THEMES: Record<Theme, Record<number, number>> = {
 /** The colour a palette entry really takes: snow first in winter, then the village's theme. */
 function look(c: number): number {
   if (season === 'winter' && WINTER[c] !== undefined) return WINTER[c];
+  if (season === 'volcanic' && VOLCANIC[c] !== undefined) return VOLCANIC[c];
   return THEMES[theme][c] ?? c;
 }
 

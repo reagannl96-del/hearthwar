@@ -5,7 +5,7 @@ import { Village3D } from '../three/Village3D';
 import { Btn, Countdown, Empty, Progress, Section, UnitList } from '../components/common';
 import { fmt } from '../format';
 import { act, go, isNightNow, now, prefs, setPrefs, view, village } from '../store';
-import { isWinter } from '../../engine/world';
+import { isVolcanic, isWinter } from '../../engine/world';
 import { CommandRow } from './RallyScreen';
 
 const BONUS_TEXT: Record<string, string> = {
@@ -37,6 +37,7 @@ export function VillageScreen() {
             points={v.points}
             villageId={v.id}
             winter={prefs.value.season === 'auto' ? isWinter(v.x, v.y, pv.config.size) : prefs.value.season === 'winter'}
+            volcanic={prefs.value.season === 'auto' && isVolcanic(v.x, v.y, pv.config.size)}
             night={night}
             units={v.units}
             marches={[

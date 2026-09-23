@@ -152,7 +152,14 @@ export function buildTerrain(seed = 7): THREE.Mesh {
       if (rr > WALL_R + 5 && bog > 0.74) c = C.water;
       else if (bog > 0.7) c = C.dirtDark;
     }
-    if (getSeason() !== 'winter' && !onRoad(cx, cz) && sd >= 4.2 && cy <= 3) {
+    // the volcanic west: glowing cracks of lava run through the ash outside the walls
+    if (getSeason() === 'volcanic' && !onRoad(cx, cz) && rr > WALL_R + 4) {
+      // thin, winding cracks where the noise crosses its middle; darker basalt beside them
+      const crack = Math.abs(noise(cx * 0.9 + 31, cz * 0.9 - 17, 9) - 0.5);
+      if (crack < 0.018) c = C.water;
+      else if (crack < 0.05) c = C.rockDark;
+    }
+    if (getSeason() === 'fall' && !onRoad(cx, cz) && sd >= 4.2 && cy <= 3) {
       const patch = noise(cx * 1.4 - 7, cz * 1.4 + 3, 8);
       if (getTheme() === 'sorcerer' && patch > 0.72) c = rr > WALL_R ? 0x8a7aa8 : 0x7f86a8; // lavender heather
       else if (getTheme() === 'druid' && patch > 0.7) c = 0x3f6d2a; // deep moss
@@ -261,7 +268,55 @@ export function buildScenery(seed = 11): THREE.Group {
   if (getTheme() === 'goblin') addSwamp(g, r);
   if (getTheme() === 'sorcerer') addArcane(g, r);
   if (getTheme() === 'druid') addGlade(g, r);
+  if (getSeason() === 'volcanic') addVolcanic(g, r);
   return bake(g);
+}
+
+/** The volcanic west: basalt columns, black boulders, smoking vents and drifting embers. */
+function addVolcanic(g: THREE.Group, r: () => number): void {
+  const basalt = (x: number, z: number) => {
+    const c = new THREE.Group();
+    const n = 3 + Math.floor(r() * 4);
+    for (let i = 0; i < n; i++) {
+      const h = 1.2 + r() * 3.2;
+      const col = cyl(0.42, 0.46, h, i % 2 ? 0x2e2624 : 0x3a302d, 6, (r() - 0.5) * 1.6, 0, (r() - 0.5) * 1.6);
+      c.add(col);
+    }
+    c.position.set(x, heightAt(x, z) - 0.1, z);
+    c.rotation.y = r() * Math.PI;
+    g.add(c);
+  };
+  const vent = (x: number, z: number) => {
+    const y = heightAt(x, z);
+    g.add(cone(1.1, 0.8, 0x2b2422, 7, x, y - 0.1, z));
+    const glow = mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.06, 8), 0xff8a2a, { emissive: 0xd0500a });
+    glow.position.set(x, y + 0.72, z);
+    g.add(glow);
+    // a column of smoke, left unbaked so the renderer can drift it
+    const smoke = new THREE.MeshBasicMaterial({ color: 0x4a4240, transparent: true, opacity: 0.32, depthWrite: false });
+    for (let i = 0; i < 4; i++) {
+      const puff = new THREE.Mesh(new THREE.IcosahedronGeometry(0.6 + i * 0.35, 0), smoke);
+      puff.position.set(x + i * 0.3, y + 1.4 + i * 1.3, z);
+      puff.userData.dynamic = true;
+      puff.userData.mote = { x: x + i * 0.3, y: y + 1.4 + i * 1.3, z, phase: r() * Math.PI * 2, speed: 0.25 + r() * 0.2 };
+      g.add(puff);
+    }
+  };
+  let placed = 0;
+  for (let tries = 0; tries < 900 && placed < 30; tries++) {
+    const a = r() * Math.PI * 2, d = WALL_R + 7 + r() * 75;
+    const x = Math.cos(a) * d, z = Math.sin(a) * d;
+    if (!freeForTree(x, z)) continue;
+    if (placed % 5 === 0) vent(x, z);
+    else if (placed % 2 === 0) basalt(x, z);
+    else g.add(Object.assign(blob(0.9 + r() * 0.9, 0x2e2624, x, heightAt(x, z) + 0.2, z, 1.3, 0.7, 1.1), {}));
+    placed++;
+  }
+  motes(g, r, 36, 0xffa040, 0xd0500a, () => {
+    const a = r() * Math.PI * 2, d = 8 + r() * 80;
+    const x = Math.cos(a) * d, z = Math.sin(a) * d;
+    return [x, (Math.hypot(x, z) > WALL_R ? heightAt(x, z) : 0) + 1 + r() * 5, z];
+  });
 }
 
 /** Floating motes of light (arcane sparks, fireflies): animated by the renderer. */

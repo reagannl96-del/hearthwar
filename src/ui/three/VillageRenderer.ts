@@ -122,7 +122,7 @@ export class VillageRenderer {
     this.season = opts.season ?? 'fall';
     setSeason(this.season);
     setTheme(opts.theme ?? 'classic');
-    const sky = new THREE.Color(this.season === 'winter' ? 0xdfe7ee : 0xe8cf9f);
+    const sky = new THREE.Color(this.season === 'winter' ? 0xdfe7ee : this.season === 'volcanic' ? 0x9a6a58 : 0xe8cf9f);
     this.scene.background = sky;
     this.scene.fog = new THREE.Fog(sky, 260, 470);
 
@@ -224,7 +224,8 @@ export class VillageRenderer {
   setNight(n: boolean): void {
     this.night = n;
     const winter = this.season === 'winter';
-    const sky = new THREE.Color(n ? (winter ? 0x1c2638 : 0x1a1d2e) : winter ? 0xdfe7ee : 0xe8cf9f);
+    const volc = this.season === 'volcanic';
+    const sky = new THREE.Color(n ? (winter ? 0x1c2638 : volc ? 0x2a1614 : 0x1a1d2e) : winter ? 0xdfe7ee : volc ? 0x9a6a58 : 0xe8cf9f);
     this.scene.background = sky;
     (this.scene.fog as THREE.Fog).color = sky;
     if (n) {
@@ -239,7 +240,7 @@ export class VillageRenderer {
       this.hemi.color.set(winter ? 0xf2f6ff : 0xfff0d8);
       this.hemi.groundColor.set(winter ? 0x8a8f99 : 0x5b4a2e);
       this.hemi.intensity = winter ? 1.1 : 1.35;
-      this.sun.color.set(winter ? 0xfff2e0 : 0xffd29a);
+      this.sun.color.set(winter ? 0xfff2e0 : volc ? 0xffd2b4 : 0xffd29a);
       this.sun.intensity = winter ? 2.1 : 2.6;
       this.fill.intensity = 0.35;
       this.renderer.toneMappingExposure = 1.05;
@@ -668,7 +669,8 @@ export class VillageRenderer {
     const m = snow ? new THREE.MeshBasicMaterial({ color: 0xffffff }) : new THREE.MeshLambertMaterial({ side: THREE.DoubleSide });
     this.leaves = new THREE.InstancedMesh(geo, m, n);
     this.leaves.castShadow = false;
-    const cols = snow ? [0xffffff, 0xf2f6fb, 0xe6eef7] : [C.leafOrange, C.leafRed, C.leafYellow, C.leafGold];
+    const ash = this.season === 'volcanic';
+    const cols = snow ? [0xffffff, 0xf2f6fb, 0xe6eef7] : ash ? [0x8a8480, 0x6e6864, 0xa09a94, 0xff7a2a] : [C.leafOrange, C.leafRed, C.leafYellow, C.leafGold];
     const r = rng(99);
     const col = new THREE.Color();
     for (let i = 0; i < n; i++) {

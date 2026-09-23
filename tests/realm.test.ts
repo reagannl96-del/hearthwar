@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { THEMED_UNITS, themeOfHero, unitNameAt } from '../src/engine/data/themes';
 import { sideInfo } from '../src/engine/commands';
 import { UNITS } from '../src/engine/data/units';
-import { createWorld, defaultConfig, realmGrowth } from '../src/engine/world';
+import { buildable, createWorld, defaultConfig, inRealm, isVolcanic, migrateWorld, realmGrowth, terrainAt } from '../src/engine/world';
 
 describe('the realm keeps growing', () => {
   it('new AI rulers arrive over time, with room to breathe, and stop when the map is full', () => {
@@ -43,6 +43,53 @@ describe('the realm keeps growing', () => {
     for (const v of fresh) {
       expect(all.some((o) => o !== v && Math.abs(o.x - v.x) <= 2 && Math.abs(o.y - v.y) <= 2)).toBe(false);
     }
+  });
+});
+
+describe('the round realm', () => {
+  it('new realms are a round island with a volcanic west, and every village stands on open ground', () => {
+    const w = createWorld({ worldName: 'T', playerName: 'P', villageName: 'H', seed: 21, config: { ...defaultConfig(), aiCount: 10, size: 120 } });
+    for (const v of Object.values(w.villages)) {
+      expect(inRealm(v.x, v.y, 120)).toBe(true);
+      expect(buildable(terrainAt(w, v.x, v.y))).toBe(true);
+    }
+    expect(terrainAt(w, 1, 1)).toBe('w');
+    expect(Object.values(w.villages).some((v) => isVolcanic(v.x, v.y, 120))).toBe(true);
+  });
+
+  it('an older square world grows into the big round one, keeping every village and filling the new land', () => {
+    const w = createWorld({ worldName: 'T', playerName: 'P', villageName: 'H', seed: 22, config: { ...defaultConfig(), aiCount: 6, size: 60 } });
+    w.round = undefined;
+    const home = w.villages[w.players[w.humanId].villages[0]];
+    const [hx, hy] = [home.x, home.y];
+    const oldTerrain = w.terrain;
+    const before = Object.keys(w.villages).length;
+    const ais = Object.values(w.players).filter((p) => p.kind === 'ai').length;
+    migrateWorld(w);
+    expect(w.config.size).toBe(180);
+    expect(w.terrain.length).toBe(180 * 180);
+    expect(home.x - hx).toBe(60);
+    expect(home.y - hy).toBe(60);
+    for (const v of Object.values(w.villages)) {
+      expect(inRealm(v.x, v.y, 180)).toBe(true);
+      expect(buildable(terrainAt(w, v.x, v.y))).toBe(true);
+    }
+    // the old landscape is still there in the middle (apart from the new volcanic west and the shore)
+    let same = 0, n = 0;
+    for (let y = 0; y < 60; y++) for (let x = 0; x < 60; x++) {
+      const was = oldTerrain[y * 60 + x];
+      if (!'.fm'.includes(was) || isVolcanic(x, y, 60) || isVolcanic(x + 60, y + 60, 180)) continue;
+      n++;
+      if (w.terrain[(y + 60) * 180 + x + 60] === was || Object.values(w.villages).some((v) => v.x === x + 60 && v.y === y + 60)) same++;
+    }
+    expect(n).toBeGreaterThan(1000);
+    expect(same / n).toBeGreaterThan(0.99);
+    expect(Object.keys(w.villages).length).toBeGreaterThan(before * 3);
+    expect(Object.values(w.players).filter((p) => p.kind === 'ai').length).toBeGreaterThan(ais * 3);
+    // loading it again changes nothing
+    const count = Object.keys(w.villages).length;
+    migrateWorld(w);
+    expect(Object.keys(w.villages).length).toBe(count);
   });
 });
 

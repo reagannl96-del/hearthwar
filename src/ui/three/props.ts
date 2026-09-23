@@ -7,6 +7,25 @@ const AUTUMN = [C.leafOrange, C.leafRed, C.leafYellow, C.leafGold, C.leafOrange,
 
 export function tree(kind: 'oak' | 'pine' | 'birch', r: () => number, scale = 1): THREE.Group {
   const g = new THREE.Group();
+  if (getSeason() === 'volcanic') {
+    // a charred snag: black trunk, a few bare branches, embers still glowing in the bark
+    const h = kind === 'pine' ? 3.2 : 2.6;
+    g.add(cyl(0.14, 0.3, h, 0x241c19, 5));
+    for (let i = 0; i < 3; i++) {
+      const b = cyl(0.05, 0.1, 1.1 + r() * 0.6, 0x2c2320, 4);
+      b.position.set(0, h * (0.45 + i * 0.18), 0);
+      b.rotation.set((r() - 0.5) * 1.6, r() * Math.PI * 2, 0.7 + r() * 0.5);
+      g.add(b);
+    }
+    if (r() < 0.4) {
+      const ember = mesh(new THREE.IcosahedronGeometry(0.1, 0), 0xff7a2a, { emissive: 0xc0400a });
+      ember.position.set(0.18, 0.5 + r() * 1.2, 0.12);
+      g.add(ember);
+    }
+    g.scale.setScalar(scale * (0.8 + r() * 0.45));
+    g.rotation.y = r() * Math.PI * 2;
+    return g;
+  }
   if (kind === 'pine') {
     g.add(cyl(0.18, 0.28, 1.4, C.trunk, 5));
     const col = r() < 0.5 ? C.pine : C.pineDark;

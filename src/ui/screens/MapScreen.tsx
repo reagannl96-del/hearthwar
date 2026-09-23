@@ -5,7 +5,7 @@ import type { UnitId, Units } from '../../engine/types';
 import type { MapData, MapVillage } from '../../engine/view';
 import { lsGet } from '../../host/storage';
 import { forestSprite, villageSprite } from '../mapSprites';
-import { isWinter } from '../../engine/world';
+import { isVolcanic, isWinter } from '../../engine/world';
 import { Icon } from '../art/icons';
 import { Btn, UnitList, UnitIcon, unitName } from '../components/common';
 import { coords, continent, fmt, fmtAgo, fmtDur, parseCoords } from '../format';
@@ -41,7 +41,7 @@ export function MapScreen({ focus }: { focus?: number }) {
   }, [data.rev]);
   const snow = useMemo(() => {
     const a = new Uint8Array(data.size * data.size);
-    for (let y = 0; y < data.size; y++) for (let x = 0; x < data.size; x++) a[y * data.size + x] = isWinter(x, y, data.size) ? 1 : 0;
+    for (let y = 0; y < data.size; y++) for (let x = 0; x < data.size; x++) a[y * data.size + x] = isWinter(x, y, data.size) ? 1 : isVolcanic(x, y, data.size) ? 2 : 0;
     return a;
   }, [data.size]);
   const start = (focus !== undefined ? byId.get(focus) : undefined) ?? byId.get(cur.id)!;
@@ -98,12 +98,46 @@ export function MapScreen({ focus }: { focus?: number }) {
         const t = data.terrain[y * data.size + x];
         const pair = TERRAIN_COLORS[t] ?? TERRAIN_COLORS['.'];
         const cold = snow[y * data.size + x] === 1;
+        const hot = snow[y * data.size + x] === 2 && t !== 'w';
         const hsh = (x * 73856093) ^ (y * 19349663);
         // forests keep the meadow colour underneath; the trees are drawn on top
         ctx.fillStyle = cold
           ? SNOW[t === 'w' ? 'w' : 'g']
+          : t === 'l' ? ASH.lava
+          : hot ? ((hsh & 1) ? ASH.g : ASH.g2)
           : col[t === 'f' || t === 'm' ? '--map-grass-2' : pair[0]];
         ctx.fillRect(Math.floor(sx(x)), Math.floor(sy(y)), Math.ceil(z) + 1, Math.ceil(z) + 1);
+        if (t === 'l' && z >= 6 && (hsh & 3) === 0) {
+          // glowing pools and a dark cooling crust
+          const px = sx(x), py = sy(y);
+          ctx.fillStyle = ASH.lava2;
+          ctx.beginPath();
+          ctx.ellipse(px + z * (0.3 + ((hsh >> 2) & 3) * 0.12), py + z * (0.35 + ((hsh >> 4) & 3) * 0.1), z * 0.22, z * 0.13, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = ASH.crust;
+          ctx.lineWidth = Math.max(1, z * 0.06);
+          ctx.beginPath();
+          ctx.moveTo(px, py + z * (0.2 + ((hsh >> 6) & 3) * 0.15));
+          ctx.lineTo(px + z * 0.5, py + z * (0.5 + ((hsh >> 8) & 1) * 0.2));
+          ctx.lineTo(px + z, py + z * (0.3 + ((hsh >> 9) & 3) * 0.15));
+          ctx.stroke();
+        } else if (t === 'v' && !grid.has(y * data.size + x) && z >= 12) {
+          const px = sx(x), py = sy(y);
+          if ((hsh & 7) === 0) {
+            // a jagged black boulder
+            ctx.fillStyle = ASH.rock;
+            ctx.beginPath();
+            ctx.moveTo(px + z * 0.2, py + z * 0.85);
+            ctx.lineTo(px + z * 0.35, py + z * 0.45);
+            ctx.lineTo(px + z * 0.55, py + z * 0.6);
+            ctx.lineTo(px + z * 0.72, py + z * 0.35);
+            ctx.lineTo(px + z * 0.85, py + z * 0.85);
+            ctx.fill();
+          } else if ((hsh & 15) === 5) {
+            ctx.fillStyle = ASH.ember;
+            ctx.fillRect(px + z * 0.5, py + z * 0.5, Math.max(1.5, z * 0.08), Math.max(1.5, z * 0.08));
+          }
+        }
         if (t === 'f' && !grid.has(y * data.size + x) && (hsh & 3) !== 0) {
           if (z >= 12) ctx.drawImage(forestSprite(hsh & 7, cold), sx(x) - z * 0.05, sy(y) - z * 0.15, z * 1.05, z * 1.05);
           else {
@@ -115,25 +149,34 @@ export function MapScreen({ focus }: { focus?: number }) {
           const px = sx(x), py = sy(y);
           const k = 0.85 + ((hsh >> 3) & 3) * 0.1;
           const tipX = px + z * (0.4 + ((hsh >> 5) & 3) * 0.05), tipY = py + z * (1 - 0.95 * k);
-          ctx.fillStyle = cold ? '#9aa3ab' : '#8a8068';
+          ctx.fillStyle = cold ? '#9aa3ab' : hot ? ASH.rock : '#8a8068';
           ctx.beginPath();
           ctx.moveTo(px - z * 0.05, py + z);
           ctx.lineTo(tipX, tipY);
           ctx.lineTo(px + z * 1.05, py + z);
           ctx.fill();
-          ctx.fillStyle = cold ? '#7d868f' : '#6e654f';
+          ctx.fillStyle = cold ? '#7d868f' : hot ? ASH.rock2 : '#6e654f';
           ctx.beginPath();
           ctx.moveTo(tipX, tipY);
           ctx.lineTo(px + z * 1.05, py + z);
           ctx.lineTo(tipX + z * 0.08, py + z);
           ctx.fill();
-          ctx.fillStyle = cold ? '#f6f9fb' : '#e9e4d6';
+          ctx.fillStyle = cold ? '#f6f9fb' : hot ? ASH.lava2 : '#e9e4d6';
           ctx.beginPath();
           ctx.moveTo(tipX, tipY);
           ctx.lineTo(tipX + z * 0.16, tipY + z * 0.28);
           ctx.lineTo(tipX - z * 0.02, tipY + z * 0.22);
           ctx.lineTo(tipX - z * 0.15, tipY + z * 0.3);
           ctx.fill();
+          if (hot && z >= 12 && (hsh & 3) === 0) {
+            // a lazy plume of smoke from the crater
+            ctx.fillStyle = 'rgba(70,62,60,0.45)';
+            for (let i = 0; i < 3; i++) {
+              ctx.beginPath();
+              ctx.arc(tipX + z * (0.08 + i * 0.12), tipY - z * (0.18 + i * 0.22), z * (0.12 + i * 0.05), 0, Math.PI * 2);
+              ctx.fill();
+            }
+          }
         }
       }
     }
@@ -178,7 +221,7 @@ export function MapScreen({ focus }: { focus?: number }) {
           ctx.fillRect(px + (z - s) / 2, py + (z - s) / 2, s, s);
         } else {
           const t = tier(v.points);
-          const sprite = villageSprite(t, v.ownerId === null ? 'barb' : 'player', snow[y * data.size + x] === 1);
+          const sprite = villageSprite(t, v.ownerId === null ? 'barb' : 'player', snow[y * data.size + x] === 1, snow[y * data.size + x] === 2);
           ctx.drawImage(sprite, px - z * 0.12, py - z * 0.2, z * 1.24, z * 1.24);
           // owner marker, Tribal Wars style
           const d = Math.max(4, z * 0.16);
@@ -295,7 +338,11 @@ export function MapScreen({ focus }: { focus?: number }) {
       for (let y = 0; y < data.size; y++)
         for (let x = 0; x < data.size; x++) {
           const t = data.terrain[y * data.size + x];
-          b.fillStyle = snow[y * data.size + x] ? SNOW[t === 'w' ? 'w' : t === 'm' ? 'm' : t === 'f' ? 'f' : 'g'] : col[(TERRAIN_COLORS[t] ?? TERRAIN_COLORS['.'])[0]];
+          const zone = snow[y * data.size + x];
+          b.fillStyle = t === 'l' ? ASH.lava
+            : zone === 1 ? SNOW[t === 'w' ? 'w' : t === 'm' ? 'm' : t === 'f' ? 'f' : 'g']
+            : zone === 2 && t !== 'w' ? (t === 'm' ? ASH.rock : ASH.g)
+            : col[(TERRAIN_COLORS[t] ?? TERRAIN_COLORS['.'])[0]];
           b.fillRect(x * P, y * P, P, P);
         }
       for (const v of data.villages) {
@@ -477,6 +524,8 @@ export function MapScreen({ focus }: { focus?: number }) {
 }
 
 const SNOW = { g: '#e7edf1', g2: '#dce4ea', f: '#c9d4d6', w: '#a7c4d6', m: '#c5cacf', peak: '#f5f8fa' };
+/** the volcanic west: ash plains, black rock and lava */
+const ASH = { g: '#5d534c', g2: '#5a504a', rock: '#3d3533', rock2: '#2b2422', lava: '#b3401c', lava2: '#f08a2c', crust: 'rgba(50,20,12,0.45)', ember: '#ff7a2a' };
 
 /** The halo Tribal Wars puts around villages: gold for yours, white for your home, any colour for markers. */
 function glow(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, strong: boolean, color: string) {
@@ -581,6 +630,20 @@ function Legend({ data }: { data: MapData }) {
   );
 }
 
+/** Invite a real ruler straight from the map, if you are in a tribe and may recruit. */
+function TribeInvite({ pid, name, tribeId }: { pid: number; name: string; tribeId: number | null }) {
+  const pv = view.value!;
+  if (pv.me.tribeId == null || tribeId === pv.me.tribeId) return null;
+  const mine = host.value!.tribeHome().tribe;
+  if (!mine || !mine.myRights.includes('invite')) return null;
+  if (mine.invites.some((i) => i.pid === pid)) return <p class="muted small">{name} has an invitation to your tribe.</p>;
+  return (
+    <Btn small variant="ghost" onClick={() => act({ type: 'tribeInvite', name }, `${name} has been invited to [${mine.tag}].`)}>
+      <Icon name="tribe" size={14} /> Invite to tribe{tribeId != null ? ' (already in a tribe)' : ''}
+    </Btn>
+  );
+}
+
 function loadTpl(): { a: Units; b: Units } {
   try {
     return JSON.parse(lsGet('hw-farm') ?? '');
@@ -639,6 +702,7 @@ function VillagePanel({ v, data }: { v: MapVillage; data: MapData }) {
             </div>
           )}
           {owner && <Btn small variant="quiet" onClick={() => { marketTarget.value = { x: v.x, y: v.y }; go({ name: 'building', id: 'market', tab: 'send' }); }}>Send resources</Btn>}
+          {owner && owner.kind === 'human' && <TribeInvite pid={owner.id} name={owner.name} tribeId={owner.tribeId} />}
         </>
       )}
       {!own && info.travel && (

@@ -112,6 +112,19 @@ function tinyTree(ctx: CanvasRenderingContext2D, x: number, y: number, k: number
   if (winter) poly(ctx, [[x, y - 13 * k], [x + 2.2 * k, y - 7.5 * k], [x - 2.2 * k, y - 7.5 * k]], '#ffffff');
 }
 
+/** A charred, leafless tree for the volcanic west. */
+function deadTree(ctx: CanvasRenderingContext2D, x: number, y: number, k: number) {
+  ctx.fillStyle = 'rgba(10,5,2,0.35)';
+  ctx.beginPath(); ctx.ellipse(x + 2, y + 1, 3.5 * k, 1.5 * k, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#2a211d';
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  ctx.moveTo(x, y); ctx.lineTo(x, y - 10 * k);
+  ctx.moveTo(x, y - 6 * k); ctx.lineTo(x + 3.5 * k, y - 9.5 * k);
+  ctx.moveTo(x, y - 4 * k); ctx.lineTo(x - 3 * k, y - 7.5 * k);
+  ctx.stroke();
+}
+
 /** A ring of palisade stakes (or a stone wall) around the plot, drawn back half or front half. */
 function ring(ctx: CanvasRenderingContext2D, cx: number, cy: number, rx: number, ry: number, front: boolean, stone: string | null, h: number) {
   const n = 22;
@@ -139,8 +152,8 @@ function shade(hex: string, amt: number): string {
 }
 
 /** tier 0..5 by points */
-export function villageSprite(tier: number, kind: Kind, winter = false): HTMLCanvasElement {
-  const key = `${tier}|${kind}|${winter ? 1 : 0}`;
+export function villageSprite(tier: number, kind: Kind, winter = false, volcanic = false): HTMLCanvasElement {
+  const key = `${tier}|${kind}|${winter ? 1 : 0}|${volcanic ? 1 : 0}`;
   const hit = cache.get(key);
   if (hit) return hit;
   const c = document.createElement('canvas');
@@ -162,14 +175,16 @@ export function villageSprite(tier: number, kind: Kind, winter = false): HTMLCan
   ctx.translate(2, 3);
   poly(ctx, plot, 'rgba(25,15,5,0.35)');
   ctx.restore();
-  const earth = winter ? (barb ? '#cfc9bf' : '#e3dccd') : barb ? '#a89470' : '#c9a86c';
-  poly(ctx, plot, earth, winter ? '#9aa2a8' : '#5c4526');
-  // grass tufts and worn paths on the plot
-  ctx.fillStyle = winter ? '#f4f7f9' : barb ? '#7d8a45' : '#8a9a48';
+  const earth = volcanic ? (barb ? '#5b514a' : '#6e6258') : winter ? (barb ? '#cfc9bf' : '#e3dccd') : barb ? '#a89470' : '#c9a86c';
+  poly(ctx, plot, earth, volcanic ? '#241c19' : winter ? '#9aa2a8' : '#5c4526');
+  // grass tufts and worn paths on the plot (black rock and embers in the volcanic west)
+  ctx.fillStyle = volcanic ? '#3a302c' : winter ? '#f4f7f9' : barb ? '#7d8a45' : '#8a9a48';
   for (let i = 0; i < 14; i++) {
     const a = rnd() * Math.PI * 2, rr = 0.55 + rnd() * 0.4;
+    if (volcanic && i % 4 === 0) ctx.fillStyle = '#ff7a2a';
+    else if (volcanic) ctx.fillStyle = '#3a302c';
     ctx.beginPath();
-    ctx.ellipse(cx + Math.cos(a) * rx * rr, cy + Math.sin(a) * ry * rr, 2.4, 1.2, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx + Math.cos(a) * rx * rr, cy + Math.sin(a) * ry * rr, volcanic && i % 4 === 0 ? 1.2 : 2.4, volcanic && i % 4 === 0 ? 0.8 : 1.2, 0, 0, Math.PI * 2);
     ctx.fill();
   }
   ctx.strokeStyle = winter ? 'rgba(160,150,135,0.5)' : 'rgba(120,85,45,0.45)';
@@ -198,8 +213,13 @@ export function villageSprite(tier: number, kind: Kind, winter = false): HTMLCan
   if (walled) ring(ctx, cx, cy, rx - 1, ry - 1, false, stone, 6 + tier);
 
   // trees at the edge of the plot, behind the houses
-  tinyTree(ctx, cx - rx * 0.78, cy - ry * 0.45, 1, winter);
-  tinyTree(ctx, cx + rx * 0.72, cy - ry * 0.55, 0.9, winter);
+  if (volcanic) {
+    deadTree(ctx, cx - rx * 0.78, cy - ry * 0.45, 1);
+    deadTree(ctx, cx + rx * 0.72, cy - ry * 0.55, 0.9);
+  } else {
+    tinyTree(ctx, cx - rx * 0.78, cy - ry * 0.45, 1, winter);
+    tinyTree(ctx, cx + rx * 0.72, cy - ry * 0.55, 0.9, winter);
+  }
 
   // the buildings, back to front
   const spots: [number, number, number, number][] = [
@@ -246,8 +266,16 @@ export function villageSprite(tier: number, kind: Kind, winter = false): HTMLCan
     }
   }
   // a couple of trees in front
-  tinyTree(ctx, cx + rx * 0.85, cy + ry * 0.35, 0.8, winter);
-  if (barb) tinyTree(ctx, cx - rx * 0.6, cy + ry * 0.6, 0.9, winter);
+  if (volcanic) {
+    // jagged black rocks around the plot
+    for (const [ox, oy, k] of [[0.85, 0.35, 1], [-0.6, 0.62, 0.8], [-0.95, 0.1, 0.7]] as const) {
+      const x = cx + rx * ox, y = cy + ry * oy;
+      poly(ctx, [[x - 4 * k, y + 1], [x - 1.5 * k, y - 5 * k], [x + 1 * k, y - 3 * k], [x + 3.5 * k, y - 6.5 * k], [x + 5 * k, y + 1]], '#2e2624', 'rgba(10,5,2,0.6)');
+    }
+  } else {
+    tinyTree(ctx, cx + rx * 0.85, cy + ry * 0.35, 0.8, winter);
+    if (barb) tinyTree(ctx, cx - rx * 0.6, cy + ry * 0.6, 0.9, winter);
+  }
 
   cache.set(key, c);
   return c;

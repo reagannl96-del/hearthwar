@@ -368,6 +368,8 @@ export interface World {
   dayKey?: number;
   /** online worlds: sign-in account id -> player id */
   accounts?: Record<string, number>;
+  /** the realm is the round island (older worlds were square and get grown on load) */
+  round?: boolean;
   /** client-side shadow only: attacks on fellow tribe members, as sent by the server */
   tribeAlerts?: TribeAlert[];
 }
