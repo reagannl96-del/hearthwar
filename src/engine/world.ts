@@ -313,23 +313,23 @@ export function respawnHuman(w: World, villageName: string, pid = w.humanId): Vi
  */
 export function spawnPlayer(w: World, name: string, villageNameText: string): Player | null {
   const size = w.config.size;
-  const c = size / 2;
-  const humans = Object.values(w.players).filter((p) => p.kind === 'human').length;
   const taken = new Set(Object.values(w.players).map((p) => p.color));
   const color = PLAYER_COLORS.find((col) => !taken.has(col)) ?? pick(w, PLAYER_COLORS);
   const clear = (x: number, y: number, r: number) => {
     for (const v of Object.values(w.villages)) if (Math.abs(v.x - x) <= r && Math.abs(v.y - y) <= r) return false;
     return true;
   };
-  // later arrivals start a little further out, like a real world filling up
-  for (let ring = 6 + humans * 3; ring < size * 0.48; ring += 2) {
-    for (let tries = 0; tries < 60; tries++) {
-      const a = nextRandom(w) * Math.PI * 2;
-      const x = Math.round(c + Math.cos(a) * ring), y = Math.round(c + Math.sin(a) * ring);
-      if (x < 4 || y < 4 || x >= size - 4 || y >= size - 4) continue;
+  // Anywhere on the map, but on open ground with elbow room, and never right on
+  // top of another human ruler. If the realm is crowded, the rules relax.
+  const humanVillages = Object.values(w.villages).filter((v) => v.ownerId !== null && w.players[v.ownerId]?.kind === 'human');
+  const rules: [number, number][] = [[3, 10], [2, 7], [1, 4], [1, 0]];
+  for (const [room, gap] of rules) {
+    for (let tries = 0; tries < 800; tries++) {
+      const x = randInt(w, 5, size - 6), y = randInt(w, 5, size - 6);
       const ter = terrainAt(w, x, y);
       if (ter !== '.' && ter !== 'f') continue;
-      if (!clear(x, y, 3)) continue;
+      if (!clear(x, y, room)) continue;
+      if (gap > 0 && humanVillages.some((v) => Math.hypot(v.x - x, v.y - y) < gap)) continue;
       const p = newPlayer(w, name.slice(0, 24) || 'Wanderer', 'human', color);
       const v = createVillage(w, x, y, villageNameText.slice(0, 32) || `${p.name}'s hold`, p.id);
       v.res = res(600, 600, 600);

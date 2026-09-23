@@ -5,7 +5,7 @@ import { conquer } from '../src/engine/commands';
 import { advance } from '../src/engine/game';
 import { HOUR, MINUTE, unitsPop } from '../src/engine/formulas';
 import type { World } from '../src/engine/types';
-import { createWorld, defaultConfig } from '../src/engine/world';
+import { createWorld, defaultConfig, spawnPlayer } from '../src/engine/world';
 import { buildView } from '../src/engine/view';
 import { popUsed, recomputeCounters, updateVillage } from '../src/engine/village';
 import { questStatus } from '../src/engine/quests';
@@ -231,6 +231,20 @@ describe('a human player', () => {
     expect(cmds[4].arrive - cmds[0].arrive).toBe(400);
     advance(w, cmds[4].arrive + 1);
     expect(target.ownerId).toBe(p.id);
+  });
+
+  it('drops online players at random spots, apart from each other', () => {
+    const w = createWorld({ worldName: 'T', playerName: '', villageName: '', multiplayer: true, seed: 7, config: { ...defaultConfig(), aiCount: 8, size: 100 } });
+    const spots = Array.from({ length: 8 }, (_, i) => {
+      const p = spawnPlayer(w, `P${i}`, `V${i}`)!;
+      const v = w.villages[p.villages[0]];
+      return [v.x, v.y];
+    });
+    for (let i = 0; i < spots.length; i++)
+      for (let j = i + 1; j < spots.length; j++) expect(Math.hypot(spots[i][0] - spots[j][0], spots[i][1] - spots[j][1])).toBeGreaterThanOrEqual(10);
+    // spread over the map, not bunched around the middle
+    const xs = spots.map((s) => s[0]), ys = spots.map((s) => s[1]);
+    expect(Math.max(...xs) - Math.min(...xs) + Math.max(...ys) - Math.min(...ys)).toBeGreaterThan(80);
   });
 
   it('can be conquered and respawn', () => {
