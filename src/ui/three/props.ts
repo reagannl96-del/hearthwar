@@ -370,7 +370,7 @@ const STEEL = 0xb9c4cc;
 const STEEL_DK = 0x6a7782;
 const SHAFT = 0x7a5230;
 
-export type TroopModel = 'spear' | 'sword' | 'axe' | 'archer' | 'scout' | 'noble' | 'light' | 'marcher' | 'heavy' | 'paladin';
+export type TroopModel = 'spear' | 'sword' | 'axe' | 'archer' | 'scout' | 'noble' | 'light' | 'marcher' | 'heavy' | 'paladin' | 'sorcerer' | 'druid' | 'goblin';
 
 function helmet(g: THREE.Group, color = STEEL) {
   g.add(cyl(0.16, 0.23, 0.2, color, 7, 0, 1.3));
@@ -384,7 +384,8 @@ function bow(color = SHAFT): THREE.Mesh {
 
 /** One of your soldiers on foot, carrying what their unit is known for. */
 function footSoldier(kind: TroopModel): THREE.Group {
-  const tunic = { spear: 0x2f5d99, sword: 0x8e3a1f, axe: 0x5a3a22, archer: 0x4f7a2e, scout: 0x3b3a30, noble: C.red }[kind as 'spear'] ?? 0x6f7c35;
+  if (kind === 'goblin') return goblin();
+  const tunic = { spear: 0x2f5d99, sword: 0x8e3a1f, axe: 0x5a3a22, archer: 0x4f7a2e, scout: 0x3b3a30, noble: C.red, sorcerer: 0x5b3596, druid: 0x4f7a2e }[kind as 'spear'] ?? 0x6f7c35;
   const g = person(tunic);
   switch (kind) {
     case 'spear':
@@ -427,6 +428,28 @@ function footSoldier(kind: TroopModel): THREE.Group {
       g.add(cone(0.26, 0.5, 0x2a2a22, 6, 0, 1.2));
       g.add(box(0.5, 0.7, 0.06, 0x2a2a22, 0, 0.35, -0.24));
       break;
+    case 'sorcerer':
+      // a tall star-spangled hat, a long robe and a staff with a glowing orb
+      g.add(cyl(0.34, 0.34, 0.05, 0x48297a, 10, 0, 1.36));
+      g.add(cone(0.2, 0.75, 0x5b3596, 8, 0, 1.38));
+      g.add(cyl(0.3, 0.36, 0.5, 0x5b3596, 7, 0, -0.02));
+      g.add(cyl(0.035, 0.035, 1.9, 0x3b2a1c, 5, 0.36, 0, 0.1));
+      const orb = mesh(new THREE.IcosahedronGeometry(0.16, 1), 0xc9a6ff, { emissive: 0x7a4ad0 });
+      orb.position.set(0.36, 1.98, 0.1);
+      g.add(orb);
+      break;
+    case 'druid': {
+      // hooded green robe, a gnarled staff sprouting leaves
+      g.add(cone(0.27, 0.5, 0x3f6424, 7, 0, 1.12));
+      g.add(cyl(0.3, 0.38, 0.5, 0x3f6424, 7, 0, -0.02));
+      g.add(blob(0.13, 0xd9d2c0, 0, 1.08, 0.14, 1, 1.3, 0.6));
+      const staff = cyl(0.04, 0.05, 2, 0x6e4a2a, 5, 0.36, 0, 0.1);
+      staff.rotation.z = -0.06;
+      g.add(staff);
+      g.add(blob(0.2, C.leafGreen, 0.42, 2.05, 0.1, 1.2, 0.8, 1));
+      g.add(blob(0.12, C.leafGold, 0.3, 2.15, 0.2));
+      break;
+    }
     case 'noble':
       g.add(cyl(0.17, 0.17, 0.14, C.gold, 6, 0, 1.4));
       g.add(box(0.55, 0.9, 0.06, 0x2f5d99, 0, 0.2, -0.24));
@@ -438,6 +461,28 @@ function footSoldier(kind: TroopModel): THREE.Group {
 
 const ROYAL = 0x2f5fb0;
 const GOLD_TRIM = 0xe9b83a;
+
+/** The goblin chief: small, green, all ears, with a spiked club and a loot sack. */
+function goblin(): THREE.Group {
+  const g = new THREE.Group();
+  const skin = 0x7fa843;
+  g.add(box(0.28, 0.26, 0.18, 0x3b2a1c, 0, 0, 0));
+  g.add(cyl(0.18, 0.26, 0.55, 0x6e4a2a, 6, 0, 0.24));
+  g.add(blob(0.22, skin, 0, 0.98, 0.02, 1, 0.9, 1));
+  for (const x of [-1, 1]) {
+    const ear = cone(0.08, 0.36, skin, 4, x * 0.3, 1.0, 0);
+    ear.rotation.z = -x * 1.25;
+    g.add(ear);
+  }
+  g.add(blob(0.05, 0xf2d64b, -0.08, 1.02, 0.19));
+  g.add(blob(0.05, 0xf2d64b, 0.08, 1.02, 0.19));
+  const club = cyl(0.05, 0.1, 0.8, 0x6e4a2a, 5, 0.3, 0.3, 0.12);
+  club.rotation.x = -0.4;
+  g.add(club);
+  g.add(blob(0.24, 0xc9ad72, -0.1, 0.55, -0.26, 1, 1.1, 0.9));
+  for (const c of g.children) c.castShadow = true;
+  return g;
+}
 
 /** A rider: a horse (facing +z like everyone else) with a soldier on its back. */
 function rider(kind: TroopModel): THREE.Group {

@@ -2,9 +2,9 @@
 // which validates everything server-side style, so the same code can back multiplayer.
 
 import { BUILDINGS } from './data/buildings';
-import { ITEM_BY_ID, UNITS } from './data/units';
+import { HEROES, ITEM_BY_ID, UNITS, isHero } from './data/units';
 import { cancelCommand, sendResources, sendTrain, sendTroops, withdrawSupport } from './commands';
-import { commandsOf } from './cmdindex';
+import { commandsFrom, commandsOf } from './cmdindex';
 import { pushEvent } from './events';
 import {
   COIN_COST, SCAVENGE_TIERS, buildCost, buildPopDelta, buildTime, coinsForNoble, noblesFromCoins, recruitTime,
@@ -167,12 +167,10 @@ export function recruitCheck(w: World, v: Village, u: UnitId, count: number): { 
   let max = Infinity;
   for (const k of RES_KEYS) if (d.cost[k] > 0) max = Math.min(max, Math.floor(v.res[k] / d.cost[k]));
   max = Math.min(max, Math.floor(popFree(v) / Math.max(1, d.pop)));
-  if (u === 'paladin') {
-    const owner = w.players[v.ownerId!];
-    const has = hasPaladin(w, v.ownerId!);
-    max = has ? 0 : Math.min(max, 1);
-    if (has) return { ok: false, reason: 'You already have a paladin.', max: 0 };
-    if (!owner) return { ok: false, reason: 'No owner.', max: 0 };
+  if (isHero(u)) {
+    const hero = villageHero(w, v);
+    if (hero) return { ok: false, reason: `This village already has a hero (${UNITS[hero].name}). Each village keeps one.`, max: 0 };
+    max = Math.min(max, 1);
   }
   if (u === 'noble') {
     const info = nobleInfo(w, v.ownerId!);
@@ -185,16 +183,31 @@ export function recruitCheck(w: World, v: Village, u: UnitId, count: number): { 
   return { ok: true, max };
 }
 
+/** Does the player have a paladin anywhere: at home, in training, on the road or stationed abroad? */
 export function hasPaladin(w: World, pid: number): boolean {
-  const pal = w.players[pid].paladin;
-  // the paladin's home is cleared when he dies, so a known home means he is alive somewhere
-  if (pal && pal.vid !== null) return true;
-  for (const vid of w.players[pid].villages) {
+  const p = w.players[pid];
+  for (const vid of p.villages) {
     const v = w.villages[vid];
     if ((v.units.paladin ?? 0) > 0) return true;
     if (v.recruit.statue.some((j) => j.unit === 'paladin')) return true;
   }
-  return commandsOf(w, pid).some((c) => (c.units.paladin ?? 0) > 0);
+  if (commandsOf(w, pid).some((c) => (c.units.paladin ?? 0) > 0)) return true;
+  for (const id in w.villages) if (w.villages[id].support.some((s) => s.ownerId === pid && (s.units.paladin ?? 0) > 0)) return true;
+  return false;
+}
+
+/** The hero this village already has (home, training, marching or stationed elsewhere), if any. */
+export function villageHero(w: World, v: Village): UnitId | null {
+  for (const h of HEROES) if ((v.units[h] ?? 0) > 0) return h;
+  for (const j of v.recruit.statue) if (isHero(j.unit)) return j.unit;
+  for (const c of commandsFrom(w, v.id)) for (const h of HEROES) if ((c.units[h] ?? 0) > 0) return h;
+  for (const id in w.villages) {
+    for (const st of w.villages[id].support) {
+      if (st.fromVid !== v.id) continue;
+      for (const h of HEROES) if ((st.units[h] ?? 0) > 0) return h;
+    }
+  }
+  return null;
 }
 
 export function countNobles(w: World, pid: number): number {
@@ -261,7 +274,7 @@ export function researchCheck(w: World, v: Village, u: UnitId): { ok: boolean; r
   const cost = researchCost(u, Math.min(level, 3));
   const time = researchTime(u, Math.min(level, 3), v.buildings.smithy, w.config.speed);
   const base = { level, cost, time };
-  if (u === 'paladin' || u === 'noble' || u === 'militia') return { ...base, ok: false, reason: 'Cannot be researched.' };
+  if (isHero(u) || u === 'noble' || u === 'militia') return { ...base, ok: false, reason: 'Cannot be researched.' };
   if ((u === 'archer' || u === 'marcher') && !w.config.archers) return { ...base, ok: false, reason: 'Archers are disabled.' };
   if (level > 3) return { ...base, ok: false, reason: 'Fully researched.' };
   const smithy = researchSmithyReq(u, level);

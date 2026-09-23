@@ -1,6 +1,6 @@
 import { useState } from 'preact/hooks';
 import { BUILDINGS, BUILDING_ORDER } from '../../engine/data/buildings';
-import { ITEMS, ITEM_BY_ID, UNITS, UNIT_ORDER } from '../../engine/data/units';
+import { HEROES, HERO_INFO, ITEMS, ITEM_BY_ID, UNITS, UNIT_ORDER } from '../../engine/data/units';
 import {
   COIN_COST, farmCap, hideCap, mineRate, researchCost, storageCap, techMultiplier, wallBase, wallMultiplier,
   watchtowerRange, unitsPop,
@@ -284,7 +284,7 @@ function RecruitPanel({ v, b }: { v: VillageView; b: RecruitBuilding }) {
 function SmithyPanel({ v }: { v: VillageView }) {
   const h = host.value!;
   const have = liveRes(v);
-  const units = UNIT_ORDER.filter((u) => u !== 'paladin' && u !== 'noble' && ((u !== 'archer' && u !== 'marcher') || view.value!.config.archers));
+  const units = UNIT_ORDER.filter((u) => !HEROES.includes(u) && u !== 'noble' && ((u !== 'archer' && u !== 'marcher') || view.value!.config.archers));
   return (
     <div class="stack">
       {v.research.length > 0 && (
@@ -383,40 +383,78 @@ function AcademyPanel({ v }: { v: VillageView }) {
   );
 }
 
-// ---------- statue / paladin ----------
+// ---------- statue: the village hero ----------
 
 function StatuePanel({ v }: { v: VillageView }) {
   const pv = view.value!;
   const pal = pv.me.paladin;
   const h = host.value!;
   const have = liveRes(v);
-  if (!pv.config.paladin) return <Section><Empty>The paladin is disabled in this world.</Empty></Section>;
-  const training = v.recruit.statue.length > 0;
-  const chk = h.recruitCheck(v.id, 'paladin', 1);
+  if (!pv.config.paladin) return <Section><Empty>Heroes are disabled in this world.</Empty></Section>;
+  const home = HEROES.find((u) => (v.units[u] ?? 0) > 0);
+  const training = v.recruit.statue.find((j) => HEROES.includes(j.unit))?.unit;
+  const current = home ?? training;
+  const chk0 = h.recruitCheck(v.id, 'sorcerer', 1);
+  const away = !current && !chk0.ok && /already has a hero/.test(chk0.reason ?? '');
   return (
     <div class="stack">
       <RecruitQueue v={v} b="statue" />
-      <Section title="Paladin">
-        {!pv.me.hasPaladin && !training ? (
-          <div>
-            <p>Your paladin is a mighty knight (150 attack, 250/400/150 defense) who finds legendary weapons. The equipped item boosts the troops he fights beside.</p>
-            <Cost cost={UNITS.paladin.cost} have={have} pop={UNITS.paladin.pop} time={h.recruitTime(v.id, 'paladin')} />
-            <div class="row gap">
-              <Btn disabled={!chk.ok} onClick={() => act({ type: 'recruit', vid: v.id, unit: 'paladin', count: 1 }, 'Your paladin has been called.')}>Appoint paladin</Btn>
-              {!chk.ok && <span class="reason">{chk.reason}</span>}
-            </div>
-          </div>
-        ) : (
-          <div>
-            <p>
-              <b>{pal?.name ?? 'Your paladin'}</b>{' '}
-              {pal?.vid != null ? <>serves {pv.villages.find((x) => x.id === pal.vid)?.name ?? 'afar'}. </> : training ? 'is in training. ' : 'is on the move. '}
-              He discovers a new item roughly every <span class="num">{fmtDur((24 * 3600_000) / pv.config.speed / warp.value)}</span>.
-            </p>
-          </div>
+      <Section title="Village hero">
+        <p class="muted">
+          Every village with a statue may keep one hero. Heroes fight beside your troops and are especially strong
+          against one kind of enemy, so pick the one that answers the armies around you.
+        </p>
+        {current && (
+          <p class="hero-current">
+            <Icon name={current} size={22} /> <b>{UNITS[current].name}</b> {home ? 'guards this village.' : 'is in training.'}
+          </p>
         )}
+        {away && <p class="hero-current"><Icon name="attack" size={18} /> This village's hero is away from home.</p>}
+        <div class="hero-grid">
+          {HEROES.map((u) => {
+            const d = UNITS[u];
+            const info = HERO_INFO[u];
+            const chk = h.recruitCheck(v.id, u, 1);
+            const mine = current === u;
+            return (
+              <article class={`hero-card hero-${u} ${mine ? 'is-mine' : ''}`}>
+                <header>
+                  <span class="hero-portrait"><Icon name={u} size={44} /></span>
+                  <div>
+                    <h3>{d.name}</h3>
+                    <span class="hero-vs">Strong against <b>{info.vsLabel}</b></span>
+                  </div>
+                </header>
+                <p class="small">{d.description}</p>
+                <ul class="hero-perks">
+                  {info.perks.map((p) => <li>{p}</li>)}
+                </ul>
+                <dl class="hero-stats">
+                  <dt>Attack</dt><dd class="num">{d.attack}</dd>
+                  <dt>Defense</dt><dd class="num">{d.def[0]} / {d.def[1]} / {d.def[2]}</dd>
+                  <dt>Speed</dt><dd class="num">{d.speed} min/field</dd>
+                  {d.carry > 0 && <><dt>Carries</dt><dd class="num">{d.carry}</dd></>}
+                </dl>
+                {mine ? <span class="pill">Your hero</span> : (
+                  <>
+                    <Cost cost={d.cost} have={have} pop={d.pop} time={h.recruitTime(v.id, u)} />
+                    <div class="row gap">
+                      <Btn small disabled={!chk.ok} onClick={() => act({ type: 'recruit', vid: v.id, unit: u, count: 1 }, `${d.name} answers the call.`)}>Train {d.name}</Btn>
+                    </div>
+                    {!chk.ok && !current && !away && <span class="reason">{chk.reason}</span>}
+                  </>
+                )}
+              </article>
+            );
+          })}
+        </div>
       </Section>
       <Section title="Legendary items">
+        <p class="muted small">
+          Your paladins search for legendary weapons, one roughly every <span class="num">{fmtDur((24 * 3600_000) / pv.config.speed / warp.value)}</span>.
+          The equipped item boosts the troops any of your paladins fight beside.
+          {!pv.me.hasPaladin && ' Train a paladin in any village to start finding them.'}
+        </p>
         <div class="items">
           {ITEMS.filter((i) => pv.config.archers || (i.unit !== 'archer' && i.unit !== 'marcher')).map((it) => {
             const found = pal?.items.includes(it.id);

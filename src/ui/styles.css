@@ -1101,3 +1101,41 @@ input.tiny { width: 56px; padding: 2px 4px; }
 .rep-facts dt { padding-top: 2px; }
 .rep-facts dd > .rep-buildings { width: 100%; }
 .rep-buildings { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
+
+/* ---------- statue heroes ---------- */
+.hero-current { display: flex; align-items: center; gap: 8px; margin: 4px 0 10px; }
+.hero-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.hero-card {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  padding: 12px;
+  border-radius: 4px;
+  border: 1px solid var(--line-strong);
+  border-top: 4px solid var(--hero, var(--brass-dark));
+  background: linear-gradient(var(--parch-hi), var(--parch));
+}
+.hero-card.is-mine { box-shadow: 0 0 0 2px var(--hero), 0 4px 14px rgba(0, 0, 0, 0.18); }
+.hero-paladin { --hero: #2f5fb0; }
+.hero-sorcerer { --hero: #6a3fa0; }
+.hero-druid { --hero: #4f7a2e; }
+.hero-goblin { --hero: #7c9a2e; }
+.hero-card header { display: flex; align-items: center; gap: 10px; }
+.hero-card h3 { margin: 0; }
+.hero-portrait {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  flex: none;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #fff8e6, var(--parch-3));
+  border: 2px solid var(--hero);
+}
+.hero-vs { font-size: 0.85rem; color: var(--ink-2); }
+.hero-vs b { color: var(--hero); }
+.hero-perks { margin: 0; padding-left: 1.1em; font-size: 0.88rem; display: grid; gap: 2px; }
+.hero-stats { display: grid; grid-template-columns: max-content 1fr; gap: 2px 10px; margin: 0; font-size: 0.85rem; }
+.hero-stats dt { color: var(--ink-2); font-weight: 700; }
+.hero-stats dd { margin: 0; }
+.hero-card .pill { justify-self: start; }

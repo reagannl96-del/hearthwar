@@ -2,6 +2,7 @@
 // `advance(world, t)` is deterministic and knows nothing about the UI, so a
 // multiplayer server can run exactly the same code.
 
+import { hasPaladin } from './actions';
 import { aiOnBattle, aiOnConquest, aiThink } from './ai/ai';
 import { handleArrival, addReport, type ArrivalHooks, sendTroops, updateIntel } from './commands';
 import { BUILDINGS } from './data/buildings';
@@ -141,7 +142,7 @@ function paladinItem(w: World, e: GameEvent): void {
   if (!p) return;
   pushEvent(w, 'item', w.now + itemInterval(w), p.id);
   const pal = p.paladin;
-  if (!pal || pal.vid === null) return;
+  if (!pal || !hasPaladin(w, p.id)) return;
   const missing = ITEMS.filter((i) => !pal.items.includes(i.id) && (w.config.archers || (i.unit !== 'archer' && i.unit !== 'marcher')));
   if (missing.length === 0) return;
   const item = pick(w, missing);

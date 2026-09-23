@@ -96,6 +96,24 @@ export const UNITS: Record<UnitId, UnitDef> = {
     cost: r(20, 20, 40), pop: 10, attack: 150, def: [250, 400, 150], speed: 10, carry: 100, time: 21600,
     cls: 'cav', building: 'statue', req: { statue: 1 }, research: false, smithy: 0,
   },
+  sorcerer: {
+    id: 'sorcerer', name: 'Sorcerer', plural: 'Sorcerers',
+    description: 'A hero of the statue. Arcane fire tears through massed footmen.',
+    cost: r(40, 60, 40), pop: 10, attack: 200, def: [150, 150, 300], speed: 12, carry: 0, time: 21600,
+    cls: 'arc', building: 'statue', req: { statue: 1 }, research: false, smithy: 0,
+  },
+  druid: {
+    id: 'druid', name: 'Druid', plural: 'Druids',
+    description: 'A hero of the statue. Thorn and root stop archers, and snare siege engines at the gate.',
+    cost: r(60, 40, 20), pop: 10, attack: 100, def: [300, 250, 300], speed: 12, carry: 50, time: 21600,
+    cls: 'inf', building: 'statue', req: { statue: 1 }, research: false, smithy: 0,
+  },
+  goblin: {
+    id: 'goblin', name: 'Goblin Chief', plural: 'Goblin Chiefs',
+    description: 'A hero of the statue. Quick, greedy and sly: sniffs out spies and fills every sack.',
+    cost: r(30, 30, 30), pop: 10, attack: 120, def: [120, 120, 80], speed: 8, carry: 300, time: 21600,
+    cls: 'inf', building: 'statue', req: { statue: 1 }, research: false, smithy: 0,
+  },
   noble: {
     id: 'noble', name: 'Nobleman', plural: 'Noblemen',
     description: 'Lowers the loyalty of a village. At zero loyalty the village is yours.',
@@ -111,8 +129,28 @@ export const UNITS: Record<UnitId, UnitDef> = {
 };
 
 export const UNIT_ORDER: UnitId[] = [
-  'spear', 'sword', 'axe', 'archer', 'scout', 'light', 'marcher', 'heavy', 'ram', 'catapult', 'paladin', 'noble',
+  'spear', 'sword', 'axe', 'archer', 'scout', 'light', 'marcher', 'heavy', 'ram', 'catapult', 'paladin', 'sorcerer', 'druid', 'goblin', 'noble',
 ];
+
+/** Heroes of the statue: each village may keep one. */
+export const HEROES: UnitId[] = ['paladin', 'sorcerer', 'druid', 'goblin'];
+export const isHero = (u: UnitId) => HEROES.includes(u);
+
+export interface HeroInfo {
+  /** the kind of troops this hero is strong against (+25% strength, scaled by how much of the enemy is that kind) */
+  vs?: UnitClass;
+  vsLabel: string;
+  perks: string[];
+}
+
+export const HERO_VS_BONUS = 0.25;
+
+export const HERO_INFO: Record<string, HeroInfo> = {
+  paladin: { vs: 'cav', vsLabel: 'Cavalry', perks: ['+25% strength against cavalry', 'Carries your legendary items into battle'] },
+  sorcerer: { vs: 'inf', vsLabel: 'Infantry', perks: ['+25% strength against infantry'] },
+  druid: { vs: 'arc', vsLabel: 'Archers', perks: ['+25% strength against archers', 'Defending: enemy rams and catapults work at half power'] },
+  goblin: { vsLabel: 'Scouts', perks: ['Scouts fight twice as hard, in attack and defense', 'The army carries 25% more loot', 'The fastest hero on the road'] },
+};
 
 export const ARMY_ORDER: UnitId[] = [...UNIT_ORDER, 'militia'];
 

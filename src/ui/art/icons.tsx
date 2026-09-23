@@ -247,6 +247,40 @@ const paths: Record<string, () => JSX.Element> = {
       <path d="M8 8.6c.8-1.6 2-2.4 3.2-2.6" fill="none" stroke={STEEL_LT} stroke-width="1.1" />
     </Ink>
   ),
+  sorcerer: () => (
+    <Ink>
+      <path d="m18.6 8.4 2.6 13.4" stroke={WOOD_DK} stroke-width="1.6" />
+      <circle cx="18.2" cy="6.4" r="2.6" fill="#b58cff" />
+      <circle cx="17.6" cy="5.7" r=".8" fill="#f1e6ff" stroke="none" />
+      <path d="M3.2 18.4c2.6-1.2 5.2-1.6 8-1.4 1.4.1 2.6.5 3.6 1.2L12.4 3.2c-.6-.8-1.6-.8-2.2.2Z" fill="#5b3596" />
+      <path d="M2.4 19.2c3.4-2 9-2.2 13 0 .6.4.4 1.2-.2 1.3-4.2.8-8.6.8-12.6 0-.6-.1-.8-.9-.2-1.3Z" fill="#48297a" />
+      <path d="m8.6 9.4.6 1.2 1.3.2-1 .9.2 1.3-1.1-.6-1.2.6.2-1.3-.9-.9 1.3-.2Z" fill={GOLD} stroke-width=".5" />
+      <path d="M10.6 5.2c-.8 2.6-1.8 5.6-2.6 8.8" fill="none" stroke="#8a64c8" stroke-width="1" />
+    </Ink>
+  ),
+  druid: () => (
+    <Ink>
+      <path d="M4 21.6c.4-6 1.2-10.4 3-13.2C8.4 6 10 4.6 12 4.6s3.6 1.4 5 3.8c1.8 2.8 2.6 7.2 3 13.2Z" fill={GREEN} />
+      <path d="M8.4 21.6c0-4.6 1.4-8.4 3.6-8.4s3.6 3.8 3.6 8.4Z" fill="#2c2418" />
+      <circle cx="10.6" cy="15.6" r=".7" fill="#c9f07a" stroke="none" />
+      <circle cx="13.4" cy="15.6" r=".7" fill="#c9f07a" stroke="none" />
+      <path d="M7.2 9.6c1-2.4 2.8-4 4.8-4.4" fill="none" stroke={GREEN_LT} stroke-width="1.1" />
+      <path d="M3.4 22.2 5 4.2" stroke={WOOD} stroke-width="1.6" />
+      <path d="M5 4.2c-1.8-.6-3-2-3-3.4 1.6 0 3 1.2 3 3.4Zm0 0c1.2-1.6 3-2.4 4.4-2-.6 1.6-2.4 2.4-4.4 2Z" fill={GREEN_LT} stroke-width=".7" />
+    </Ink>
+  ),
+  goblin: () => (
+    <Ink>
+      <path d="M6.2 10.4 1 6.6l1.4 6.2 4.6.8ZM17.8 10.4 23 6.6l-1.4 6.2-4.6.8Z" fill="#6f9a3a" />
+      <path d="M12 3.6c4 0 6.6 3 6.6 7.4 0 5-3 9.2-6.6 9.2s-6.6-4.2-6.6-9.2c0-4.4 2.6-7.4 6.6-7.4Z" fill="#86b04a" />
+      <path d="M7.6 9.4 11 10.6M16.4 9.4 13 10.6" stroke={O} stroke-width="1.2" />
+      <ellipse cx="9.6" cy="12" rx="1.3" ry="1" fill={GOLD_LT} stroke-width=".6" />
+      <ellipse cx="14.4" cy="12" rx="1.3" ry="1" fill={GOLD_LT} stroke-width=".6" />
+      <path d="M8.6 15.6c1.8 1.4 5 1.4 6.8 0-.6 2.2-2 3.2-3.4 3.2s-2.8-1-3.4-3.2Z" fill="#3a1f10" stroke-width=".7" />
+      <path d="m10.2 16.2.5 1 .6-1M12.8 16.2l.5 1 .6-1" fill="#fff6e0" stroke-width=".4" />
+      <path d="M8.2 6.4c1-1 2.4-1.6 3.8-1.6" fill="none" stroke="#b3d677" stroke-width="1.1" />
+    </Ink>
+  ),
   noble: () => (
     <Ink>
       <path d="M2.8 17.8 4.6 7l4.3 5.1L12 5.2l3.1 6.9L19.4 7l1.8 10.8Z" fill={GOLD} />

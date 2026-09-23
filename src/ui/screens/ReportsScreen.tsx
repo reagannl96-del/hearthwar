@@ -103,7 +103,7 @@ function columns(b: BattleData): UnitId[] {
   const seen = (u: UnitId) => [b.attUnits, b.defUnits, b.scout?.unitsOutside].some((x) => (x?.[u] ?? 0) > 0);
   return ARMY_ORDER.filter((u) => {
     if ((u === 'archer' || u === 'marcher') && !pv.config.archers) return seen(u);
-    if (u === 'militia') return seen(u);
+    if (u === 'militia' || u === 'sorcerer' || u === 'druid' || u === 'goblin') return seen(u);
     return true;
   });
 }

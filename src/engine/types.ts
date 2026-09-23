@@ -12,7 +12,7 @@ export type BuildingId =
 
 export type UnitId =
   | 'spear' | 'sword' | 'axe' | 'archer' | 'scout' | 'light' | 'marcher'
-  | 'heavy' | 'ram' | 'catapult' | 'paladin' | 'noble' | 'militia';
+  | 'heavy' | 'ram' | 'catapult' | 'paladin' | 'sorcerer' | 'druid' | 'goblin' | 'noble' | 'militia';
 
 export type Units = { [K in UnitId]?: number };
 export type Buildings = Record<BuildingId, number>;

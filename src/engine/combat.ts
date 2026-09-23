@@ -1,6 +1,6 @@
 // Pure battle math. Used by the engine and by the in-game battle simulator.
 
-import { UNITS, type ItemDef, type UnitClass } from './data/units';
+import { HEROES, HERO_INFO, HERO_VS_BONUS, UNITS, type ItemDef, type UnitClass } from './data/units';
 import { techMultiplier, wallBase, wallMultiplier } from './formulas';
 import type { Res, UnitId, Units } from './types';
 import { RES_KEYS } from './types';
@@ -75,14 +75,21 @@ export function catDemolish(power: number, level: number, min: number): number {
   return level - l;
 }
 
+/** Heroes present on each side of a battle. */
+function heroesIn(units: Units[]): UnitId[] {
+  return HEROES.filter((h) => units.some((u) => (u[h] ?? 0) > 0));
+}
+
 export function resolveBattle(input: CombatInput): CombatResult {
   const { att, attTech, attItem, defStacks, defItems } = input;
+  const attHeroes = heroesIn([att]);
+  const defHeroes = heroesIn(defStacks.map((s) => s.units));
 
   // --- scouts fight scouts ---
   const scoutsSent = att.scout ?? 0;
   const defScouts = defStacks.reduce((s, st) => s + (st.units.scout ?? 0), 0);
-  const scoutMultA = attItem?.special === 'scout' ? 2 : 1;
-  const scoutMultD = defItems.some((i) => i.special === 'scout') ? 2 : 1;
+  const scoutMultA = (attItem?.special === 'scout' ? 2 : 1) * (attHeroes.includes('goblin') ? 2 : 1);
+  const scoutMultD = (defItems.some((i) => i.special === 'scout') ? 2 : 1) * (defHeroes.includes('goblin') ? 2 : 1);
   let scoutLost = 0;
   if (scoutsSent > 0) {
     const pa = scoutsSent * scoutMultA;
@@ -126,9 +133,25 @@ export function resolveBattle(input: CombatInput): CombatResult {
     if (n <= 0) continue;
     A[CLS_INDEX[UNITS[u].cls]] += n * unitAttackValue(u, attTech, attItem) * mod;
   }
+  // heroes hit harder against the kind of troops they are good against,
+  // in proportion to how much of the enemy army is that kind
+  const defPop = [0, 0, 0];
+  for (const st of defStacks) for (const k in st.units) {
+    const u = k as UnitId;
+    defPop[CLS_INDEX[UNITS[u].cls]] += (st.units[u] ?? 0) * Math.max(1, UNITS[u].pop);
+  }
+  const defPopTot = defPop[0] + defPop[1] + defPop[2];
+  let attHeroMult = 1;
+  for (const h of attHeroes) {
+    const vs = HERO_INFO[h]?.vs;
+    if (vs && defPopTot > 0) attHeroMult += HERO_VS_BONUS * (defPop[CLS_INDEX[vs]] / defPopTot);
+  }
+  for (let i = 0; i < 3; i++) A[i] *= attHeroMult;
   const Atot = A[0] + A[1] + A[2];
 
-  const ramMult = attItem?.special === 'ramx2' ? 2 : 1;
+  // a defending druid snares siege engines
+  const siegeMult = defHeroes.includes('druid') ? 0.5 : 1;
+  const ramMult = (attItem?.special === 'ramx2' ? 2 : 1) * siegeMult;
   const ramsSent = main.ram ?? 0;
   const ramPowerSent = ramsSent * ramMult * techMultiplier(attTech.ram);
   const battleWall = Math.max(0, input.wall - Math.floor(ramDemolish(ramPowerSent, input.wall) / 2));
@@ -148,6 +171,12 @@ export function resolveBattle(input: CombatInput): CombatResult {
       }
     }
   }
+  let defHeroMult = 1;
+  for (const h of defHeroes) {
+    const vs = HERO_INFO[h]?.vs;
+    if (vs && Atot > 0) defHeroMult += HERO_VS_BONUS * (A[CLS_INDEX[vs]] / Atot);
+  }
+  D *= defHeroMult;
   D = D * wallMultiplier(battleWall) + wallBase(battleWall);
 
   let winner: 'attacker' | 'defender';
@@ -200,7 +229,7 @@ export function resolveBattle(input: CombatInput): CombatResult {
   let catLevelsDestroyed = 0;
   const catsLeft = winner === 'attacker' ? attSurvivors.catapult ?? 0 : main.catapult ?? 0;
   if (catsLeft > 0 && input.catTargetLevel !== undefined) {
-    const catMult = attItem?.special === 'catx2' ? 2 : 1;
+    const catMult = (attItem?.special === 'catx2' ? 2 : 1) * siegeMult;
     const power = catsLeft * catMult * techMultiplier(attTech.catapult) * ramFactor;
     if (input.catTargetIsWall) {
       catLevelsDestroyed = catDemolish(power, wallAfter, 0);
