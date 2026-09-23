@@ -200,6 +200,9 @@ export function house(o: {
   w: number; d: number; h: number; roofH: number;
   wall?: number; roof?: number; frame?: number | null; door?: boolean; windows?: number; stone?: boolean; chimney?: boolean;
 }): THREE.Group {
+  if (theme === 'sorcerer') return sorcererHouse(o);
+  if (theme === 'druid') return druidHouse(o);
+  if (theme === 'goblin') return goblinHouse(o);
   const g = new THREE.Group();
   const wall = o.wall ?? (o.stone ? C.stone : C.plaster);
   const roof = o.roof ?? C.tile;
@@ -281,7 +284,12 @@ export function merlonRing(r: number, y: number, count: number, color: number, s
   return g;
 }
 
-export function roundTower(r: number, h: number, o: { color?: number; roof?: number | null; merlons?: boolean; banner?: number } = {}): THREE.Group {
+type TowerOpts = { color?: number; roof?: number | null; merlons?: boolean; banner?: number };
+
+export function roundTower(r: number, h: number, o: TowerOpts = {}): THREE.Group {
+  if (theme === 'sorcerer') return sorcererTower(r, h, o);
+  if (theme === 'druid') return druidTower(r, h, o);
+  if (theme === 'goblin') return goblinTower(r, h, o);
   const g = new THREE.Group();
   const color = o.color ?? C.stone;
   g.add(cyl(r, r * 1.08, h, color, 10));
@@ -376,4 +384,219 @@ export function rng(seed: number) {
     t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
+}
+
+// ---------- hero themes: the same buildings in each hero's style ----------
+// Every themed piece keeps the footprint of the classic one, so the village
+// layout (and its tests) hold for every theme.
+
+type HouseOpts = Parameters<typeof house>[0];
+
+function windowAt(x: number, y: number, z: number, round = false): THREE.Mesh {
+  const w = round ? cyl(0.36, 0.36, 0.14, C.window, 8) : box(0.7, 0.8, 0.14, C.window);
+  if (round) w.rotation.x = Math.PI / 2;
+  w.position.set(x, y, z);
+  w.userData.window = true;
+  return w;
+}
+
+/** Sorcerer: tall walls, a steep witch-hat roof with curled ends, a corner turret and a crystal on the ridge. */
+function sorcererHouse(o: HouseOpts): THREE.Group {
+  const g = new THREE.Group();
+  const { w, d, h } = o;
+  const roofH = o.roofH * 1.9;
+  const wall = o.wall ?? (o.stone ? C.stone : C.plaster);
+  g.add(extrude([[-w / 2, 0], [w / 2, 0], [w / 2, h], [0, h + roofH], [-w / 2, h]], d, wall));
+  const half = w / 2 + 0.35;
+  const theta = Math.atan2(roofH, w / 2);
+  const len = half / Math.cos(theta) + 0.2;
+  for (const side of [-1, 1]) {
+    const slab = box(len, 0.24, d + 0.7, C.tile);
+    slab.geometry.translate(0, -0.12, 0);
+    slab.rotation.z = -side * theta;
+    slab.position.set(side * (half / 2) + side * Math.sin(theta) * 0.12, h + roofH - (half / 2) * Math.tan(theta) + Math.cos(theta) * 0.12, 0);
+    g.add(slab);
+  }
+  // curled ridge ends and a gold trim band
+  for (const z of [d / 2 + 0.35, -d / 2 - 0.35]) {
+    const c = cone(0.22, 0.9, C.gold, 6, 0, h + roofH - 0.1, z);
+    c.rotation.x = z > 0 ? 0.5 : -0.5;
+    g.add(c);
+  }
+  g.add(box(w + 0.1, 0.18, d + 0.1, C.gold, 0, h - 0.18, 0));
+  // a small turret on the front corner
+  if (w > 3.5) {
+    const tx = w / 2 - 0.55, tz = d / 2 - 0.55;
+    g.add(cyl(0.55, 0.6, h + roofH * 0.55, wall, 8, tx, 0, tz));
+    g.add(cone(0.75, 1.8, C.tileDark, 8, tx, h + roofH * 0.55, tz));
+  }
+  // a crystal floating over the ridge
+  const cr = mesh(new THREE.OctahedronGeometry(0.28, 0), 0xb58cff, { emissive: 0x5a2fb0 });
+  cr.scale.set(1, 1.8, 1);
+  cr.position.set(0, h + roofH + 0.9, 0);
+  g.add(cr);
+  if (o.door !== false) g.add(box(Math.min(1.2, w * 0.22), Math.min(2.2, h * 0.66), 0.2, C.door, 0, 0, d / 2 + 0.05));
+  const nw = o.windows ?? Math.max(0, Math.floor(w / 2.4));
+  for (let i = 0; i < nw; i++) {
+    const x = -w / 2 + ((i + 1) * w) / (nw + 1);
+    if (Math.abs(x) < 1 && o.door !== false) continue;
+    g.add(windowAt(x, h * 0.6, d / 2 + 0.06, true));
+  }
+  return g;
+}
+
+/** Druid: a rounded cottage of daub and timber under a mossy turf dome, roots at its feet. */
+function druidHouse(o: HouseOpts): THREE.Group {
+  const g = new THREE.Group();
+  const { w, d, h } = o;
+  const body = cyl(0.5, 0.52, h, o.stone ? C.stone : C.plaster, 12);
+  body.scale.set(w, 1, d);
+  g.add(body);
+  // timber ribs around the wall
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    g.add(box(0.18, h, 0.18, C.timber, Math.cos(a) * w * 0.5, 0, Math.sin(a) * d * 0.5));
+  }
+  // the turf dome, with a skirt of moss hanging over the eaves
+  const dome = blob(0.5, C.tile, 0, h, 0, w + 0.7, o.roofH * 2.2, d + 0.7, 1);
+  g.add(dome);
+  const skirt = cyl(0.5, 0.5, 0.35, C.tileDark, 12, 0, h - 0.1, 0);
+  skirt.scale.set(w + 0.8, 1, d + 0.8);
+  g.add(skirt);
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2 + 0.4;
+    g.add(blob(0.3, 0x7ea64a, Math.cos(a) * w * 0.3, h + o.roofH * 0.9, Math.sin(a) * d * 0.3));
+  }
+  // roots at the base
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2 + 0.2;
+    if (Math.sin(a) > 0.8) continue;
+    const root = box(0.35, 0.45, 0.9, C.timber, Math.cos(a) * w * 0.47, 0, Math.sin(a) * d * 0.47);
+    root.rotation.y = -a + Math.PI / 2;
+    g.add(root);
+  }
+  if (o.door !== false) {
+    g.add(box(Math.min(1.2, w * 0.22), Math.min(1.9, h * 0.66), 0.25, C.door, 0, 0, d / 2 - 0.02));
+    g.add(blob(0.62, C.timber, 0, Math.min(1.9, h * 0.66), d / 2 - 0.02, 1, 0.45, 0.3));
+  }
+  const nw = Math.min(2, o.windows ?? 1);
+  for (let i = 0; i < nw; i++) {
+    const a = Math.PI / 2 + (i === 0 ? 0.75 : -0.75);
+    g.add(windowAt(Math.cos(a) * w * 0.49, h * 0.6, Math.sin(a) * d * 0.49, true));
+  }
+  if (o.chimney) g.add(cyl(0.35, 0.45, o.roofH + 1.2, C.stoneDark, 6, w * 0.2, h, -d * 0.15));
+  return g;
+}
+
+/** Goblin: a crooked plank shack under lopsided rusted plates, bones on the ridge. */
+function goblinHouse(o: HouseOpts): THREE.Group {
+  const g = new THREE.Group();
+  const { w, d, h } = o;
+  const body = new THREE.Group();
+  body.add(box(w, h, d, o.stone ? C.stone : C.timberLight));
+  for (let i = 0; i < Math.max(3, Math.floor(w)); i++) {
+    body.add(box(0.14, h + 0.2, 0.1, C.timber, -w / 2 + 0.3 + (i * (w - 0.6)) / Math.max(2, Math.floor(w) - 1), 0, d / 2 + 0.03));
+  }
+  body.rotation.z = 0.04;
+  g.add(body);
+  // two mismatched roof slabs, one higher than the other
+  const roofH = o.roofH * 0.8;
+  for (const side of [-1, 1]) {
+    const slab = box(w / 2 + 0.7, 0.22, d + 0.6, side < 0 ? C.tile : C.tileDark);
+    slab.position.set(side * w * 0.24, h + roofH * (side < 0 ? 0.55 : 0.4), side * 0.08);
+    slab.rotation.z = -side * Math.atan2(roofH, w / 2) * (side < 0 ? 1 : 0.8);
+    g.add(slab);
+  }
+  g.add(extrude([[-w / 2, 0], [w / 2, 0], [w / 2, h], [0.3, h + roofH * 0.9], [-w / 2, h]], d - 0.1, C.timberLight));
+  // a patched hide flap and stakes along the ridge
+  g.add(box(w * 0.35, h * 0.5, 0.06, C.thatch, -w * 0.2, h * 0.35, d / 2 + 0.1));
+  for (let i = 0; i < 3; i++) {
+    const sp = cone(0.1, 0.8, C.timber, 4, -w * 0.3 + i * w * 0.3, h + roofH * 0.9, 0);
+    sp.rotation.z = (i - 1) * 0.3;
+    g.add(sp);
+  }
+  g.add(blob(0.24, 0xe8dfc8, 0.3, h + roofH * 0.95 + 0.2, d / 2 - 0.3));
+  if (o.door !== false) g.add(box(Math.min(1.2, w * 0.22), Math.min(1.9, h * 0.62), 0.2, 0x241a12, w * 0.1, 0, d / 2 + 0.08));
+  const nw = Math.min(2, o.windows ?? 1);
+  for (let i = 0; i < nw; i++) g.add(windowAt(-w / 2 + ((i + 1) * w) / (nw + 1) + 0.6, h * 0.55, d / 2 + 0.09));
+  if (o.chimney) g.add(cyl(0.3, 0.35, o.roofH + 1.2, C.iron, 5, w * 0.25, h, -d * 0.2));
+  return g;
+}
+
+/** Sorcerer tower: slender, tall and needle-roofed, with a crystal above. */
+function sorcererTower(r: number, h: number, o: TowerOpts): THREE.Group {
+  const g = new THREE.Group();
+  const color = o.color ?? C.stone;
+  const hh = h * 1.15;
+  g.add(cyl(r * 0.82, r * 0.95, hh, color, 10));
+  g.add(cyl(r * 0.95, r * 0.95, 0.35, C.gold, 10, 0, hh - 0.2));
+  g.add(cone(r * 1.15, r * 3.4, C.tile, 10, 0, hh + 0.1));
+  const cr = mesh(new THREE.OctahedronGeometry(r * 0.28, 0), 0xb58cff, { emissive: 0x5a2fb0 });
+  cr.scale.set(1, 1.8, 1);
+  cr.position.set(0, hh + r * 3.4 + r * 0.7, 0);
+  g.add(cr);
+  for (let i = 0; i < 2; i++) {
+    const a = i * Math.PI + 0.5;
+    const s = windowAt(Math.cos(a) * r * 0.85, hh * 0.55, Math.sin(a) * r * 0.85, true);
+    s.rotation.set(Math.PI / 2, 0, -a + Math.PI / 2);
+    g.add(s);
+  }
+  if (o.banner !== undefined) {
+    const flag = box(1.2, 0.7, 0.05, o.banner, r + 0.6, hh * 0.8, 0);
+    flag.userData.flag = true;
+    g.add(flag);
+  }
+  return g;
+}
+
+/** Druid tower: a living trunk with a lookout platform in its leafy crown. */
+function druidTower(r: number, h: number, o: TowerOpts): THREE.Group {
+  const g = new THREE.Group();
+  g.add(cyl(r * 0.8, r * 1.1, h, C.timber, 9));
+  g.add(cyl(r * 1.1, r * 1.1, 0.3, C.timberLight, 10, 0, h - 0.2));
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2 + 0.3;
+    g.add(blob(r * 0.7, i % 2 ? 0x4f7a2e : 0x6f9a3a, Math.cos(a) * r * 0.55, h + r * 0.7, Math.sin(a) * r * 0.55, 1, 0.8, 1));
+  }
+  g.add(blob(r * 0.8, 0x4f7a2e, 0, h + r * 1.3, 0, 1, 0.8, 1));
+  for (let i = 0; i < 3; i++) {
+    const a = (i / 3) * Math.PI * 2;
+    g.add(box(0.1, h * 0.6, 0.1, 0x445c24, Math.cos(a) * r * 0.85, h * 0.35, Math.sin(a) * r * 0.85));
+  }
+  const s = windowAt(0, h * 0.55, r * 0.95, true);
+  g.add(s);
+  if (o.banner !== undefined) {
+    const flag = box(1.2, 0.7, 0.05, o.banner, r + 0.5, h * 0.75, 0);
+    flag.userData.flag = true;
+    g.add(flag);
+  }
+  return g;
+}
+
+/** Goblin tower: crates and planks stacked ever higher, capped with rust and spikes. */
+function goblinTower(r: number, h: number, o: TowerOpts): THREE.Group {
+  const g = new THREE.Group();
+  const levels = Math.max(2, Math.round(h / 2));
+  const step = h / levels;
+  for (let i = 0; i < levels; i++) {
+    const s = r * 1.9 * (1 - i * 0.08);
+    const lvl = box(s, step, s, i % 2 ? C.timber : C.timberLight, Math.sin(i * 2.3) * 0.15, i * step, Math.cos(i * 1.7) * 0.15);
+    lvl.rotation.y = Math.sin(i * 1.3) * 0.25;
+    g.add(lvl);
+  }
+  g.add(cone(r * 1.25, r * 1.4, C.tile, 4, 0, h, 0).rotateY(0.5));
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2 + 0.4;
+    const sp = cone(0.1, 0.9, C.iron, 4, Math.cos(a) * r * 0.9, h - 0.4, Math.sin(a) * r * 0.9);
+    sp.rotation.z = -Math.cos(a) * 1.1;
+    sp.rotation.x = Math.sin(a) * 1.1;
+    g.add(sp);
+  }
+  g.add(windowAt(0, h * 0.5, r * 0.97));
+  if (o.banner !== undefined) {
+    const flag = box(1.1, 0.7, 0.05, o.banner, r + 0.5, h * 0.8, 0);
+    flag.userData.flag = true;
+    g.add(flag);
+  }
+  return g;
 }

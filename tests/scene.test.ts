@@ -95,17 +95,23 @@ describe('village layout', () => {
     expect([...new Set(clashes)]).toEqual([]);
   });
 
-  it('hero-themed headquarters still fit', () => {
-    const clashes: string[] = [];
+  it('every building still fits in every hero theme', () => {
+    const bad: string[] = [];
     for (const theme of ['sorcerer', 'druid', 'goblin'] as const) {
       setTheme(theme);
-      const mains = tierLevels('main').map((l) => footprint('main', l));
+      const th = new Map<BuildingId, P[][]>(IDS.map((id) => [id, tierLevels(id).map((l) => footprint(id, l))]));
       setTheme('classic');
-      for (const id of IDS) {
-        if (id === 'main') continue;
-        for (const sm of mains) for (const so of shapes.get(id)!) if (overlaps(sm, so)) clashes.push(`${theme} main × ${id}`);
+      for (let i = 0; i < IDS.length; i++) for (let j = i + 1; j < IDS.length; j++) {
+        const x = IDS[i], y = IDS[j];
+        if (th.get(x)!.some((sa) => th.get(y)!.some((sb) => overlaps(sa, sb)))) bad.push(`${theme}: ${x} × ${y}`);
       }
-      // and nobody walks through it
+      for (const id of IDS) {
+        const shp = th.get(id)!;
+        const r = (fn: (a: number[]) => number) => fn(shp.flatMap((s2) => s2.map(([x, z]) => Math.hypot(x, z))));
+        if (!OUTSIDE.includes(id) && r((v) => Math.max(...v)) > WALL_R - 3) bad.push(`${theme}: ${id} reaches the wall`);
+        if (OUTSIDE.includes(id) && r((v) => Math.min(...v)) < WALL_R + 4) bad.push(`${theme}: ${id} crowds the wall`);
+      }
+      const biggest = IDS.map((id) => ({ id, s: th.get(id)![th.get(id)!.length - 1] }));
       for (const [name, path] of Object.entries(WALK_PATHS)) {
         const closed = [...path, path[0]];
         for (let i = 0; i < closed.length - 1; i++) {
@@ -113,12 +119,12 @@ describe('village layout', () => {
           const n = Math.max(2, Math.ceil(Math.hypot(x2 - x1, z2 - z1) / 0.5));
           for (let k = 0; k <= n; k++) {
             const p: P = [x1 + ((x2 - x1) * k) / n, z1 + ((z2 - z1) * k) / n];
-            if (mains.some((sm) => inside(sm, p, 0.4))) clashes.push(`${theme} main in the way of ${name}`);
+            for (const bb of biggest) if (inside(bb.s, p, 0.4)) bad.push(`${theme}: ${name} walks through the ${bb.id}`);
           }
         }
       }
     }
-    expect([...new Set(clashes)]).toEqual([]);
+    expect([...new Set(bad)]).toEqual([]);
   });
 
   it('buildings inside the walls stay clear of the wall', () => {

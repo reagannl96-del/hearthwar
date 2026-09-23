@@ -3,7 +3,7 @@
 
 import * as THREE from 'three';
 import type { BuildingId } from '../../engine/types';
-import { C, blob, box, cone, cyl, darker, getTheme, house, mesh, rng, roundTower } from './kit';
+import { C, blob, box, cone, cyl, darker, getTheme, house, mesh, rng, roundTower, type Theme } from './kit';
 import {
   anvil, banner, barrel, hqCrown, campfire, cart, catapult, crate, dummy, fence, hayBale, horse, logPile, pumpkin, ram, rock,
   stall, stump, tree, weaponRack, wheatField, windmill,
@@ -36,6 +36,10 @@ export function visualTier(id: BuildingId, level: number): number {
 
 export function buildModel(id: BuildingId, level: number, color: number): Built {
   const t = visualTier(id, level);
+  return themed(id, t, baseModel(id, t, color));
+}
+
+function baseModel(id: BuildingId, t: number, color: number): Built {
   const r = rng(id.length * 131 + t * 17);
   switch (id) {
     case 'main': {
@@ -196,6 +200,7 @@ function stable(t: number, r: () => number): Built {
   const n = t === 1 ? 2 : t === 2 ? 3 : 4;
   for (let i = 0; i < n; i++) {
     const h = horse(i % 2 ? C.horse : C.horseDark);
+    h.userData.mount = true;
     h.position.set(-2.6 + i * 1.8, 0, 4.4 + (r() - 0.5) * 1.6);
     h.rotation.y = r() * Math.PI * 2;
     pad.add(h);
@@ -234,6 +239,14 @@ function academy(): Built {
   nave.rotation.y = Math.PI / 2;
   g.add(nave);
   for (const z of [-3, 0, 3]) for (const s of [-1, 1]) g.add(box(0.14, 1.8, 0.7, 0x6e8fb3, z, 2, s * 3.02).rotateY(Math.PI / 2));
+  if (getTheme() !== 'classic') {
+    // in a hero's village the bell tower takes that hero's form
+    const tw = roundTower(1.7, 9.5, { roof: C.slate });
+    tw.add(box(1.2, 2.2, 0.2, C.door, 0, 0, 1.6));
+    tw.position.set(6.2, 0, 0);
+    g.add(tw);
+    return { obj: g, h: 18, w: 14, d: 8 };
+  }
   const tower = new THREE.Group();
   tower.add(box(3.2, 9, 3.2, C.stone));
   tower.add(box(3.6, 0.35, 3.6, C.stoneDark, 0, 9, 0));
@@ -737,6 +750,227 @@ function goblinHall(t: number): Built {
   fire.position.set(-fw / 2 + 0.8, 0, fd / 2 + 1.6);
   g.add(fire);
   return { obj: g, h, w: fw + (t >= 4 ? 5 : 0) + (t >= 5 ? 4 : 0), d: fd + (t >= 5 ? 5.5 : 1.5) };
+}
+
+// ---------- hero themes: finishing touches per building ----------
+// The walls and roofs already change with the theme (see kit.ts). These add
+// each theme's own details while every building keeps the thing that tells you
+// what it is: horses at the stable, stalls at the market, engines at the workshop.
+
+const GLOW = 0xb58cff, GLOW_EMIT = 0x5a2fb0;
+
+function glowBit(geo: THREE.BufferGeometry, color = GLOW, emissive = GLOW_EMIT): THREE.Mesh {
+  return mesh(geo, color, { emissive });
+}
+
+/** A ring of glowing runes laid on the ground. */
+function runeCircle(r: number): THREE.Group {
+  const g = new THREE.Group();
+  const ring = glowBit(new THREE.TorusGeometry(r, 0.07, 4, 24));
+  ring.rotation.x = Math.PI / 2;
+  ring.position.y = 0.06;
+  g.add(ring);
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2;
+    const rune = glowBit(new THREE.BoxGeometry(0.25, 0.04, 0.12));
+    rune.position.set(Math.cos(a) * r * 0.78, 0.07, Math.sin(a) * r * 0.78);
+    rune.rotation.y = -a;
+    g.add(rune);
+  }
+  return g;
+}
+
+function potions(n: number, r: () => number): THREE.Group {
+  const g = new THREE.Group();
+  const cols = [0xb58cff, 0x6fd3ff, 0x8cff9a, 0xff7ac8];
+  for (let i = 0; i < n; i++) {
+    const c = cols[i % cols.length];
+    const p = glowBit(new THREE.CylinderGeometry(0.12, 0.16, 0.34, 6), c, c === 0xb58cff ? GLOW_EMIT : 0x203040);
+    p.position.set((r() - 0.5) * 1.2, 0.17, (r() - 0.5) * 0.5);
+    g.add(p);
+  }
+  return g;
+}
+
+function herbs(n: number, r: () => number): THREE.Group {
+  const g = new THREE.Group();
+  for (let i = 0; i < n; i++) {
+    const x = (r() - 0.5) * 1.6, z = (r() - 0.5) * 0.8;
+    g.add(cyl(0.28, 0.22, 0.3, 0x8b5a2b, 7, x, 0, z));
+    g.add(blob(0.26, r() < 0.5 ? 0x6f9a3a : 0x9fbf4a, x, 0.35, z, 1, 0.7, 1));
+  }
+  return g;
+}
+
+function mushrooms(n: number, r: () => number, spread: number): THREE.Group {
+  const g = new THREE.Group();
+  for (let i = 0; i < n; i++) {
+    const x = (r() - 0.5) * spread, z = (r() - 0.5) * spread;
+    g.add(cyl(0.07, 0.09, 0.35, 0xefe6d0, 5, x, 0, z));
+    g.add(blob(0.2, r() < 0.5 ? 0xc0392b : 0xd98b2b, x, 0.38, z, 1, 0.5, 1));
+  }
+  return g;
+}
+
+function skullOnPole(h: number): THREE.Group {
+  const g = new THREE.Group();
+  g.add(cyl(0.07, 0.1, h, C.timber, 4));
+  const sk = skull(0.7);
+  sk.position.set(0, h + 0.2, 0);
+  g.add(sk);
+  g.add(box(0.7, 0.45, 0.05, 0x6f9a2a, 0.4, h - 0.6, 0));
+  return g;
+}
+
+function antlerPole(h: number): THREE.Group {
+  const g = new THREE.Group();
+  g.add(cyl(0.08, 0.11, h, C.timber, 5));
+  for (const s of [-1, 1]) {
+    const a = box(0.08, 0.9, 0.08, 0xd9cfae, s * 0.3, h - 0.1, 0);
+    a.rotation.z = -s * 0.6;
+    g.add(a);
+    const b = box(0.06, 0.45, 0.06, 0xd9cfae, s * 0.55, h + 0.45, 0);
+    b.rotation.z = -s * 0.2;
+    g.add(b);
+  }
+  g.add(blob(0.25, 0x6f9a3a, 0, h - 0.5, 0.12));
+  return g;
+}
+
+/** Horns, antlers or spikes for the mounts at the stable, by theme. */
+function dressMount(hg: THREE.Object3D, theme: Theme): void {
+  if (theme === 'sorcerer') {
+    const horn = cone(0.07, 0.55, C.gold, 5, 1.32, 1.95, 0);
+    horn.rotation.z = -1.1;
+    hg.add(horn);
+  } else if (theme === 'druid') {
+    for (const s of [-1, 1]) {
+      const a = box(0.06, 0.6, 0.06, 0xd9cfae, 1.0, 2.1, s * 0.16);
+      a.rotation.x = s * 0.5;
+      hg.add(a);
+      const b = box(0.05, 0.3, 0.05, 0xd9cfae, 1.15, 2.3, s * 0.3);
+      b.rotation.x = s * 0.9;
+      hg.add(b);
+    }
+  } else if (theme === 'goblin') {
+    for (let i = 0; i < 4; i++) hg.add(cone(0.07, 0.35, 0x3b3530, 4, -0.55 + i * 0.35, 1.2, 0));
+  }
+}
+
+function themedWatchtower(t: number, theme: Theme): Built {
+  const g = new THREE.Group();
+  const h = 7 + t * 1.6;
+  const tw = roundTower(1.35, h, { roof: null });
+  g.add(tw);
+  // the lookout itself stays: a railed platform near the top
+  const py = theme === 'sorcerer' ? h * 0.82 : theme === 'druid' ? h - 0.6 : h * 0.9;
+  g.add(cyl(1.75, 1.75, 0.22, theme === 'goblin' ? C.timber : C.timberLight, 8, 0, py, 0));
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    g.add(box(0.1, 0.8, 0.1, C.timber, Math.cos(a) * 1.65, py + 0.2, Math.sin(a) * 1.65));
+  }
+  if (theme === 'sorcerer') {
+    const orb = glowBit(new THREE.IcosahedronGeometry(0.45, 1));
+    orb.position.set(0, py + 1.2, 0);
+    g.add(orb);
+  }
+  if (theme === 'goblin') {
+    const sk = skull(0.9);
+    sk.position.set(0, py - 0.9, 1.35);
+    g.add(sk);
+  }
+  return { obj: g, h: h + 7, w: 4, d: 4 };
+}
+
+function themedStatue(theme: Theme): Built {
+  const g = new THREE.Group();
+  g.add(cyl(2.2, 2.4, 0.4, C.stoneDark, 8));
+  g.add(box(2.2, 1.6, 2.2, C.stone, 0, 0.4, 0));
+  g.add(box(2.5, 0.25, 2.5, C.stoneLight, 0, 2.0, 0));
+  const fig = new THREE.Group();
+  const bronze = 0x8d6e3b;
+  if (theme === 'sorcerer') {
+    fig.add(cyl(0.45, 0.75, 2.0, bronze, 8));
+    fig.add(blob(0.36, bronze, 0, 2.3, 0));
+    fig.add(cyl(0.7, 0.7, 0.08, bronze, 10, 0, 2.55));
+    fig.add(cone(0.4, 1.3, bronze, 8, 0, 2.6));
+    fig.add(box(0.1, 3.0, 0.1, 0x6e5530, 0.75, 0, 0.1));
+    const orb = glowBit(new THREE.IcosahedronGeometry(0.28, 1));
+    orb.position.set(0.75, 3.15, 0.1);
+    fig.add(orb);
+  } else if (theme === 'druid') {
+    fig.add(cyl(0.5, 0.75, 2.0, bronze, 8));
+    fig.add(cone(0.5, 1.0, bronze, 8, 0, 1.9));
+    fig.add(box(0.12, 3.1, 0.12, 0x6e5530, -0.8, 0, 0.1));
+    for (const s of [-1, 1]) {
+      const a = box(0.07, 0.6, 0.07, 0x6e5530, -0.8 + s * 0.2, 3.1, 0.1);
+      a.rotation.z = -s * 0.6;
+      fig.add(a);
+    }
+    fig.add(blob(0.35, 0x6f9a3a, -0.8, 3.2, 0.1));
+  } else {
+    fig.add(cyl(0.45, 0.55, 1.3, bronze, 7));
+    fig.add(blob(0.42, bronze, 0, 1.6, 0));
+    for (const s of [-1, 1]) {
+      const ear = cone(0.12, 0.6, bronze, 4, s * 0.5, 1.65, 0);
+      ear.rotation.z = -s * 1.25;
+      fig.add(ear);
+    }
+    const club = cyl(0.08, 0.2, 1.3, 0x6e5530, 5, 0.6, 0.5, 0.2);
+    club.rotation.z = -0.5;
+    fig.add(club);
+  }
+  fig.position.y = 2.25;
+  g.add(fig);
+  return { obj: g, h: 6.5, w: 5, d: 5 };
+}
+
+/** Dress a finished building in the village's theme. */
+function themed(id: BuildingId, t: number, b: Built): Built {
+  const theme = getTheme();
+  if (theme === 'classic' || id === 'main') return b;
+  if (id === 'watchtower') return themedWatchtower(t, theme);
+  if (id === 'statue') return themedStatue(theme);
+  const r = rng(id.length * 31 + t);
+  const g = b.obj;
+  switch (id) {
+    case 'stable':
+      g.traverse((o) => { if (o.userData.mount) dressMount(o, theme); });
+      break;
+    case 'market': {
+      const extra = theme === 'sorcerer' ? potions(8, r) : theme === 'druid' ? herbs(4, r) : new THREE.Group();
+      extra.position.set(-2.8, 1.05, 0.2);
+      g.add(extra);
+      if (theme === 'druid') { const m = mushrooms(6, r, 2); m.position.set(3.8, 0, -1.8); g.add(m); }
+      if (theme === 'goblin') { const s = skullOnPole(2.8); s.position.set(-4.2, 0, -1.4); g.add(s); g.add(crate(4.2, -2.2), crate(4.0, -1.4)); }
+      break;
+    }
+    case 'workshop':
+      if (theme === 'sorcerer') { const rc = runeCircle(2.2); rc.position.set(0.5, 0, 0.2); g.add(rc); }
+      if (theme === 'druid') for (const [x, z] of [[-3.5, -2], [3.5, -2], [-3.5, 2], [3.5, 2]]) g.add(blob(0.55, 0x6f9a3a, x, 3.5, z, 1, 0.7, 1));
+      if (theme === 'goblin') { const s = skullOnPole(3.4); s.position.set(-3.9, 0, 2.6); g.add(s); }
+      break;
+    case 'rally':
+      if (theme === 'sorcerer') { const rc = runeCircle(1.6); rc.position.set(2.6, 0, 1.6); g.add(rc); }
+      if (theme === 'druid') { const a = antlerPole(3.2); a.position.set(-1.4, 0, 1.2); g.add(a); }
+      if (theme === 'goblin') { const s = skullOnPole(3.2); s.position.set(-1.4, 0, 1.2); g.add(s); }
+      break;
+    case 'hiding':
+      if (theme === 'sorcerer') { const rune = glowBit(new THREE.BoxGeometry(0.6, 0.04, 0.6)); rune.position.set(0, 0.66, 0.1); rune.rotation.y = Math.PI / 4; g.add(rune); }
+      if (theme === 'druid') g.add(mushrooms(4, r, 2.2));
+      if (theme === 'goblin') { const sk = skull(0.5); sk.position.set(0.8, 0.8, 0.3); g.add(sk); }
+      break;
+    case 'barracks':
+    case 'smithy':
+    case 'academy':
+    case 'warehouse':
+      // a small banner-post of the theme at the doorstep
+      if (theme === 'druid') { const a = antlerPole(2.6); a.position.set(b.w * 0.42, 0, b.d * 0.42); g.add(a); }
+      if (theme === 'goblin') { const s = skullOnPole(2.6); s.position.set(b.w * 0.42, 0, b.d * 0.42); g.add(s); }
+      if (theme === 'sorcerer') { const cr = glowBit(new THREE.OctahedronGeometry(0.3, 0)); cr.scale.set(1, 2, 1); cr.position.set(b.w * 0.42, 1.6, b.d * 0.42); g.add(cr); g.add(cyl(0.25, 0.35, 0.9, C.stone, 6, b.w * 0.42, 0, b.d * 0.42)); }
+      break;
+  }
+  return b;
 }
 
 export { tree };
