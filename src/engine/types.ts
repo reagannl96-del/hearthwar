@@ -226,6 +226,10 @@ export interface AIState {
   aggression: number;          // 0..1
   hostile: boolean;            // allowed to attack the human
   memory: Record<number, number>; // target vid -> last time a farm was sent
+  /** human player id -> last time this ruler launched an attack at them */
+  lastHit?: Record<number, number>;
+  /** when the current grudge (targetPlayer) was last renewed */
+  grudgeAt?: number;
 }
 
 export interface PlayerStats {

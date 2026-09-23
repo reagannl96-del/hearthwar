@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { applyAction, nobleInfo } from '../src/engine/actions';
 import { resolveBattle, computeLoot } from '../src/engine/combat';
-import { conquer } from '../src/engine/commands';
+import { conquer, sendTroops } from '../src/engine/commands';
 import { advance } from '../src/engine/game';
 import { removeEvents } from '../src/engine/events';
 import { HOUR, MINUTE, unitsPop } from '../src/engine/formulas';
@@ -297,6 +297,77 @@ describe('a human player', () => {
     expect(many?.scout?.buildings).toBeDefined();
     expect(many?.scout?.unitsOutside).toBeDefined();
     expect(many?.defUnits?.spear).toBe(50); // the troops inside are seen too
+  });
+
+  it('a victorious attacker plunders the defeated village and carries the loot home', () => {
+    const w = peacefulWorld();
+    removeEvents(w, (e) => e.type === 'barb');
+    const { p, v } = human(w);
+    const ai = Object.values(w.players).find((x) => x.kind === 'ai')!;
+    const home = w.villages[ai.villages[0]];
+    p.protectedUntil = 0;
+    ai.protectedUntil = 0;
+    v.units = { spear: 20 };
+    v.buildings.wall = 0;
+    v.buildings.hiding = 1;
+    v.buildings.warehouse = 20;
+    v.res = { wood: 20000, clay: 20000, iron: 20000 };
+    home.units = { axe: 400, light: 200 };
+    home.buildings.rally = 1;
+    home.res = { wood: 0, clay: 0, iron: 0 };
+    const before = v.res.wood + v.res.clay + v.res.iron;
+    const r = sendTroops(w, { ownerId: ai.id, fromVid: home.id, toVid: v.id, kind: 'attack', units: { axe: 400, light: 200 } });
+    expect(r.ok).toBe(true);
+    const arrive = (r.data as { arrive: number }).arrive;
+    advance(w, arrive + 1000);
+    updateVillage(w, v, w.now);
+    const report = p.reports.find((x) => x.battle && x.battle.attacker.playerId === ai.id)!;
+    expect(report.battle!.winner).toBe('attacker');
+    const loot = report.battle!.loot!;
+    const taken = loot.wood + loot.clay + loot.iron;
+    // the survivors carried off as much as they could hold, and the defender sees it
+    expect(taken).toBeGreaterThan(15000);
+    expect(v.res.wood + v.res.clay + v.res.iron).toBeLessThan(before - taken + 5000);
+    // ...and it arrives in the attacker's village
+    advance(w, w.now + 6 * HOUR);
+    updateVillage(w, home, w.now);
+    expect(home.res.wood + home.res.clay + home.res.iron).toBeGreaterThanOrEqual(taken * 0.99);
+  });
+
+  it('AI rulers give a human a breather between attacks', () => {
+    const w = createWorld({
+      worldName: 'T', playerName: 'P', villageName: 'Home', seed: 5,
+      config: { ...defaultConfig(), difficulty: 'hard', aiCount: 6, size: 50 },
+    });
+    const p = w.players[w.humanId];
+    const v = w.villages[p.villages[0]];
+    p.protectedUntil = 0;
+    v.units = { spear: 5 };
+    for (const ai of Object.values(w.players).filter((x) => x.kind === 'ai')) {
+      ai.ai!.hostile = true;
+      ai.ai!.aggression = 1;
+      for (const vid of ai.villages) {
+        const av = w.villages[vid];
+        av.buildings.rally = 1;
+        av.units = { axe: 3000, light: 1000, scout: 50 };
+      }
+    }
+    advance(w, w.now + 2 * HOUR);
+    const hits = new Map<number, number[]>();
+    for (const r of p.reports) {
+      const b = r.battle;
+      if (!b || b.attacker.playerId === null || b.attacker.playerId === p.id) continue;
+      if (!Object.entries(b.attUnits).some(([k, n]) => k !== 'scout' && (n ?? 0) > 0)) continue;
+      const list = hits.get(b.attacker.playerId) ?? [];
+      list.push(r.t);
+      hits.set(b.attacker.playerId, list);
+    }
+    expect(hits.size).toBeGreaterThan(0); // they do still come
+    for (const times of hits.values()) {
+      times.sort((a, b) => a - b);
+      // launches are at least 10 minutes apart on hard; arrivals can bunch a little with travel time
+      for (let i = 1; i < times.length; i++) expect(times[i] - times[i - 1]).toBeGreaterThan(8 * 60_000);
+    }
   });
 
   it('a statue stays sworn to the first hero trained there, even after it dies', () => {

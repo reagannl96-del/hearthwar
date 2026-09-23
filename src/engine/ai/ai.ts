@@ -472,9 +472,15 @@ function humansTargetedBy(w: World, humanId: number): number {
   return n;
 }
 
+/** Real minutes an AI ruler waits before attacking the same human again. */
+const HUMAN_BREATHER_MIN = { easy: 25, normal: 15, hard: 10, peaceful: 60 } as const;
+/** A grudge fades after this long without fresh fighting. */
+const GRUDGE_MS = 60 * 60_000;
+
 function war(w: World, p: Player): void {
   const ai = p.ai!;
   const diff = w.config.difficulty;
+  if (ai.targetPlayer != null && w.players[ai.targetPlayer]?.kind === 'human' && w.now - (ai.grudgeAt ?? 0) > GRUDGE_MS) ai.targetPlayer = null;
   const margin = diff === 'hard' ? 1.15 : diff === 'easy' ? 2.2 : 1.45;
   const minArmy = diff === 'hard' ? 1500 : diff === 'easy' ? 6000 : 3000;
   if (nextRandom(w) > ai.aggression + 0.15) return;
@@ -504,8 +510,16 @@ function war(w: World, p: Player): void {
     const send = { ...army };
     if (wall === 0) delete send.ram;
     const cat = (send.catapult ?? 0) > 0 ? pickCatTarget(intel!.buildings) : undefined;
-    sendTroops(w, { ownerId: p.id, fromVid: v.id, toVid: target.id, kind: 'attack', units: send, catTarget: cat, tag: 'war' });
-    if (target.ownerId !== null) ai.targetPlayer = target.ownerId;
+    const sent = sendTroops(w, { ownerId: p.id, fromVid: v.id, toVid: target.id, kind: 'attack', units: send, catTarget: cat, tag: 'war' });
+    if (target.ownerId !== null && sent.ok) {
+      if (ai.targetPlayer !== target.ownerId) ai.grudgeAt = w.now;
+      ai.targetPlayer = target.ownerId;
+      if (w.players[target.ownerId]?.kind === 'human') {
+        (ai.lastHit ??= {})[target.ownerId] = w.now;
+        // each blow takes a little of the fury out of them
+        ai.aggression = Math.max(0.15, ai.aggression - 0.05);
+      }
+    }
   }
 }
 
@@ -530,6 +544,8 @@ function pickWarTarget(w: World, p: Player, v: Village): Village | null {
     if (o.kind === 'human') {
       if (!ai.hostile) continue;
       if (ai.targetPlayer !== o.id && humansTargetedBy(w, o.id) >= humanCap) continue;
+      // give the human a breather between attacks from this ruler
+      if (w.now - (ai.lastHit?.[o.id] ?? -Infinity) < HUMAN_BREATHER_MIN[diff] * 60_000) continue;
       if (diff === 'easy' && o.points > p.points * 0.8) continue;
     }
     const d = distance(v.x, v.y, t.x, t.y);
@@ -562,6 +578,7 @@ export function aiOnBattle(w: World, c: Command, target: Village, data: BattleDa
   if (attacker.kind === 'human' && !victim.ai.hostile) return;
   if (data.winner === 'attacker' || nextRandom(w) < 0.3) {
     victim.ai.targetPlayer = attacker.id;
+    victim.ai.grudgeAt = w.now;
     victim.ai.aggression = Math.min(1, victim.ai.aggression + 0.1);
   }
 }
