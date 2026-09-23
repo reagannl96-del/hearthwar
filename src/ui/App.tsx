@@ -9,6 +9,7 @@ import { TribeScreen } from './screens/TribeScreen';
 import { OverviewsScreen } from './screens/OverviewsScreen';
 import { QuestsScreen } from './screens/QuestsScreen';
 import { RankingScreen } from './screens/RankingScreen';
+import { RealmScreen } from './screens/RealmScreen';
 import { ReportsScreen } from './screens/ReportsScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { TitleScreen } from './screens/TitleScreen';
@@ -57,6 +58,11 @@ function Game() {
     <div class="shell">
       <Header />
       <Nav />
+      {v.roundOver && r.name !== 'realm' && (
+        <div class="banner banner-round">
+          <Icon name="star" size={16} /> This round is over and the realm is frozen. <button type="button" class="link" onClick={() => go({ name: 'realm' })}>See the final standings</button>
+        </div>
+      )}
       {v.me.protectedUntil > now.value && (
         <div class="banner banner-protect">
           <Icon name="shield" size={16} /> Beginner protection: nobody can attack you for another <b class="num">{fmtDur((v.me.protectedUntil - now.value) / warp.value)}</b>. Attacking another player ends it early.
@@ -73,6 +79,7 @@ function Game() {
         {r.name === 'overviews' && <OverviewsScreen />}
         {r.name === 'settings' && <SettingsScreen />}
         {r.name === 'news' && <NewsScreen />}
+        {r.name === 'realm' && <RealmScreen />}
         {r.name === 'tribe' && <TribeScreen id={r.id} tab={r.tab} />}
       </main>
       <Toasts />
@@ -211,6 +218,7 @@ function Nav() {
     { r: { name: 'overviews' }, icon: 'overview', label: 'Overview', key: 'overviews' },
     { r: { name: 'tribe' }, icon: 'tribe', label: 'Tribe', key: 'tribe', badge: v.tribeInvites || undefined, glow: v.forumUnread.length > 0 },
     { r: { name: 'ranking' }, icon: 'rank', label: 'Rankings', key: 'ranking' },
+    { r: { name: 'realm' }, icon: 'star', label: 'Realm', key: 'realm' },
     { r: { name: 'news' }, icon: 'news', label: 'Chronicle', key: 'news' },
     { r: { name: 'settings' }, icon: 'settings', label: 'Settings', key: 'settings' },
   ];

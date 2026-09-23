@@ -39,6 +39,8 @@ export interface WorldConfig {
   luck: number;
   /** Beginner protection in game-hours at speed 1 (scaled by speed). */
   protectionHours: number;
+  /** how many real days a round of this realm lasts (14 if unset) */
+  roundDays?: number;
   /** testing: AI rulers never sleep or take breaks */
   aiAlwaysAwake?: boolean;
 }
@@ -328,7 +330,7 @@ export interface Tribe {
   forum?: ForumThread[];
 }
 
-export type GameEventType = 'build' | 'arrive' | 'research' | 'ai' | 'barb' | 'scav' | 'item' | 'sample';
+export type GameEventType = 'build' | 'arrive' | 'research' | 'ai' | 'barb' | 'scav' | 'item' | 'sample' | 'end';
 
 export interface GameEvent {
   t: number;
@@ -370,6 +372,12 @@ export interface World {
   dayKey?: number;
   /** online worlds: sign-in account id -> player id */
   accounts?: Record<string, number>;
+  /** when this round ends (world time) */
+  endsAt?: number;
+  /** the final standings, once the round is over (the realm is frozen then) */
+  finished?: RoundResult;
+  /** earlier rounds on this server: the hall of fame */
+  pastRounds?: RoundResult[];
   /** the realm is the round island (older worlds were square and get grown on load) */
   round?: boolean;
   /** client-side shadow only: attacks on fellow tribe members, as sent by the server */
@@ -380,4 +388,16 @@ export interface ActionResult {
   ok: boolean;
   error?: string;
   data?: unknown;
+}
+
+export interface RoundResult {
+  world: string;
+  /** world time the round ended */
+  at: number;
+  /** wall-clock time it ended */
+  endedReal: number;
+  days: number;
+  winner: { name: string; tag: string; color: string; share: number; villages: number; domination: boolean } | null;
+  tribes: { name: string; tag: string; share: number }[];
+  topRuler: { name: string; tag: string | null; points: number } | null;
 }

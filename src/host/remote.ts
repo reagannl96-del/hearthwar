@@ -134,6 +134,11 @@ export class Connection {
           this.setUp(false);
           return;
         }
+        if (m.t === 'reset') {
+          // a new round has begun on the server: start over with the fresh realm
+          location.reload();
+          return;
+        }
         if (greeted) this.setUp(true);
         if (m.t === 'hello' && !greeted) {
           greeted = true;

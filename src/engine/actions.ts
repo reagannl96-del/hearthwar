@@ -437,9 +437,13 @@ function exchange(w: World, pid: number, vid: number, give: keyof Res, get: keyo
   return { ok: true, data: q.receive };
 }
 
+const AFTER_ROUND = new Set<Action['type']>(['readReport', 'deleteReport', 'note', 'forumThread', 'forumReply', 'forumDelete', 'forumPin', 'forumRead', 'rename']);
+
 export function applyAction(w: World, pid: number, a: Action): ActionResult {
   const p = w.players[pid];
   if (!p) return fail('Unknown player.');
+  // once the round is over the realm is frozen: reports, notes and the tribe forum still work
+  if (w.finished && !AFTER_ROUND.has(a.type)) return fail('This round is over. A new realm opens soon.');
   switch (a.type) {
     case 'build': return build(w, pid, a.vid, a.building);
     case 'demolish': return demolish(w, pid, a.vid, a.building);

@@ -20,6 +20,7 @@ export type Route =
   | { name: 'overviews' }
   | { name: 'settings' }
   | { name: 'news' }
+  | { name: 'realm' }
   | { name: 'tribe'; id?: number; tab?: string };
 
 export interface Toast {

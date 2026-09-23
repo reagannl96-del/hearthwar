@@ -4,6 +4,7 @@
 
 import { hasPaladin } from './actions';
 import { rolloverDay } from './awards';
+import { finishRound } from './round';
 import { aiOnBattle, aiOnConquest, aiThink } from './ai/ai';
 import { handleArrival, addReport, type ArrivalHooks, sendTroops, updateIntel } from './commands';
 import { BUILDINGS } from './data/buildings';
@@ -164,7 +165,7 @@ export function processEvent(w: World, e: GameEvent): void {
     case 'scav': scavengeReturn(w, e); break;
     case 'ai': {
       const p = w.players[e.a];
-      if (p && !p.eliminated && p.ai) {
+      if (p && !p.eliminated && p.ai && !w.finished) {
         aiThink(w, p);
         pushEvent(w, 'ai', w.now + aiThinkInterval(w) * (0.85 + nextRandom(w) * 0.3), p.id);
       }
@@ -181,6 +182,7 @@ export function processEvent(w: World, e: GameEvent): void {
       pushEvent(w, 'sample', w.now + sampleInterval(w), 0);
       break;
     case 'item': paladinItem(w, e); break;
+    case 'end': finishRound(w); break;
   }
 }
 

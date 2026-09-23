@@ -19,7 +19,7 @@ import { applyAction } from '../src/engine/actions';
 import { advance } from '../src/engine/game';
 import { privatePacket, publicSnapshot } from '../src/engine/shadow';
 import { invalidateSpatial } from '../src/engine/spatial';
-import type { Difficulty, World } from '../src/engine/types';
+import type { Difficulty, RoundResult, World } from '../src/engine/types';
 import { recomputeCounters, recomputePlayerPoints } from '../src/engine/village';
 import { SIZE_PRESETS, WORLD_VERSION, createWorld, defaultConfig, migrateWorld, respawnHuman, spawnPlayer } from '../src/engine/world';
 import type { ClientMsg, ServerMsg } from '../src/net/protocol';
@@ -76,7 +76,12 @@ async function loadWorld(): Promise<World> {
       return w;
     }
   }
-  const size = Number(env.WORLD_SIZE || SIZE_PRESETS.medium.size);
+  return freshWorld();
+}
+
+/** A brand-new realm, as configured by the environment. */
+function freshWorld(pastRounds: RoundResult[] = []): World {
+  const size = Math.max(Number(env.WORLD_SIZE || 0), SIZE_PRESETS.medium.size);
   const w = createWorld({
     worldName: env.WORLD_NAME || 'The Ashen Marches',
     playerName: '',
@@ -87,13 +92,50 @@ async function loadWorld(): Promise<World> {
       speed: Number(env.WORLD_SPEED || 150),
       unitSpeed: Number(env.WORLD_UNIT_SPEED || 80),
       size,
-      aiCount: Number(env.WORLD_AI || SIZE_PRESETS.medium.aiCount),
+      aiCount: Math.max(Number(env.WORLD_AI || 0), SIZE_PRESETS.medium.aiCount),
       difficulty: (env.WORLD_DIFFICULTY as Difficulty) || 'normal',
+      roundDays: Number(env.ROUND_DAYS || 14),
     },
   });
   w.accounts = {};
+  w.pastRounds = pastRounds;
+  if (pastRounds.length > 0) w.name = `${env.WORLD_NAME || 'The Ashen Marches'} (round ${pastRounds.length + 1})`;
   console.log(`Created a new world "${w.name}".`);
   return w;
+}
+
+/** After a round ends, its final standings stay up for a while; then a fresh realm opens. */
+const RESULTS_MS = Number(env.ROUND_RESULTS_MINUTES || 60) * 60_000;
+let resetting = false;
+async function maybeStartNextRound(): Promise<void> {
+  if (resetting || !world.finished || world.now - world.finished.at < RESULTS_MS) return;
+  resetting = true;
+  try {
+    const past = [...(world.pastRounds ?? []), world.finished];
+    await saveArchive(world);
+    world = freshWorld(past);
+    clockBase = Date.now() - world.now;
+    invalidateSpatial();
+    pubCache = null;
+    await saveWorld();
+    for (const c of clients) {
+      c.pid = null;
+      send(c, { t: 'reset' });
+    }
+    console.log(`A new round has begun: "${world.name}".`);
+  } finally {
+    resetting = false;
+  }
+}
+
+/** Keep the finished realm around (the last one only) in case anyone wants to look back at it. */
+async function saveArchive(w: World): Promise<void> {
+  if (!sb) {
+    writeFileSync('world-dev-previous.json', JSON.stringify(w));
+    return;
+  }
+  const { error } = await sb.from('world_state').upsert({ id: 2, data: w, updated_at: new Date().toISOString() });
+  if (error) console.error('Could not archive the finished round:', error.message);
 }
 
 let saving = false;
@@ -212,6 +254,7 @@ function handle(c: Client, m: ClientMsg) {
 
 function tick() {
   advance(world, Date.now() - clockBase);
+  if (world.finished) void maybeStartNextRound();
 }
 
 async function main() {

@@ -10,6 +10,7 @@ import { commandsOf, removeCommand } from './cmdindex';
 import { addReport, news, withdrawSupport } from './commands';
 import { villageHero } from './actions';
 import { normalizeTribes } from './tribes';
+import { scheduleRoundEnd } from './round';
 import { createVillage, updateVillage } from './village';
 
 export const WORLD_VERSION = 1;
@@ -120,6 +121,7 @@ export const protectionEnd = (w: World) => w.now + PROTECTION_MS;
  */
 export function migrateWorld(w: World): void {
   if (!w.round) growRealm(w);
+  scheduleRoundEnd(w);
   const cap = protectionEnd(w);
   normalizeTribes(w);
   for (const id in w.villages) {
@@ -324,6 +326,7 @@ export function createWorld(o: NewWorldOptions): World {
   pushEvent(w, 'barb', w.now + barbInterval(w), 0);
   pushEvent(w, 'sample', w.now + 1000, 0);
   if (human) pushEvent(w, 'item', w.now + itemInterval(w), human.id);
+  scheduleRoundEnd(w);
   invalidateSpatial();
   return w;
 }

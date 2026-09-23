@@ -19,4 +19,6 @@ export type ServerMsg =
   | { t: 'error'; message: string }
   | { t: 'pong'; now: number }
   /** the server is going down (restart or redeploy); clients show Offline until it is back */
-  | { t: 'shutdown' };
+  | { t: 'shutdown' }
+  /** the round is over and a fresh realm has opened: clients reload and found a new village */
+  | { t: 'reset' };

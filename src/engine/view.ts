@@ -12,9 +12,10 @@ import {
 import { achievementLevels, questStatus } from './quests';
 import { TRIBE_RIGHTS, invitesFor, relation, tribeAlerts, tribePoints, unreadThreads } from './tribes';
 import { awardsSummary, dayOf } from './awards';
+import { DOMINATION, roundDays, standings, type Standings } from './round';
 import type {
   BonusType, BuildJob, Buildings, Intel, PaladinState, PlayerStats, RecruitBuilding, RecruitJob, Report, Res,
-  ResearchJob, ScavengeRun, UnitId, Units, World, WorldConfig, Diplomacy, ForumThread, TribeAlert, TribeRight } from './types';
+  ResearchJob, ScavengeRun, UnitId, Units, World, WorldConfig, Diplomacy, ForumThread, TribeAlert, TribeRight, RoundResult } from './types';
 import { farmMax, popUsed, productionRates, updateVillage } from './village';
 
 export interface SupportView { fromVid: number; fromName: string; ownerId: number; ownerName: string; units: Units }
@@ -108,6 +109,8 @@ export interface PlayerView {
   tribeInvites: number;
   /** tribe forum threads with posts I haven't read */
   forumUnread: number[];
+  /** the round is over and the realm frozen */
+  roundOver: boolean;
   commands: CommandView[];
   incoming: CommandView[];
   unreadReports: number;
@@ -250,6 +253,7 @@ export function buildView(w: World, pid: number): PlayerView {
     villages,
     tribeInvites: invitesFor(w, pid).length,
     forumUnread: unreadThreads(w, pid),
+    roundOver: !!w.finished,
     commands,
     incoming,
     unreadReports: p.reports.reduce((n, r) => n + (r.read ? 0 : 1), 0),
@@ -481,5 +485,35 @@ export function tribeHome(w: World, pid: number): { tribe: MyTribeView | null; i
       names,
       alerts: myRights.includes('internal') ? (w.tribeAlerts ?? tribeAlerts(w, pid)) : [],
     },
+  };
+}
+
+export interface RealmProgress extends Standings {
+  now: number;
+  endsAt: number | null;
+  days: number;
+  threshold: number;
+  /** the leading tribe holds at least the threshold */
+  dominating: boolean;
+  myTribeId: number | null;
+  meId: number;
+  finished: RoundResult | null;
+  pastRounds: RoundResult[];
+}
+
+/** The world progress page: who holds how much of the realm, and how long the round has left. */
+export function realmProgress(w: World, pid: number): RealmProgress {
+  const s = standings(w);
+  return {
+    ...s,
+    now: w.now,
+    endsAt: w.endsAt ?? null,
+    days: roundDays(w),
+    threshold: DOMINATION,
+    dominating: (s.tribes[0]?.share ?? 0) >= DOMINATION,
+    myTribeId: w.players[pid]?.tribeId ?? null,
+    meId: pid,
+    finished: w.finished ?? null,
+    pastRounds: [...(w.pastRounds ?? [])].reverse(),
   };
 }

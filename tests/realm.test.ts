@@ -4,6 +4,7 @@ import { sideInfo } from '../src/engine/commands';
 import { UNITS } from '../src/engine/data/units';
 import { applyAction } from '../src/engine/actions';
 import { advance } from '../src/engine/game';
+import { pushEvent } from '../src/engine/events';
 import { buildable, createWorld, defaultConfig, inRealm, isVolcanic, migrateWorld, realmGrowth, terrainAt } from '../src/engine/world';
 
 describe('the realm keeps growing', () => {
@@ -135,5 +136,42 @@ describe('the necromancer', () => {
     const rep = p.reports.find((r) => r.battle?.risen);
     expect(rep?.battle?.risen).toEqual({ side: 'attacker', n: 25 });
     expect(unitNameAt(v, 'spear', true)).toBe('Skeleton Spearmen');
+  });
+});
+
+describe('a round of the realm', () => {
+  it('runs two weeks, ranks tribes by their share of ruled villages, then freezes on the final standings', async () => {
+    const { standings, DOMINATION } = await import('../src/engine/round');
+    const w = createWorld({ worldName: 'T', playerName: 'P', villageName: 'H', seed: 41, config: { ...defaultConfig(), difficulty: 'peaceful', aiCount: 10, size: 90 } });
+    expect(w.endsAt).toBe(14 * 86_400_000);
+    const s = standings(w);
+    const ruled = Object.values(w.villages).filter((v) => v.ownerId !== null).length;
+    expect(s.ruled).toBe(ruled);
+    expect(s.barbarians).toBe(Object.keys(w.villages).length - ruled);
+    const total = s.tribes.reduce((n, t) => n + t.share, 0) + s.tribeless.share;
+    expect(total).toBeCloseTo(1, 5);
+    // hand one tribe most of the realm: it is dominating
+    const t = Object.values(w.tribes)[0];
+    for (const v of Object.values(w.villages)) if (v.ownerId !== null) v.ownerId = t.members[0];
+    w.players[t.members[0]].villages = Object.values(w.villages).filter((v) => v.ownerId === t.members[0]).map((v) => v.id);
+    expect(standings(w).tribes[0].share).toBeGreaterThanOrEqual(DOMINATION);
+    // time runs out (jump straight to the end instead of playing out two weeks)
+    w.events = [];
+    w.now = w.endsAt! - 1;
+    pushEvent(w, 'end', w.endsAt!, 0);
+    advance(w, w.endsAt! + 1);
+    expect(w.finished?.winner?.tag).toBe(t.tag);
+    expect(w.finished?.winner?.domination).toBe(true);
+    const p = w.players[w.humanId];
+    expect(applyAction(w, p.id, { type: 'build', vid: p.villages[0] ?? 0, building: 'main' }).ok).toBe(false);
+    expect(applyAction(w, p.id, { type: 'note', vid: 0, text: 'gg' } as never).error ?? '').not.toMatch(/round is over/);
+  });
+
+  it('older worlds get an end date the first time they load', () => {
+    const w = createWorld({ worldName: 'T', playerName: 'P', villageName: 'H', seed: 42, config: { ...defaultConfig(), aiCount: 2, size: 60 } });
+    w.endsAt = undefined;
+    w.now = 5 * 86_400_000;
+    migrateWorld(w);
+    expect(w.endsAt).toBe(19 * 86_400_000);
   });
 });
