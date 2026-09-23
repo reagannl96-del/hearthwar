@@ -1171,3 +1171,7 @@ input.tiny { width: 56px; padding: 2px 4px; }
 .mh-meta { display: flex; gap: 10px; align-items: center; font-size: 0.8rem; color: #cdb58a; margin-top: 3px; }
 .mh-meta b { color: #fff3d6; }
 .mh-bonus { color: #9fd36a; font-weight: 700; }
+
+.move-group + .move-group { margin-top: 10px; }
+.move-group h4 { margin: 0 0 4px; }
+.scene-col > .panel { margin-top: 12px; }

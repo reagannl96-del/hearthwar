@@ -105,6 +105,18 @@ describe('village layout', () => {
         if (id === 'main') continue;
         for (const sm of mains) for (const so of shapes.get(id)!) if (overlaps(sm, so)) clashes.push(`${theme} main × ${id}`);
       }
+      // and nobody walks through it
+      for (const [name, path] of Object.entries(WALK_PATHS)) {
+        const closed = [...path, path[0]];
+        for (let i = 0; i < closed.length - 1; i++) {
+          const [x1, z1] = closed[i], [x2, z2] = closed[i + 1];
+          const n = Math.max(2, Math.ceil(Math.hypot(x2 - x1, z2 - z1) / 0.5));
+          for (let k = 0; k <= n; k++) {
+            const p: P = [x1 + ((x2 - x1) * k) / n, z1 + ((z2 - z1) * k) / n];
+            if (mains.some((sm) => inside(sm, p, 0.4))) clashes.push(`${theme} main in the way of ${name}`);
+          }
+        }
+      }
     }
     expect([...new Set(clashes)]).toEqual([]);
   });

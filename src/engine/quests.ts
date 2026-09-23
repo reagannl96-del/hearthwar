@@ -3,6 +3,8 @@
 import type { ActionResult, BuildingId, Player, Res, UnitId, World } from './types';
 import { RES_KEYS } from './types';
 import { storageOf, updateVillage } from './village';
+import { HEROES } from './data/units';
+import { commandsOf } from './cmdindex';
 
 export interface QuestDef {
   id: string;
@@ -14,6 +16,18 @@ export interface QuestDef {
 }
 
 const r = (w: number, c: number, i: number): Res => ({ wood: w, clay: c, iron: i });
+
+/** Villages with a trained hero, at home or out with an army. */
+function heroCount(w: World, p: Player): number {
+  const withHero = new Set<number>();
+  for (const vid of p.villages) {
+    const v = w.villages[vid];
+    if (v && HEROES.some((h) => (v.units[h] ?? 0) > 0)) withHero.add(vid);
+  }
+  for (const c of commandsOf(w, p.id)) if (HEROES.some((h) => (c.units[h] ?? 0) > 0)) withHero.add(c.fromVid);
+  for (const id in w.villages) for (const st of w.villages[id].support) if (st.ownerId === p.id && HEROES.some((h) => (st.units[h] ?? 0) > 0)) withHero.add(st.fromVid);
+  return withHero.size;
+}
 
 function maxBuilding(w: World, p: Player, b: BuildingId): number {
   let m = 0;
@@ -68,7 +82,8 @@ export const QUESTS: QuestDef[] = [
   { id: 'light', title: 'Riders of the plains', text: 'Research Light Cavalry — the best raiders there are.', reward: r(2000, 1800, 2500), requires: 'stable1', progress: (w, p) => [researched(w, p, 'light'), 1] },
   { id: 'mines10', title: 'Industry', text: 'Raise all three resource buildings to level 10.', reward: r(2500, 2500, 2500), requires: 'mines6', progress: (w, p) => [Math.min(10, minMines(w, p)), 10] },
   { id: 'scav2', title: 'Scavengers', text: 'Unlock the second scavenging option at the rally point.', reward: r(1000, 1000, 1000), requires: 'rally1', progress: (w, p) => [p.villages.some((v) => (w.villages[v]?.scavengeUnlocked ?? 0) >= 2) ? 1 : 0, 1] },
-  { id: 'paladin', title: 'A champion rises', text: 'Build the Statue and train your Paladin.', reward: r(1500, 1500, 1500), requires: 'main10', progress: (w, p) => [p.paladin && p.paladin.vid !== null ? 1 : 0, 1] },
+  { id: 'paladin', title: 'A champion rises', text: 'Build the Statue and train a hero: a Paladin, Sorcerer, Druid or Goblin Chief.', reward: r(1500, 1500, 1500), requires: 'main10', progress: (w, p) => [heroCount(w, p) > 0 ? 1 : 0, 1] },
+  { id: 'heroes2', title: 'Hall of heroes', text: 'Keep heroes in two of your villages.', reward: r(6000, 6000, 6000), requires: 'paladin', progress: (w, p) => [Math.min(2, heroCount(w, p)), 2] },
   { id: 'loot100k', title: 'Master raider', text: 'Plunder a total of 100,000 resources.', reward: r(8000, 8000, 7000), requires: 'loot10k', progress: (w, p) => [Math.min(100000, p.stats.loot), 100000] },
   bq('workshop1', 'Siegecraft', 'Build a Workshop (needs HQ 10, Smithy 10).', 'workshop', 1, r(3000, 2500, 3000), 'stable1'),
   bq('wall10', 'Bulwark', 'Raise the Wall to level 10.', 'wall', 10, r(3000, 5000, 2000), 'wall3'),

@@ -5,7 +5,8 @@ import { merchantCount } from './formulas';
 import type { Res, Village, World } from './types';
 import { RES_KEYS } from './types';
 
-export const EXCHANGE_FEE = 0.1;
+/** The trading post keeps half: at balanced stock you get about 1 for 2. */
+export const EXCHANGE_FEE = 0.5;
 
 export function exchangeBaseline(w: World): number {
   // the post grows with the strongest human ruler

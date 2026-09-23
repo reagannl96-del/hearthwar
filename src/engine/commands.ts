@@ -548,6 +548,10 @@ function resolveAttack(w: World, c: Command, hooks: ArrivalHooks): void {
   const owl = attItem?.special === 'scout';
   if (result.scoutsSurvived > 0) {
     scout = { res: res(Math.floor(target.res.wood), Math.floor(target.res.clay), Math.floor(target.res.iron)) };
+    if (target.ownerId !== null) {
+      const hc = hideCap(target.buildings.hiding);
+      scout.hidden = res(Math.min(hc, scout.res!.wood), Math.min(hc, scout.res!.clay), Math.min(hc, scout.res!.iron));
+    }
     if (scoutRatio >= 0.5 || owl) scout.buildings = { ...target.buildings };
     if (scoutRatio >= 0.75 || owl) scout.unitsOutside = unitsOutsideOf(w, target);
     attacker.stats.scouted++;

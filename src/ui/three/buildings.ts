@@ -38,7 +38,12 @@ export function buildModel(id: BuildingId, level: number, color: number): Built 
   const t = visualTier(id, level);
   const r = rng(id.length * 131 + t * 17);
   switch (id) {
-    case 'main': return crowned(mainHall(t, color), t);
+    case 'main': {
+      const th = getTheme();
+      if (th === 'druid') return druidHall(t);
+      if (th === 'goblin') return goblinHall(t);
+      return crowned(mainHall(t, color), t);
+    }
     case 'barracks': return barracks(t, color);
     case 'stable': return stable(t, r);
     case 'workshop': return workshop(t);
@@ -497,6 +502,241 @@ function farm(t: number, r: () => number): Built {
   f2.position.set(0, 0, 4.4);
   g.add(f2);
   return { obj: g, h: 6, w: 8, d: 8 };
+}
+
+// ---------- hero headquarters ----------
+
+const MOSS = 0x5e7d32, MOSS_DK = 0x445c24, BARK = 0x5a3f28, BARK_DK = 0x3f2c1c, LEAF = 0x4f7a2e, LEAF_LT = 0x6f9a3a, MENHIR = 0x8e9a80;
+
+/** A round window that glows at night. */
+function glowWindow(x: number, y: number, z: number, ry = 0): THREE.Group {
+  const g = new THREE.Group();
+  const w = cyl(0.32, 0.32, 0.12, C.window, 8);
+  w.rotation.x = Math.PI / 2;
+  w.userData.window = true;
+  g.add(w);
+  g.position.set(x, y, z);
+  g.rotation.y = ry;
+  return g;
+}
+
+/**
+ * The druids' Great Tree Hall: a stump hut that grows into a hollow tree home,
+ * then a great tree with platforms and huts, and at last a towering world-tree
+ * ringed by standing stones.
+ */
+function druidHall(t: number): Built {
+  const g = new THREE.Group();
+  const r = rng(71 + t);
+  const trunkR = [0, 1.7, 2.2, 2.8, 3.3, 3.7][t];
+  const trunkH = [0, 2.8, 4.6, 6.2, 7.6, 9][t];
+  // the trunk, flared at the roots
+  g.add(cyl(trunkR * 0.85, trunkR * 1.15, trunkH, BARK, 9));
+  if (t >= 2) {
+    for (let i = 0; i < 5 + t; i++) {
+      const a = (i / (5 + t)) * Math.PI * 2 + 0.3;
+      const root = box(0.5 + t * 0.12, 0.7 + t * 0.15, trunkR * 0.9, BARK_DK, Math.cos(a) * trunkR * 0.95, 0, Math.sin(a) * trunkR * 0.95);
+      root.rotation.y = -a + Math.PI / 2;
+      g.add(root);
+    }
+  }
+  // doorway and glowing windows
+  g.add(box(1.1, 1.9, 0.3, C.door, 0, 0, trunkR * 1.02));
+  g.add(blob(0.62, BARK_DK, 0, 1.9, trunkR * 1.0, 1, 0.5, 0.35));
+  for (let i = 0; i < t; i++) {
+    const a = Math.PI / 2 + (i % 2 === 0 ? 0.7 : -0.7);
+    g.add(glowWindow(Math.cos(a) * trunkR * 0.98, 2.6 + i * 1.3, Math.sin(a) * trunkR * 0.98, Math.PI / 2 - a));
+  }
+  if (t === 1) {
+    // a stump with a mossy cap
+    g.add(blob(2.1, MOSS, 0, trunkH + 0.2, 0, 1, 0.45, 1));
+    g.add(blob(0.5, LEAF_LT, 1.1, trunkH + 0.7, 0.3));
+    return { obj: g, h: 5.5, w: 5, d: 5 };
+  }
+  // the crown of leaves
+  const crown = [0, 0, 3.4, 4.6, 5.8, 6.8][t];
+  const blobs = 3 + t * 2;
+  for (let i = 0; i < blobs; i++) {
+    const a = (i / blobs) * Math.PI * 2;
+    const rr = crown * (0.35 + r() * 0.35);
+    g.add(blob(crown * (0.42 + r() * 0.15), r() < 0.5 ? LEAF : LEAF_LT, Math.cos(a) * rr, trunkH + crown * 0.35 + r() * crown * 0.4, Math.sin(a) * rr * 0.8, 1, 0.75, 1, 1));
+  }
+  g.add(blob(crown * 0.6, LEAF, 0, trunkH + crown * 0.85, 0, 1, 0.7, 1, 1));
+  // platforms ringing the trunk
+  if (t >= 3) {
+    for (let k = 0; k < t - 2; k++) {
+      const y = 3.2 + k * 2.6;
+      g.add(cyl(trunkR + 1.3, trunkR + 1.3, 0.25, C.timberLight, 12, 0, y, 0));
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        g.add(box(0.12, 0.8, 0.12, C.timber, Math.cos(a) * (trunkR + 1.2), y + 0.25, Math.sin(a) * (trunkR + 1.2)));
+      }
+      const lamp = blob(0.2, 0xffd27a, trunkR + 1.2, y + 1.2, 0.3);
+      lamp.userData.window = true;
+      g.add(lamp);
+    }
+  }
+  // moss-roofed huts at the roots
+  if (t >= 3) {
+    for (const s of t >= 4 ? [-1, 1] : [-1]) {
+      const hut = house({ w: 3.2, d: 2.8, h: 1.8, roofH: 1.6, roof: MOSS, windows: 1 });
+      hut.position.set(s * (trunkR + 2.6), 0, 1.2);
+      hut.rotation.y = s * -0.4;
+      g.add(hut);
+    }
+  }
+  // standing stones and hanging vines on the oldest trees
+  if (t >= 4) {
+    const ring = trunkR + 4.4;
+    for (let i = 0; i < 9; i++) {
+      const a = (i / 9) * Math.PI * 2 + 0.2;
+      if (Math.sin(a) > 0.75) continue; // keep the doorway open
+      const st = box(0.55, 1.8 + r() * 0.8, 0.4, MENHIR, Math.cos(a) * ring, 0, Math.sin(a) * ring * 0.85);
+      st.rotation.y = -a;
+      g.add(st);
+    }
+  }
+  if (t >= 5) {
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2;
+      const len = 2 + r() * 2.5;
+      g.add(box(0.08, len, 0.08, MOSS_DK, Math.cos(a) * crown * 0.7, trunkH + crown * 0.2 - len, Math.sin(a) * crown * 0.55));
+    }
+  }
+  const h = trunkH + crown * 1.3;
+  const span = Math.max(crown * 2, (trunkR + 4.6) * 2 * (t >= 4 ? 1 : 0.6));
+  return { obj: g, h, w: span, d: span * 0.85 };
+}
+
+const HIDE = 0x8a6a3e, HIDE_DK = 0x6b4f2c, RAG = 0x6f9a2a, RUST = 0x8a4b24, RUST_DK = 0x5f3218, JUNK_WOOD = 0x4e3620, BONE = 0xe8dfc8;
+
+function goblinTent(size: number, r: () => number): THREE.Group {
+  const t = new THREE.Group();
+  const body = cone(size, size * 1.5, HIDE, 6);
+  body.rotation.y = r();
+  t.add(body);
+  // patches
+  for (let i = 0; i < 3; i++) {
+    const a = r() * Math.PI * 2;
+    const p = box(size * 0.45, size * 0.4, 0.05, i % 2 ? HIDE_DK : RAG, Math.cos(a) * size * 0.55, size * 0.35, Math.sin(a) * size * 0.55);
+    p.rotation.y = -a + Math.PI / 2;
+    p.rotation.x = -0.45;
+    t.add(p);
+  }
+  for (const a of [0.3, 1.9, 3.8]) t.add(cyl(0.05, 0.05, 0.9, JUNK_WOOD, 4, Math.cos(a) * 0.25, size * 1.4, Math.sin(a) * 0.25));
+  t.add(box(0.8, 1.1, 0.1, 0x241a12, 0, 0, size * 0.72));
+  return t;
+}
+
+function skull(s: number): THREE.Group {
+  const g = new THREE.Group();
+  g.add(blob(0.5 * s, BONE, 0, 0, 0, 1, 0.9, 1));
+  g.add(box(0.36 * s, 0.25 * s, 0.25 * s, BONE, 0, -0.45 * s, 0.1 * s));
+  g.add(box(0.16 * s, 0.16 * s, 0.08 * s, 0x1a1a1a, -0.17 * s, 0.02 * s, 0.44 * s));
+  g.add(box(0.16 * s, 0.16 * s, 0.08 * s, 0x1a1a1a, 0.17 * s, 0.02 * s, 0.44 * s));
+  return g;
+}
+
+/**
+ * The goblins' War Camp: a patched hide tent that sprawls into a stake-ringed
+ * camp, a lopsided fort under rusted plates, a teetering junk tower, and at last
+ * a skull-gated stronghold.
+ */
+function goblinHall(t: number): Built {
+  const g = new THREE.Group();
+  const r = rng(53 + t);
+  if (t <= 2) {
+    g.add(goblinTent(t === 1 ? 2.4 : 3, r));
+    if (t === 2) {
+      const t2 = goblinTent(2, r);
+      t2.position.set(-4.2, 0, -0.8);
+      g.add(t2);
+      for (let i = -4; i <= 4; i++) {
+        const st = cone(0.18, 1.6 + r() * 0.6, JUNK_WOOD, 4, i * 1.05, 0, 3.6 + Math.abs(i) * 0.12);
+        st.rotation.x = 0.25;
+        st.rotation.z = (r() - 0.5) * 0.3;
+        g.add(st);
+      }
+    }
+    const fire = campfire();
+    fire.position.set(2.6, 0, 2.4);
+    g.add(fire);
+    const b = new THREE.Group();
+    b.add(cyl(0.08, 0.08, 3.4, JUNK_WOOD, 4));
+    b.add(box(1.1, 0.7, 0.05, RAG, 0.6, 2.6, 0));
+    b.position.set(3, 0, -1.2);
+    g.add(b);
+    return { obj: g, h: t === 1 ? 5 : 6, w: t === 1 ? 7 : 11, d: t === 1 ? 6 : 8 };
+  }
+  // the lopsided fort
+  const fw = t === 3 ? 8 : 9.5, fd = t === 3 ? 6.5 : 7.5, fh = t === 3 ? 3.6 : 4.2;
+  const fort = new THREE.Group();
+  fort.add(box(fw, fh, fd, JUNK_WOOD));
+  for (let i = 0; i < 6; i++) fort.add(box(0.2, fh + 0.3, 0.12, 0x2f2012, -fw / 2 + 0.6 + i * ((fw - 1.2) / 5), 0, fd / 2 + 0.05));
+  // rusted plate roof, crooked
+  for (let i = 0; i < 4; i++) {
+    const p = box(fw / 4 + 0.5, 0.2, fd + 0.8, i % 2 ? RUST : RUST_DK, -fw / 2 + fw / 8 + i * (fw / 4), fh + 0.4 + (r() - 0.5) * 0.4, 0);
+    p.rotation.x = (r() - 0.5) * 0.25;
+    p.rotation.z = (r() - 0.5) * 0.3;
+    fort.add(p);
+  }
+  fort.add(box(1.4, 2.2, 0.25, 0x241a12, 0, 0, fd / 2 + 0.1));
+  const s1 = skull(1.1);
+  s1.position.set(0, 2.9, fd / 2 + 0.3);
+  fort.add(s1);
+  fort.rotation.z = 0.03;
+  g.add(fort);
+  // spikes along the roof edge
+  for (let i = 0; i < 7; i++) {
+    const sp = cone(0.14, 1.1, 0x3b3530, 4, -fw / 2 + 0.5 + i * ((fw - 1) / 6), fh + 0.5, fd / 2 + 0.3);
+    sp.rotation.x = 0.7;
+    g.add(sp);
+  }
+  // a teetering junk tower (or two)
+  const tower = (x: number, z: number, levels: number) => {
+    const tw = new THREE.Group();
+    let y = 0;
+    for (let i = 0; i < levels; i++) {
+      const s = 2.6 - i * 0.35;
+      const lvl = box(s, 1.8, s, i % 2 ? JUNK_WOOD : 0x5e4428, (r() - 0.5) * 0.4, y, (r() - 0.5) * 0.4);
+      lvl.rotation.y = (r() - 0.5) * 0.4;
+      tw.add(lvl);
+      y += 1.8;
+    }
+    tw.add(cone(1.5, 1.6, RUST, 4, 0, y, 0).rotateY(0.4));
+    const fl = new THREE.Group();
+    fl.add(cyl(0.06, 0.06, 2, JUNK_WOOD, 4));
+    fl.add(box(1, 0.6, 0.05, RAG, 0.55, 1.4, 0));
+    fl.position.set(0, y + 1.3, 0);
+    tw.add(fl);
+    tw.position.set(x, 0, z);
+    g.add(tw);
+    return y + 3.2;
+  };
+  let h = fh + 2.5;
+  if (t >= 4) h = Math.max(h, tower(-fw / 2 - 1.8, -1.2, 4));
+  if (t >= 5) h = Math.max(h, tower(fw / 2 + 1.8, -1.6, 5));
+  if (t >= 5) {
+    // the great skull gate in front
+    const gate = new THREE.Group();
+    gate.add(box(0.5, 4.2, 0.5, JUNK_WOOD, -2.2, 0, 0));
+    gate.add(box(0.5, 4.2, 0.5, JUNK_WOOD, 2.2, 0, 0));
+    gate.add(box(5.2, 0.5, 0.6, JUNK_WOOD, 0, 4, 0));
+    const big = skull(2.4);
+    big.position.set(0, 5.6, 0);
+    gate.add(big);
+    gate.position.set(0, 0, fd / 2 + 2.6);
+    g.add(gate);
+  }
+  const bn = new THREE.Group();
+  bn.add(cyl(0.08, 0.08, 3.6, JUNK_WOOD, 4));
+  bn.add(box(1.2, 0.8, 0.05, RAG, 0.65, 2.7, 0));
+  bn.position.set(fw / 2 - 0.6, 0, fd / 2 + 1.2);
+  g.add(bn);
+  const fire = campfire();
+  fire.position.set(-fw / 2 + 0.8, 0, fd / 2 + 1.6);
+  g.add(fire);
+  return { obj: g, h, w: fw + (t >= 4 ? 5 : 0) + (t >= 5 ? 4 : 0), d: fd + (t >= 5 ? 5.5 : 1.5) };
 }
 
 export { tree };

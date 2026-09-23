@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { BUILDINGS } from '../../engine/data/buildings';
 import type { BuildingId, Buildings, Units } from '../../engine/types';
 import { VillageScene } from '../art/VillageScene';
-import { VillageRenderer, webglAvailable } from './VillageRenderer';
+import { VillageRenderer, webglAvailable, type MarchInfo } from './VillageRenderer';
 import type { Theme } from './kit';
 
 interface Props {
@@ -18,6 +18,9 @@ interface Props {
   units?: Units;
   /** the village hero's look */
   theme?: Theme;
+  /** armies leaving and coming home, and the game clock */
+  marches?: MarchInfo[];
+  now?: number;
   onToggleNight?: () => void;
 }
 
@@ -61,6 +64,10 @@ export function Village3D(p: Props) {
   useEffect(() => {
     r.current?.setTroops(p.units ?? {});
   }, [p.units]);
+
+  useEffect(() => {
+    if (p.marches && p.now !== undefined) r.current?.setMarches(p.marches, p.now);
+  }, [p.marches, p.now]);
 
   useEffect(() => {
     r.current?.setNight(p.night);

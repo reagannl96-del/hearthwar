@@ -274,6 +274,31 @@ describe('a human player', () => {
     expect(p.villages.length).toBe(0);
   });
 
+  it('a big enough scouting party sees everything; a handful sees little or dies', () => {
+    const w = peacefulWorld();
+    removeEvents(w, (e) => e.type === 'barb');
+    const { p, v } = human(w);
+    v.buildings.rally = 1;
+    v.units.scout = 200;
+    const barb = nearestBarb(w, v.x, v.y);
+    barb.units = { scout: 20, spear: 50 };
+    const scoutWith = (n: number) => {
+      const before = p.reports.length;
+      expect(applyAction(w, p.id, { type: 'send', vid: v.id, target: barb.id, kind: 'attack', units: { scout: n } }).ok).toBe(true);
+      advance(w, w.now + 3 * HOUR);
+      updateVillage(w, v, w.now);
+      barb.units.scout = 20;
+      return p.reports.slice(0, p.reports.length - before).find((r) => r.battle)?.battle;
+    };
+    const few = scoutWith(10);
+    expect(few?.scout).toBeUndefined(); // all ten caught
+    const many = scoutWith(80);
+    expect(many?.scout?.res).toBeDefined();
+    expect(many?.scout?.buildings).toBeDefined();
+    expect(many?.scout?.unitsOutside).toBeDefined();
+    expect(many?.defUnits?.spear).toBe(50); // the troops inside are seen too
+  });
+
   it('restarts: old village turns barbarian as-is, a new one is founded', () => {
     const w = peacefulWorld();
     const { p, v } = human(w);

@@ -193,13 +193,13 @@ function trade(w: World, p: Player, v: Village): void {
   const sorted = [...RES_KEYS].sort((a, b) => v.res[b] - v.res[a]);
   const rich = sorted[0], poor = sorted[2];
   if (v.res[rich] < cap * 0.55 || v.res[poor] > cap * 0.25) return;
-  // rulers trade with their own merchants at a flat 4:3 rate, so they never
-  // drain the shared trading post the human uses
+  // rulers trade with their own merchants at the same 2:1 rate the trading
+  // post gives, so they never drain the shared post the humans use
   const q = exchangeQuote(w, v, rich, poor, 1);
   const amount = Math.floor(Math.min(q.maxAmount, (v.res[rich] - v.res[poor]) / 2));
   if (amount < 200) return;
   v.res[rich] -= amount;
-  v.res[poor] = Math.min(cap, v.res[poor] + Math.floor(amount * 0.75));
+  v.res[poor] = Math.min(cap, v.res[poor] + Math.floor(amount * 0.5));
 }
 
 // ---------- research ----------

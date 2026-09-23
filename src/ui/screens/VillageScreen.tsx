@@ -39,6 +39,11 @@ export function VillageScreen() {
             winter={prefs.value.season === 'auto' ? isWinter(v.x, v.y, pv.config.size) : prefs.value.season === 'winter'}
             night={night}
             units={v.units}
+            marches={[
+              ...pv.commands.filter((c) => c.fromVid === v.id && (c.kind === 'attack' || c.kind === 'support')).map((c) => ({ id: c.id, kind: 'out' as const, units: c.units ?? {}, at: c.depart })),
+              ...pv.commands.filter((c) => c.fromVid === v.id && c.kind === 'return').map((c) => ({ id: c.id, kind: 'home' as const, units: c.units ?? {}, at: c.arrive })),
+            ]}
+            now={now.value}
             theme={v.hero === 'sorcerer' || v.hero === 'druid' || v.hero === 'goblin' ? v.hero : 'classic'}
             onToggleNight={() => setPrefs({ sceneTime: night ? 'day' : 'night' })}
           />
@@ -52,6 +57,7 @@ export function VillageScreen() {
             <span class="num muted">{fmt(quest.cur)}/{fmt(quest.max)}</span>
           </button>
         )}
+        <TroopMovements vid={v.id} />
       </div>
       <aside class="side-col">
         <Section title="Construction" actions={<Btn small variant="ghost" onClick={() => go({ name: 'building', id: 'main' })}>Headquarters</Btn>}>
@@ -146,5 +152,27 @@ export function VillageScreen() {
         </Section>
       </aside>
     </div>
+  );
+}
+
+/** Every army leaving, coming home to, or marching on the selected village. */
+function TroopMovements({ vid }: { vid: number }) {
+  const pv = view.value!;
+  const out = pv.commands.filter((c) => c.fromVid === vid && (c.kind === 'attack' || c.kind === 'support')).sort((a, b) => a.arrive - b.arrive);
+  const back = pv.commands.filter((c) => c.fromVid === vid && c.kind === 'return').sort((a, b) => a.arrive - b.arrive);
+  const inc = pv.incoming.filter((c) => c.toVid === vid && (c.kind === 'attack' || c.kind === 'support')).sort((a, b) => a.arrive - b.arrive);
+  const groups: [string, typeof out][] = [['Incoming', inc], ['Attacks & support', out], ['Returning', back]];
+  const total = out.length + back.length + inc.length;
+  return (
+    <Section title="Troop movements" actions={<Btn small variant="ghost" onClick={() => go({ name: 'building', id: 'rally', tab: 'commands' })}>Rally point</Btn>}>
+      {total === 0 ? <Empty>No armies are on the road from this village.</Empty> : groups.filter(([, list]) => list.length > 0).map(([title, list]) => (
+        <div class="move-group">
+          <h4>{title} <span class="muted small">({list.length})</span></h4>
+          <ul class="cmd-list">
+            {list.slice(0, 30).map((c) => <CommandRow c={c} />)}
+          </ul>
+        </div>
+      ))}
+    </Section>
   );
 }

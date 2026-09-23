@@ -223,6 +223,15 @@ function Battle({ b, kind }: { b: BattleData; kind: Report['kind'] }) {
                 <dd class="cost">{(['wood', 'clay', 'iron'] as ResKey[]).map((k) => <Res k={k} n={b.scout!.res![k]} />)}</dd>
               </>
             )}
+            {b.scout.hidden && (b.scout.hidden.wood + b.scout.hidden.clay + b.scout.hidden.iron) > 0 && (
+              <>
+                <dt>In the hiding place</dt>
+                <dd class="cost">
+                  {(['wood', 'clay', 'iron'] as ResKey[]).map((k) => <Res k={k} n={b.scout!.hidden![k]} />)}
+                  <span class="muted small">safe from plunder</span>
+                </dd>
+              </>
+            )}
             {b.scout.buildings && (
               <>
                 <dt>Buildings</dt>

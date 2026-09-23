@@ -154,6 +154,8 @@ export interface SideInfo {
 
 export interface ScoutInfo {
   res?: Res;
+  /** part of res kept safe in the hiding place (cannot be plundered) */
+  hidden?: Res;
   buildings?: Partial<Buildings>;
   unitsOutside?: Units;
 }

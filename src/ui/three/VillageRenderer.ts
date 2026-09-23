@@ -6,11 +6,20 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { BUILDINGS } from '../../engine/data/buildings';
 import type { BuildingId, Buildings, Units } from '../../engine/types';
 import { buildModel, visualTier } from './buildings';
-import { C, bake, disposeTree, mat, rng, setSeason, setTheme, type Season, type Theme } from './kit';
+import { C, bake, box, disposeTree, mat, rng, setSeason, setTheme, type Season, type Theme } from './kit';
 import { isRider, person, plot, scaffold, troop, type TroopModel } from './props';
 import { FOOT_LOOPS, PEOPLE_LOOPS, RIDE_LOOPS } from './paths';
 import { wallGuardPosts } from './scene';
 import { LAYOUT, OUTSIDE, WALL_R, buildScenery, buildTerrain, buildWall, buildingScale, heightAt } from './scene';
+
+/** An army leaving or coming home, as far as the village scene cares. */
+export interface MarchInfo {
+  id: number;
+  kind: 'out' | 'home';
+  units: Units;
+  /** game time it set off (out) or gets home (home) */
+  at: number;
+}
 
 export interface VillageRendererOpts {
   onPick?: (b: BuildingId) => void;
@@ -76,6 +85,9 @@ export class VillageRenderer {
   private guards: THREE.Group | null = null;
   private guardKey = '';
   private units: Units = {};
+  private marches: { members: THREE.Group[]; path: THREE.Vector3[]; t: number; len: number; fadeIn: number; fadeOut: number }[] = [];
+  private marchSeen = new Set<number>();
+  private builders = new Map<BuildingId, { g: THREE.Group; arms: THREE.Object3D[] }>();
 
   constructor(private container: HTMLElement, private opts: VillageRendererOpts = {}) {
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
@@ -188,6 +200,7 @@ export class VillageRenderer {
     this.lastBuildings = { ...b };
     this.updateGuards();
     this.updateLabels(b, constructing);
+    this.updateBuilders(constructing);
   }
 
   /** Moonlight, lit windows and lantern-carrying villagers. */
@@ -474,6 +487,100 @@ export class VillageRenderer {
     this.scene.add(g);
   }
 
+  // ---------- armies marching out and home ----------
+
+  /**
+   * Armies that just set off march out through the gate and vanish into the
+   * forest down the road; armies about to get home come out of the trees.
+   */
+  setMarches(moves: MarchInfo[], now: number): void {
+    for (const m of moves) {
+      if (this.marchSeen.has(m.id)) continue;
+      const age = m.kind === 'out' ? now - m.at : m.at - now;
+      // only very fresh departures, and returns in their last stretch
+      if (m.kind === 'out' ? age < 0 || age > 30_000 : age < 0 || age > 25_000) continue;
+      this.marchSeen.add(m.id);
+      const figures = marchFigures(m.units);
+      if (figures.length === 0) continue;
+      const road = MARCH_ROAD.map(([x, z]) => new THREE.Vector3(x, Math.hypot(x, z) > WALL_R ? heightAt(x, z) : 0, z));
+      if (m.kind === 'home') road.reverse();
+      const members = figures.map((k) => {
+        const g = troop(k);
+        g.scale.setScalar(1.3);
+        g.visible = false;
+        this.scene.add(g);
+        return g;
+      });
+      const len = pathLength(road, false);
+      this.marches.push({ members, path: road, t: 0, len, fadeIn: m.kind === 'home' ? 8 : 0, fadeOut: m.kind === 'out' ? len - 10 : len });
+    }
+    if (this.marchSeen.size > 500) this.marchSeen = new Set([...this.marchSeen].slice(-200));
+  }
+
+  private stepMarches(dt: number, t: number): void {
+    const SPACING = 1.9, SPEED = 4.2;
+    this.marches = this.marches.filter((m) => {
+      m.t += SPEED * dt;
+      let alive = false;
+      m.members.forEach((g, i) => {
+        const pt = m.t - i * SPACING;
+        if (pt < 0 || pt > m.len) { g.visible = false; if (pt <= m.len) alive = true; return; }
+        alive = true;
+        const { pos, dir } = pointOnPath(m.path, pt);
+        // two abreast, a little stagger so it reads as a column
+        const side = (i % 2 === 0 ? 1 : -1) * 0.7;
+        g.position.set(pos.x - dir.z * side, pos.y + Math.abs(Math.sin(t * 8 + i)) * 0.12, pos.z + dir.x * side);
+        g.rotation.y = Math.atan2(dir.x, dir.z);
+        const fade = pt < m.fadeIn ? pt / m.fadeIn : pt > m.fadeOut ? 1 - (pt - m.fadeOut) / (m.len - m.fadeOut) : 1;
+        g.scale.setScalar(1.3 * Math.max(0.01, fade));
+        g.visible = true;
+      });
+      if (!alive) for (const g of m.members) { this.scene.remove(g); disposeTree(g); }
+      return alive;
+    });
+  }
+
+  // ---------- builders at work ----------
+
+  /** A couple of villagers hammer away at every building being upgraded. */
+  private updateBuilders(constructing: Partial<Record<BuildingId, number>>): void {
+    for (const [id, b] of this.builders) {
+      if (constructing[id] !== undefined) continue;
+      this.scene.remove(b.g);
+      disposeTree(b.g);
+      this.builders.delete(id);
+    }
+    for (const id of Object.keys(constructing) as BuildingId[]) {
+      if (this.builders.has(id) || id === 'wall') continue;
+      const slot = this.slots.get(id);
+      if (!slot) continue;
+      const [x, z] = LAYOUT[id];
+      const g = new THREE.Group();
+      const arms: THREE.Object3D[] = [];
+      // stand on the plaza side of the building, just clear of it
+      const dx = 0 - x, dz = 4 - z;
+      const d = Math.hypot(dx, dz) || 1;
+      const ux = dx / d, uz = dz / d;
+      const r = slot.radius * 0.85 + 1.2;
+      for (const side of [-1, 1]) {
+        const w = person(side < 0 ? 0x8e3a1f : 0x6f7c35);
+        const arm = new THREE.Group();
+        arm.position.set(0.3, 1.0, 0);
+        arm.add(box(0.07, 0.75, 0.07, 0x6e4a2a, 0, 0, 0.0));
+        arm.add(box(0.3, 0.16, 0.16, 0x5d6b75, 0, 0.72, 0.05));
+        w.add(arm);
+        arms.push(arm);
+        const px = x + ux * r - uz * side * 1.3, pz = z + uz * r + ux * side * 1.3;
+        w.position.set(px, OUTSIDE.includes(id) ? heightAt(px, pz) : 0, pz);
+        w.rotation.y = Math.atan2(-ux, -uz);
+        w.scale.setScalar(1.3);
+        g.add(w);
+      }
+      this.scene.add(g);
+      this.builders.set(id, { g, arms });
+    }
+  }
+
   // ---------- leaves ----------
 
   private initLeaves(): void {
@@ -641,6 +748,8 @@ export class VillageRenderer {
       p.g.rotation.y = Math.atan2(dir.x, dir.z);
     }
     if (this.guards) for (const gd of this.guards.children) gd.rotation.y += Math.sin(t * 0.6 + (gd.userData.guard as number) * 1.7) * 0.004;
+    for (const b of this.builders.values()) b.arms.forEach((a, i) => { a.rotation.x = -0.9 + Math.sin(t * 9 + i * 1.7) * 0.9; });
+    this.stepMarches(dt, t);
     this.stepLeaves(dt, t);
     // smoke puffs
     for (const s of this.smoke) {
@@ -704,10 +813,33 @@ function makeLantern(): THREE.Group {
 }
 
 
-function pathLength(p: THREE.Vector3[]): number {
+function pathLength(p: THREE.Vector3[], closed = true): number {
   let l = 0;
-  for (let i = 0; i < p.length; i++) l += p[i].distanceTo(p[(i + 1) % p.length]);
+  for (let i = 0; i < (closed ? p.length : p.length - 1); i++) l += p[i].distanceTo(p[(i + 1) % p.length]);
   return l;
+}
+
+/** From the plaza, out through the gate, down the road and off into the trees. */
+const MARCH_ROAD: [number, number][] = [[0, 11], [0, 44], [0, 72], [-5, 84], [-16, 96]];
+
+/** A few figures that stand for an army: its biggest contingents, up to six. */
+function marchFigures(units: Units): TroopModel[] {
+  const map: Partial<Record<keyof Units, TroopModel>> = {
+    spear: 'spear', sword: 'sword', axe: 'axe', archer: 'archer', scout: 'scout', light: 'light', marcher: 'marcher',
+    heavy: 'heavy', paladin: 'paladin', sorcerer: 'sorcerer', druid: 'druid', goblin: 'goblin', noble: 'noble', ram: 'axe', catapult: 'axe',
+  };
+  const kinds = (Object.entries(units) as [keyof Units, number][]).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]);
+  const total = kinds.reduce((a, [, n]) => a + n, 0);
+  const n = Math.min(6, Math.max(2, Math.round(Math.log10(total + 1) * 2)));
+  const out: TroopModel[] = [];
+  for (let i = 0; out.length < n && kinds.length; i++) {
+    const m = map[kinds[i % kinds.length][0]];
+    if (m) out.push(m);
+    if (i > 20) break;
+  }
+  // the heroes and noblemen always ride along if present
+  for (const [k] of kinds) { const m = map[k]; if (m && ['paladin', 'sorcerer', 'druid', 'goblin', 'noble'].includes(m) && !out.includes(m)) out.push(m); }
+  return out;
 }
 
 function pointOnPath(p: THREE.Vector3[], t: number): { pos: THREE.Vector3; dir: THREE.Vector3 } {
