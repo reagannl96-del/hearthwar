@@ -3,7 +3,7 @@ import { resetNavOrder } from '../navOrder';
 import { SPEED_PRESETS } from '../../engine/world';
 import { Btn, Modal, Section } from '../components/common';
 import { fmtDur } from '../format';
-import { host, paused, prefs, restartRealm, setPaused, setPrefs, setWarp, stopHost, toast, view, warp } from '../store';
+import { host, paused, prefs, restartRealm, setPaused, setPrefs, setWarp, leaveRealm, toast, view, warp } from '../store';
 
 export function SettingsScreen() {
   const h = host.value!;
@@ -123,7 +123,7 @@ export function SettingsScreen() {
             {confirmLeave ? (
               <>
                 <span class="small">Return to the realm list?</span>
-                <Btn small onClick={() => stopHost()}>Yes, leave</Btn>
+                <Btn small onClick={() => leaveRealm()}>Yes, leave</Btn>
                 <Btn small variant="ghost" onClick={() => setConfirmLeave(false)}>Stay</Btn>
               </>
             ) : <Btn variant="quiet" onClick={() => setConfirmLeave(true)}>Switch realm…</Btn>}

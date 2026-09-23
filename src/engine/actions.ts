@@ -61,8 +61,8 @@ export type Action =
   | { type: 'tribeDiplomacy'; tribe: number; status: Diplomacy | null }
   | { type: 'tribeEdit'; description?: string; internal?: string; name?: string; tag?: string }
   | { type: 'tribeDisband' }
-  | { type: 'forumThread'; title: string; text: string }
-  | { type: 'forumReply'; thread: number; text: string }
+  | { type: 'forumThread'; title: string; text: string; report?: number }
+  | { type: 'forumReply'; thread: number; text: string; report?: number }
   | { type: 'forumDelete'; thread: number; post?: number }
   | { type: 'forumPin'; thread: number; sticky: boolean }
   | { type: 'forumRead'; thread: number };
@@ -490,8 +490,8 @@ export function applyAction(w: World, pid: number, a: Action): ActionResult {
     case 'tribeDiplomacy': return setDiplomacy(w, pid, a.tribe, a.status);
     case 'tribeEdit': return editTribe(w, pid, a);
     case 'tribeDisband': return disbandTribe(w, pid);
-    case 'forumThread': return forumNewThread(w, pid, a.title, a.text);
-    case 'forumReply': return forumReply(w, pid, a.thread, a.text);
+    case 'forumThread': return forumNewThread(w, pid, a.title, a.text, a.report);
+    case 'forumReply': return forumReply(w, pid, a.thread, a.text, a.report);
     case 'forumDelete': return forumDelete(w, pid, a.thread, a.post);
     case 'forumPin': return forumPin(w, pid, a.thread, a.sticky);
     case 'forumRead': return forumRead(w, pid, a.thread);

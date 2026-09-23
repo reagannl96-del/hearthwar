@@ -1,7 +1,7 @@
 import { useState } from 'preact/hooks';
 import { BUILDINGS, BUILDING_ORDER } from '../../engine/data/buildings';
 import { ARMY_ORDER, ITEM_BY_ID, UNITS } from '../../engine/data/units';
-import type { BattleData, Report, ResKey, SideInfo, UnitId, Units } from '../../engine/types';
+import type { BattleData, Report, ResKey, SideInfo, UnitId, Units, SharedReport } from '../../engine/types';
 import { Icon } from '../art/icons';
 import { Btn, Empty, PlayerLink, Res, Section, VillageLink, UnitIcon, unitName } from '../components/common';
 import { fmt, fmtAgo, fmtClock } from '../format';
@@ -47,7 +47,7 @@ export function ReportsScreen({ id }: { id?: number }) {
               <li class={`report-item ${r.read ? '' : 'is-unread'}`}>
                 <span class={`dot dot-${r.color}`} />
                 <button type="button" class="link grow" onClick={() => go({ name: 'reports', id: r.id })}>{r.title}</button>
-                {r.battle?.loot && <span class="muted small num">{fmt(r.battle.loot.wood + r.battle.loot.clay + r.battle.loot.iron)} loot</span>}
+                {r.battle?.loot && <Haul loot={r.battle.loot.wood + r.battle.loot.clay + r.battle.loot.iron} capacity={r.battle.capacity} />}
                 <span class="muted small">{fmtAgo(r.t, now.value)}</span>
                 <button type="button" class="icon-btn" aria-label="Delete report" onClick={() => act({ type: 'deleteReport', id: r.id })}>
                   <Icon name="close" size={14} />
@@ -93,7 +93,74 @@ function ReportView({ r }: { r: Report }) {
         )}
         {r.battle && <Battle b={r.battle} kind={r.kind} />}
       </article>
+      {view.value!.me.tribeId != null && <ShareReport r={r} />}
     </div>
+  );
+}
+
+/** Post a copy of this report in the tribe forum: in a new thread, or into one already running. */
+function ShareReport({ r }: { r: Report }) {
+  const [open, setOpen] = useState(false);
+  const [thread, setThread] = useState<number | 'new'>('new');
+  const [title, setTitle] = useState(r.title.slice(0, 80));
+  const [text, setText] = useState('');
+  const tribe = host.value!.tribeHome().tribe;
+  if (!tribe) return null;
+  const share = () => {
+    const ok = thread === 'new'
+      ? act({ type: 'forumThread', title, text, report: r.id }, `Report shared in a new thread in [${tribe.tag}]'s forum.`)
+      : act({ type: 'forumReply', thread, text, report: r.id }, `Report posted in "${tribe.forum.find((x) => x.id === thread)?.title ?? 'the thread'}".`);
+    if (ok) { setOpen(false); setText(''); }
+  };
+  return (
+    <Section title="Share with your tribe">
+      {!open ? (
+        <div class="row gap">
+          <Btn variant="ghost" onClick={() => setOpen(true)}><Icon name="tribe" size={16} /> Share to [{tribe.tag}] forum</Btn>
+          <span class="muted small">Your tribe mates will see a copy of this report in the forum.</span>
+        </div>
+      ) : (
+        <form class="stack-sm share-form" onSubmit={(e) => { e.preventDefault(); share(); }}>
+          <label class="field"><span>Post it in</span>
+            <select value={String(thread)} onChange={(e) => { const v = (e.currentTarget as HTMLSelectElement).value; setThread(v === 'new' ? 'new' : Number(v)); }}>
+              <option value="new">A new thread</option>
+              {tribe.forum.map((x) => <option value={String(x.id)}>{x.title}</option>)}
+            </select>
+          </label>
+          {thread === 'new' && (
+            <label class="field"><span>Thread title</span><input type="text" maxLength={80} value={title} onInput={(e) => setTitle(e.currentTarget.value)} /></label>
+          )}
+          <label class="field"><span>Message (optional)</span><textarea rows={3} value={text} onInput={(e) => setText(e.currentTarget.value)} placeholder="Anything to add?" /></label>
+          <div class="row gap">
+            <Btn type="submit" disabled={thread === 'new' && !title.trim()}>Share report</Btn>
+            <Btn variant="quiet" onClick={() => setOpen(false)}>Cancel</Btn>
+          </div>
+        </form>
+      )}
+    </Section>
+  );
+}
+
+/** A report as it appears inside a forum post. */
+export function SharedReportCard({ r }: { r: SharedReport }) {
+  const [open, setOpen] = useState(false);
+  const loot = r.battle?.loot ? r.battle.loot.wood + r.battle.loot.clay + r.battle.loot.iron : 0;
+  return (
+    <article class={`rep-card rep-${r.color} shared-report`}>
+      <button type="button" class="shared-head" onClick={() => setOpen(!open)} aria-expanded={open}>
+        <span class={`dot dot-${r.color}`} />
+        <b class="grow">{r.title}</b>
+        {r.battle?.loot && <Haul loot={loot} capacity={r.battle.capacity} />}
+        <span class="muted small">{open ? 'Hide' : 'Show report'}</span>
+      </button>
+      {open && (
+        <div class="shared-body">
+          {r.text && <p class="rep-text">{r.text}</p>}
+          {r.res && <span class="cost">{(['wood', 'clay', 'iron'] as ResKey[]).map((k) => <Res k={k} n={r.res![k]} />)}</span>}
+          {r.battle && <Battle b={r.battle} kind={r.kind} shared />}
+        </div>
+      )}
+    </article>
   );
 }
 
@@ -168,9 +235,9 @@ function LuckMeter({ luck }: { luck: number }) {
   );
 }
 
-function Battle({ b, kind }: { b: BattleData; kind: Report['kind'] }) {
+function Battle({ b, kind, shared }: { b: BattleData; kind: Report['kind']; shared?: boolean }) {
   const pv = view.value!;
-  const mine = b.attacker.playerId === pv.me.id;
+  const mine = b.attacker.playerId === pv.me.id && !shared;
   const cols = columns(b);
   const attWon = b.winner === 'attacker';
   const good = attWon === mine;
@@ -270,6 +337,7 @@ function Battle({ b, kind }: { b: BattleData; kind: Report['kind'] }) {
                   <span class="haul">
                     <span class="haul-bar"><span style={{ width: `${Math.min(100, (lootSum / Math.max(1, b.capacity ?? lootSum)) * 100)}%` }} /></span>
                     <span class="muted small num">{fmt(lootSum)} / {fmt(b.capacity ?? 0)}</span>
+                    <Haul loot={lootSum} capacity={b.capacity} bare />
                   </span>
                 </dd>
               </>
@@ -300,5 +368,20 @@ function Battle({ b, kind }: { b: BattleData; kind: Report['kind'] }) {
         </div>
       )}
     </>
+  );
+}
+
+/**
+ * The haul, as Tribal Wars shows it: a loot sack drawn solid when the troops came back
+ * as full as they could carry (there was more to take), faded when they had room to spare.
+ */
+function Haul({ loot, capacity, bare }: { loot: number; capacity?: number; bare?: boolean }) {
+  const full = capacity !== undefined && capacity > 0 && loot >= capacity - 1;
+  const title = full ? `Full haul: the troops carried all they could (${fmt(loot)}). There was more to take.` : `Partial haul: ${fmt(loot)}${capacity ? ` of ${fmt(capacity)}` : ''} carried. The village was picked clean.`;
+  return (
+    <span class={`haul-icon ${full ? 'is-full' : ''}`} title={title}>
+      <Icon name="haul" size={18} />
+      {!bare && <span class="small num">{fmt(loot)}</span>}
+    </span>
   );
 }

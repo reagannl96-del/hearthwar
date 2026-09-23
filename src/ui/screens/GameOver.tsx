@@ -1,6 +1,6 @@
 import { useState } from 'preact/hooks';
 import { Btn } from '../components/common';
-import { host, stopHost, view, vid } from '../store';
+import { host, leaveRealm, view, vid } from '../store';
 
 export function GameOver() {
   const [name, setName] = useState('New Hope');
@@ -19,7 +19,7 @@ export function GameOver() {
           <input id="respawn-name" value={name} maxLength={32} onInput={(e) => setName(e.currentTarget.value)} />
         </label>
         <div class="row gap end">
-          <Btn variant="ghost" onClick={() => stopHost()}>Leave realm</Btn>
+          <Btn variant="ghost" onClick={() => leaveRealm()}>Leave realm</Btn>
           <Btn
             onClick={() => {
               if (host.value?.respawn(name.trim() || 'New Hope')) {

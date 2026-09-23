@@ -431,6 +431,20 @@ const UNIT_ART: Partial<Record<UnitId, Art>> = {
 };
 
 const paths: Record<string, () => JSX.Element> = {
+  // ---- the haul: a stuffed loot sack (drawn solid for a full haul, faded for a partial one) ----
+  haul: () => (
+    <Ink>
+      <path d="M5.2 21.4c-2-1.2-2.6-4.6-1.2-7.8 1.1-2.6 3.1-4.4 5.2-5.2h5.6c2.1.8 4.1 2.6 5.2 5.2 1.4 3.2.8 6.6-1.2 7.8Z" fill="#c9a060" />
+      <path d="M6.8 12.4c-.9 1.6-1.3 3.6-1 5.4" fill="none" stroke="#e8c98a" stroke-width="1.1" />
+      <path d="M9.2 8.4h5.6l-.6 1.8H9.8Z" fill="#8a6230" />
+      <rect x="5.6" y="3.2" width="5.6" height="3" rx="1.5" fill={WOOD} transform="rotate(-18 8.4 4.7)" />
+      <ellipse cx="10.9" cy="3.8" rx="1.1" ry="1.3" fill={GRAIN} transform="rotate(-18 8.4 4.7)" stroke-width=".7" />
+      <rect x="11.4" y="2.2" width="4.4" height="3" rx=".5" fill={CLAY} transform="rotate(10 13.6 3.7)" />
+      <path d="M15.4 6.8 17.2 3.4 19.6 5.6 18.2 8Z" fill={STEEL} />
+      <path d="M8 16.4h8" stroke="#8a6230" stroke-width="1" />
+    </Ink>
+  ),
+
   // ---- resources ----
   wood: () => (
     <Ink>

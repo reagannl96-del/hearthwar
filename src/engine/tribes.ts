@@ -4,7 +4,7 @@
 
 import { commandsTo } from './cmdindex';
 import { news } from './commands';
-import type { ActionResult, Diplomacy, Player, Tribe, TribeAlert, TribeRight, World } from './types';
+import type { ActionResult, Diplomacy, Player, Tribe, TribeAlert, TribeRight, World, ForumPost, SharedReport } from './types';
 
 export const TRIBE_MAX_MEMBERS = 25;
 export const TRIBE_RIGHTS: TribeRight[] = ['lead', 'invite', 'diplomacy', 'forum', 'internal'];
@@ -228,27 +228,43 @@ export function disbandTribe(w: World, pid: number): ActionResult {
   return { ok: true };
 }
 
-export function forumNewThread(w: World, pid: number, title: string, text: string): ActionResult {
+/** A frozen copy of one of the player's own reports, for posting in the forum. */
+function shareable(w: World, pid: number, reportId: number | undefined): SharedReport | null | undefined {
+  if (reportId === undefined) return undefined;
+  const r = w.players[pid]?.reports.find((x) => x.id === reportId);
+  if (!r) return null;
+  const copy = JSON.parse(JSON.stringify({ kind: r.kind, title: r.title, color: r.color, t: r.t, battle: r.battle, text: r.text, res: r.res })) as SharedReport;
+  return copy;
+}
+
+export function forumNewThread(w: World, pid: number, title: string, text: string, reportId?: number): ActionResult {
   const t = tribeOf(w, pid);
   if (!t) return fail('You are not in a tribe.');
   const ti = clean(title, 80), tx = String(text ?? '').trim().slice(0, 4000);
+  const report = shareable(w, pid, reportId);
+  if (report === null) return fail('That report is gone.');
   if (!ti) return fail('Give the thread a title.');
-  if (!tx) return fail('Write something first.');
+  if (!tx && !report) return fail('Write something first.');
   t.forum ??= [];
-  const thread = { id: w.nextId++, title: ti, by: pid, t: w.now, posts: [{ id: w.nextId++, by: pid, t: w.now, text: tx }] };
+  const first: ForumPost = { id: w.nextId++, by: pid, t: w.now, text: tx };
+  if (report) first.report = report;
+  const thread = { id: w.nextId++, title: ti, by: pid, t: w.now, posts: [first] };
   t.forum.unshift(thread);
   (w.players[pid].forumSeen ??= {})[thread.id] = thread.posts[0].id;
   if (t.forum.length > FORUM_MAX_THREADS) t.forum.length = FORUM_MAX_THREADS;
   return { ok: true, data: thread.id };
 }
 
-export function forumReply(w: World, pid: number, threadId: number, text: string): ActionResult {
+export function forumReply(w: World, pid: number, threadId: number, text: string, reportId?: number): ActionResult {
   const t = tribeOf(w, pid);
   const th = t?.forum?.find((x) => x.id === threadId);
   if (!t || !th) return fail('That thread is gone.');
   const tx = String(text ?? '').trim().slice(0, 4000);
-  if (!tx) return fail('Write something first.');
-  const post = { id: w.nextId++, by: pid, t: w.now, text: tx };
+  const report = shareable(w, pid, reportId);
+  if (report === null) return fail('That report is gone.');
+  if (!tx && !report) return fail('Write something first.');
+  const post: ForumPost = { id: w.nextId++, by: pid, t: w.now, text: tx };
+  if (report) post.report = report;
   th.posts.push(post);
   (w.players[pid].forumSeen ??= {})[th.id] = post.id;
   if (th.posts.length > FORUM_MAX_POSTS) th.posts.splice(1, th.posts.length - FORUM_MAX_POSTS);

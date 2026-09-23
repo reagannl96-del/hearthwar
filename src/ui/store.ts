@@ -103,8 +103,36 @@ export function dismissToast(id: number) {
 }
 
 export function go(r: Route) {
+  const same = JSON.stringify(route.value) === JSON.stringify(r);
   route.value = r;
-  if (typeof window !== 'undefined') window.scrollTo({ top: 0 });
+  if (typeof window !== 'undefined') {
+    // each screen is a step in the browser's history, so Back and Forward move around the game
+    if (!same) try { history.pushState({ hw: r }, ''); } catch { /* history unavailable */ }
+    window.scrollTo({ top: 0 });
+  }
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('popstate', (e) => {
+    const r = (e.state as { hw?: Route } | null)?.hw;
+    if (host.value && r) route.value = r;
+  });
+}
+
+/**
+ * Which realm to reopen when the page loads again: a refresh (or coming back to the
+ * tab) drops the player straight back into the game instead of the title screen.
+ * Cleared when they leave the realm on purpose.
+ */
+const RESUME_KEY = 'hw-resume';
+export function resumeTarget(): { kind: 'online' } | { kind: 'local'; id: string } | null {
+  const v = lsGet(RESUME_KEY);
+  if (v === 'online') return { kind: 'online' };
+  if (v?.startsWith('local:')) return { kind: 'local', id: v.slice(6) };
+  return null;
+}
+export function forgetResume(): void {
+  lsSet(RESUME_KEY, '');
 }
 
 export function act(a: Action, success?: string): boolean {
@@ -215,6 +243,8 @@ function diff(prev: PlayerView | null, next: PlayerView) {
 export function startHost(h: HostBase) {
   stopHost();
   host.value = h;
+  lsSet(RESUME_KEY, h.multiplayer ? 'online' : `local:${h.world.id}`);
+  try { history.replaceState({ hw: { name: 'village' } }, ''); } catch { /* history unavailable */ }
   if (import.meta.env.DEV) (window as unknown as { __hw: HostBase }).__hw = h;
   if (h.multiplayer) {
     const r = h as HostBase & { onServerError: ((m: string) => void) | null; onConnection: ((up: boolean) => void) | null };
@@ -244,6 +274,12 @@ export function startHost(h: HostBase) {
     h.tick();
     now.value = h.now;
   }, 250);
+}
+
+/** The player chose to leave the realm: back to the title screen, and no auto-resume next time. */
+export function leaveRealm() {
+  forgetResume();
+  stopHost();
 }
 
 export function stopHost() {

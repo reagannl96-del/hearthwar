@@ -81,3 +81,29 @@ describe('tribes', () => {
     expect(pb.invitedBy.map((i) => i.tribeId)).toEqual([tid]);
   });
 });
+
+describe('sharing reports in the tribe forum', () => {
+  it('posts a frozen copy of a report, in a new thread or an old one', () => {
+    const w = createWorld({ worldName: 'T', playerName: '', villageName: '', multiplayer: true, seed: 5, config: { ...defaultConfig(), aiCount: 2, size: 60 } });
+    const a = spawnPlayer(w, 'Alda', 'A')!;
+    const b = spawnPlayer(w, 'Bram', 'B')!;
+    expect(applyAction(w, a.id, { type: 'tribeCreate', name: 'Hearth Wardens', tag: 'HWD' }).ok).toBe(true);
+    applyAction(w, a.id, { type: 'tribeInvite', name: 'Bram' });
+    applyAction(w, b.id, { type: 'tribeAccept', tribe: a.tribeId! });
+    a.reports.unshift({ id: 999, t: w.now, kind: 'attack', title: 'A attacks Barbarian village', color: 'green', read: true, battle: undefined, text: 'Easy pickings.' });
+    const r1 = applyAction(w, a.id, { type: 'forumThread', title: 'Look at this', text: '', report: 999 });
+    expect(r1.ok).toBe(true);
+    const th = w.tribes[a.tribeId!].forum![0];
+    expect(th.posts[0].report?.title).toBe('A attacks Barbarian village');
+    // the copy stays even when the report is deleted
+    applyAction(w, a.id, { type: 'deleteReport', id: 999 });
+    expect(th.posts[0].report?.text).toBe('Easy pickings.');
+    // someone else's report cannot be shared
+    expect(applyAction(w, b.id, { type: 'forumReply', thread: th.id, text: 'nice', report: 999 }).ok).toBe(false);
+    b.reports.unshift({ id: 1000, t: w.now, kind: 'defense', title: 'Held the wall', color: 'green', read: true });
+    expect(applyAction(w, b.id, { type: 'forumReply', thread: th.id, text: '', report: 1000 }).ok).toBe(true);
+    expect(th.posts[1].report?.title).toBe('Held the wall');
+    // and the tribe mates see it
+    expect(tribeHome(w, b.id).tribe!.forum[0].posts.length).toBe(2);
+  });
+});

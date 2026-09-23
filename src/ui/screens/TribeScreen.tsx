@@ -1,3 +1,4 @@
+import { SharedReportCard } from './ReportsScreen';
 import { useEffect, useState } from 'preact/hooks';
 import { RIGHT_LABEL, TRIBE_MAX_MEMBERS, TRIBE_RIGHTS } from '../../engine/tribes';
 import type { Diplomacy, TribeRight } from '../../engine/types';
@@ -350,7 +351,8 @@ function Forum({ t }: { t: MyTribeView }) {
                 <b>{t.names[p.by] ?? 'Someone'}</b> <span class="muted small">{fmtAgo(p.t, now.value)}</span>
                 {(mod || p.by === me) && i > 0 && <button type="button" class="link small" onClick={() => act({ type: 'forumDelete', thread: th.id, post: p.id })}>delete</button>}
               </div>
-              <p class="prewrap">{p.text}</p>
+              {p.text && <p class="prewrap">{p.text}</p>}
+              {p.report && <SharedReportCard r={p.report} />}
             </li>
           ))}
         </ul>

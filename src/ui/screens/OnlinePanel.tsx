@@ -2,7 +2,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { Connection } from '../../host/remote';
 import { GAME_SERVER_URL, currentSession, devLogin, onSessionChange, signInWithGoogle, signOut, type SessionLite } from '../../net/supabase';
 import { Btn } from '../components/common';
-import { startHost } from '../store';
+import { resumeTarget, startHost } from '../store';
 
 type Stage =
   | { s: 'checking' }
@@ -22,6 +22,14 @@ export function OnlinePanel() {
     refresh();
     return onSessionChange(refresh);
   }, []);
+  // after a refresh the player goes straight back into the realm they were playing
+  const [resumed, setResumed] = useState(false);
+  useEffect(() => {
+    if (stage.s === 'ready' && !resumed && resumeTarget()?.kind === 'online') {
+      setResumed(true);
+      void enter();
+    }
+  }, [stage.s]);
 
   const enter = async () => {
     setStage({ s: 'connecting' });

@@ -309,7 +309,9 @@ export interface Player {
 export type TribeRight = 'lead' | 'invite' | 'diplomacy' | 'forum' | 'internal';
 export type Diplomacy = 'ally' | 'nap' | 'enemy';
 
-export interface ForumPost { id: number; by: number; t: number; text: string }
+/** A report shared in the tribe forum: a frozen copy, so it reads the same for everyone and survives the original being deleted. */
+export interface SharedReport { kind: Report['kind']; title: string; color: ReportColor; t: number; battle?: BattleData; text?: string; res?: Res }
+export interface ForumPost { id: number; by: number; t: number; text: string; report?: SharedReport }
 export interface ForumThread { id: number; title: string; by: number; t: number; posts: ForumPost[]; sticky?: boolean }
 export interface TribeInvite { pid: number; by: number; t: number }
 

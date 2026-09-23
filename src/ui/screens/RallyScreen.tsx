@@ -1,6 +1,7 @@
+import type { ComponentChildren } from 'preact';
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { BUILDINGS, BUILDING_ORDER } from '../../engine/data/buildings';
-import { UNITS, UNIT_ORDER, HEROES } from '../../engine/data/units';
+import { ARMY_ORDER, UNITS, UNIT_ORDER, HEROES } from '../../engine/data/units';
 import { SCAVENGE_TIERS, distance, hasUnits, unitsCarry } from '../../engine/formulas';
 import type { BuildingId, UnitId, Units } from '../../engine/types';
 import type { CommandView, VillageView } from '../../engine/view';
@@ -341,11 +342,9 @@ function TroopsTab({ v }: { v: VillageView }) {
         {v.support.length === 0 ? <Empty>No foreign troops are stationed here.</Empty> : (
           <ul class="support-list">
             {v.support.map((s) => (
-              <li class="support-row">
+              <SupportRow host={v.id} from={s.fromVid} units={s.units} allLabel="Send all home" done="Support sent home.">
                 <span>{s.ownerName} · from {s.fromName}</span>
-                <UnitList units={s.units} />
-                <Btn small variant="ghost" onClick={() => act({ type: 'withdraw', host: v.id, from: s.fromVid }, 'Support sent home.')}>Send home</Btn>
-              </li>
+              </SupportRow>
             ))}
           </ul>
         )}
@@ -354,16 +353,49 @@ function TroopsTab({ v }: { v: VillageView }) {
         {v.stationed.length === 0 ? <Empty>None of this village's troops are stationed elsewhere.</Empty> : (
           <ul class="support-list">
             {v.stationed.map((s) => (
-              <li class="support-row">
+              <SupportRow host={s.hostVid} from={v.id} units={s.units} allLabel="Withdraw all" done="Troops are marching home.">
                 <span>In <VillageLink vid={s.hostVid} name={s.hostName} x={s.hostX} y={s.hostY} /> <span class="muted">({s.hostOwner})</span></span>
-                <UnitList units={s.units} />
-                <Btn small variant="ghost" onClick={() => act({ type: 'withdraw', host: s.hostVid, from: v.id }, 'Troops are marching home.')}>Withdraw</Btn>
-              </li>
+              </SupportRow>
             ))}
           </ul>
         )}
       </Section>
     </div>
+  );
+}
+
+/**
+ * A stack of support troops: send the whole stack home at once, or pick just
+ * some of them (the rest stay where they are).
+ */
+function SupportRow({ host, from, units, allLabel, done, children }: { host: number; from: number; units: Units; allLabel: string; done: string; children: ComponentChildren }) {
+  const [picking, setPicking] = useState(false);
+  const [pick, setPick] = useState<Units>({});
+  const kinds = ARMY_ORDER.filter((u) => (units[u] ?? 0) > 0);
+  const chosen: Units = {};
+  for (const u of kinds) { const n = Math.min(pick[u] ?? 0, units[u] ?? 0); if (n > 0) chosen[u] = n; }
+  const some = Object.keys(chosen).length > 0;
+  return (
+    <li class={`support-row ${picking ? 'is-picking' : ''}`}>
+      {children}
+      <UnitList units={units} />
+      <span class="row gap">
+        <Btn small variant="ghost" onClick={() => act({ type: 'withdraw', host, from }, done)}>{allLabel}</Btn>
+        <Btn small variant="quiet" onClick={() => { setPicking(!picking); setPick({}); }}>{picking ? 'Cancel' : 'Choose troops'}</Btn>
+      </span>
+      {picking && (
+        <div class="support-pick">
+          {kinds.map((u) => (
+            <label class="send-row" title={unitName(u)}>
+              <UnitIcon u={u} size={20} />
+              <span class="send-name">{unitName(u)}</span>
+              <NumInput value={pick[u] ?? ''} max={units[u] ?? 0} onInput={(n) => setPick({ ...pick, [u]: n === '' ? 0 : n })} />
+            </label>
+          ))}
+          <Btn small disabled={!some} onClick={() => { if (act({ type: 'withdraw', host, from, units: chosen }, done)) { setPicking(false); setPick({}); } }}>Send these home</Btn>
+        </div>
+      )}
+    </li>
   );
 }
 
