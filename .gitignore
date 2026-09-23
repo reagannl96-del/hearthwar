@@ -1,0 +1,12 @@
+node_modules
+dist
+*.log
+.prof
+server-dist
+.env
+.env.*
+!.env.example
+!.env.server.example
+!.env.online
+.claude
+world-dev.json

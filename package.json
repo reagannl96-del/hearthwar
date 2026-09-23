@@ -1,0 +1,39 @@
+{
+  "name": "hearthwar",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Hearthwar - a fast-paced single-player village war game inspired by Tribal Wars",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --open",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --open",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "simulate": "vite-node scripts/simulate.ts",
+    "server:build": "vite build --ssr server/index.ts --outDir server-dist --emptyOutDir",
+    "server:start": "node server-dist/index.js",
+    "server:local": "npm run server:build && node server-dist/index.js --dev",
+    "dev:online": "vite --open --mode online"
+  },
+  "dependencies": {
+    "@fontsource/alegreya-sans": "^5.3.0",
+    "@fontsource/grenze-gotisch": "^5.3.0",
+    "@preact/signals": "^2.11.2",
+    "@supabase/supabase-js": "^2.117.1",
+    "preact": "^10.29.8",
+    "three": "^0.186.0",
+    "ws": "^8.21.3"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.28.0",
+    "@preact/preset-vite": "^2.10.6",
+    "@types/node": "^26.6.2",
+    "@types/three": "^0.186.0",
+    "@types/ws": "^8.18.1",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.0",
+    "vite-plugin-singlefile": "^2.3.3",
+    "vitest": "^5.0.1"
+  }
+}

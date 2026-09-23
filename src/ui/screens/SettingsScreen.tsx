@@ -1,0 +1,149 @@
+import { useState } from 'preact/hooks';
+import { SPEED_PRESETS } from '../../engine/world';
+import { Btn, Section } from '../components/common';
+import { fmtDur } from '../format';
+import { host, paused, prefs, setPaused, setPrefs, setWarp, stopHost, toast, view, warp } from '../store';
+
+export function SettingsScreen() {
+  const h = host.value!;
+  const pv = view.value!;
+  const p = prefs.value;
+  const [copied, setCopied] = useState(false);
+  const [speed, setSpeed] = useState(pv.config.speed);
+  const [unitSpeed, setUnitSpeed] = useState(pv.config.unitSpeed);
+  const [offline, setOffline] = useState(h.offline);
+  const [confirmLeave, setConfirmLeave] = useState(false);
+
+  const exportSave = async () => {
+    const text = h.exportSave();
+    try {
+      const blob = new Blob([text], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `${pv.worldName.replace(/[^\w-]+/g, '_')}.hearthwar.json`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    } catch { /* downloads may be blocked */ }
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+    } catch { /* clipboard may be blocked */ }
+  };
+
+  return (
+    <div class="stack">
+      <div class="page-head"><h1>Settings</h1></div>
+      <div class="grid-2">
+        {!h.multiplayer && (
+        <Section title="Time">
+          <p class="muted">This is your realm, so you control its clock. Pausing stops everything, rival rulers included.</p>
+          <div class="row gap wrap">
+            <Btn variant={paused.value ? 'primary' : 'ghost'} onClick={() => setPaused(!paused.value)}>{paused.value ? 'Resume' : 'Pause'}</Btn>
+            {[1, 2, 4].map((n) => (
+              <Btn variant={warp.value === n ? 'primary' : 'ghost'} onClick={() => setWarp(n)}>{n}× time</Btn>
+            ))}
+          </div>
+          <div class="row gap wrap">
+            <Btn variant="ghost" onClick={() => { const ms = h.skipToNext(); toast(`Skipped ahead ${fmtDur(ms)}.`); }}>Skip to the next event</Btn>
+            <Btn variant="ghost" onClick={() => { h.skip(10 * 60_000); toast('Ten minutes pass…'); }}>Skip 10 minutes</Btn>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" checked={offline} onChange={(e) => { const on = e.currentTarget.checked; setOffline(on); h.offline = on; void h.save(); }} />
+            Keep the world running while the game is closed
+          </label>
+          <p class="muted small">When off, the realm freezes when you leave and resumes exactly where you stopped.</p>
+        </Section>
+        )}
+        {!h.multiplayer && (
+        <Section title="World speed">
+          <p class="muted">Change the pace mid-game. New constructions and marches use the new speed.</p>
+          <div class="row gap wrap">
+            {Object.values(SPEED_PRESETS).map((s) => (
+              <Btn small variant={speed === s.speed && unitSpeed === s.unitSpeed ? 'primary' : 'ghost'} onClick={() => { setSpeed(s.speed); setUnitSpeed(s.unitSpeed); }}>{s.label}</Btn>
+            ))}
+          </div>
+          <div class="row gap wrap">
+            <label class="field"><span>Economy</span><input id="set-speed" type="number" min={1} max={2000} value={speed} onInput={(e) => setSpeed(Math.max(1, Number(e.currentTarget.value) || 1))} /></label>
+            <label class="field"><span>Marching</span><input id="set-unit" type="number" min={1} max={2000} value={unitSpeed} onInput={(e) => setUnitSpeed(Math.max(1, Number(e.currentTarget.value) || 1))} /></label>
+          </div>
+          <Btn disabled={speed === pv.config.speed && unitSpeed === pv.config.unitSpeed} onClick={() => { h.setSpeed(speed, unitSpeed); toast('World speed changed.', 'good'); }}>Apply</Btn>
+        </Section>
+        )}
+        <Section title="Village scene">
+          <p class="muted small">Villages in the snowy north of the map wear winter; everywhere else it is autumn.</p>
+          <div class="row gap wrap">
+            {(['auto', 'fall', 'winter'] as const).map((s) => (
+              <Btn small variant={p.season === s ? 'primary' : 'ghost'} onClick={() => setPrefs({ season: s })}>
+                {s === 'auto' ? 'Season by location' : s === 'fall' ? 'Always autumn' : 'Always winter'}
+              </Btn>
+            ))}
+          </div>
+          <div class="row gap wrap">
+            {(['auto', 'day', 'night'] as const).map((s) => (
+              <Btn small variant={p.sceneTime === s ? 'primary' : 'ghost'} onClick={() => setPrefs({ sceneTime: s })}>
+                {s === 'auto' ? 'Day & night follow my clock' : s === 'day' ? 'Always day' : 'Always night'}
+              </Btn>
+            ))}
+          </div>
+        </Section>
+        <Section title="Sound & alerts">
+          <label class="toggle"><input type="checkbox" checked={p.sound} onChange={(e) => setPrefs({ sound: e.currentTarget.checked })} /> Sound effects</label>
+          <label class="toggle">
+            <input
+              type="checkbox"
+              checked={p.notify}
+              onChange={async (e) => {
+                const on = e.currentTarget.checked;
+                if (on && typeof Notification !== 'undefined' && Notification.permission !== 'granted') {
+                  try {
+                    const r = await Notification.requestPermission();
+                    if (r !== 'granted') { toast('Notifications were not allowed.', 'warn'); return; }
+                  } catch { toast('Notifications are not available here.', 'warn'); return; }
+                }
+                setPrefs({ notify: on });
+              }}
+            />
+            Desktop alerts for incoming attacks while the tab is in the background
+          </label>
+        </Section>
+        <Section title="Saves">
+          <p class="muted">{h.multiplayer ? 'The shared realm lives on the server and is saved every 30 seconds.' : 'Your realm saves itself every few seconds in this browser. Export a copy to move it to another browser or keep a backup.'}</p>
+          <div class="row gap wrap">
+            {!h.multiplayer && <Btn variant="ghost" onClick={() => { void h.save().then(() => toast('Saved.', 'good')); }}>Save now</Btn>}
+            {!h.multiplayer && <Btn variant="ghost" onClick={exportSave}>Export save</Btn>}
+          </div>
+          {copied && <p class="small good-text">The save was also copied to your clipboard.</p>}
+          <div class="row gap wrap">
+            {confirmLeave ? (
+              <>
+                <span class="small">Return to the realm list?</span>
+                <Btn small onClick={() => stopHost()}>Yes, leave</Btn>
+                <Btn small variant="ghost" onClick={() => setConfirmLeave(false)}>Stay</Btn>
+              </>
+            ) : <Btn variant="quiet" onClick={() => setConfirmLeave(true)}>Switch realm…</Btn>}
+          </div>
+        </Section>
+        <Section title="Keyboard">
+          <dl class="facts">
+            <dt><kbd>A</kbd> / <kbd>D</kbd></dt><dd>Previous / next village</dd>
+            <dt><kbd>V</kbd></dt><dd>Village</dd>
+            <dt><kbd>M</kbd></dt><dd>Map</dd>
+            <dt><kbd>R</kbd></dt><dd>Reports</dd>
+            <dt><kbd>Q</kbd></dt><dd>Quests</dd>
+            <dt><kbd>P</kbd></dt><dd>Pause / resume</dd>
+          </dl>
+        </Section>
+        <Section title="This world">
+          <dl class="facts">
+            <dt>Economy speed</dt><dd class="num">{pv.config.speed}×</dd>
+            <dt>Marching speed</dt><dd class="num">{pv.config.unitSpeed}×</dd>
+            <dt>Map</dt><dd class="num">{pv.config.size}×{pv.config.size}</dd>
+            <dt>Rival rulers</dt><dd>{pv.config.aiCount} · {pv.config.difficulty}</dd>
+            <dt>Morale</dt><dd>{pv.config.morale ? 'on' : 'off'}</dd>
+            <dt>Luck</dt><dd class="num">±{Math.round(pv.config.luck * 100)}%</dd>
+          </dl>
+        </Section>
+      </div>
+    </div>
+  );
+}
