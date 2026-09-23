@@ -1,0 +1,27 @@
+# Render blueprint for the Hearthwar game server (free plan).
+# Render -> New -> Blueprint -> pick this repo. You'll be asked for the two secrets.
+services:
+  - type: web
+    name: hearthwar-server
+    runtime: docker
+    plan: free
+    healthCheckPath: /
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: ALLOWED_ORIGINS
+        value: https://quickee.io,https://www.quickee.io,https://hearthwar.vercel.app
+      - key: WORLD_NAME
+        value: The Ashen Marches
+      - key: WORLD_SPEED
+        value: "150"
+      - key: WORLD_UNIT_SPEED
+        value: "80"
+      - key: WORLD_SIZE
+        value: "120"
+      - key: WORLD_AI
+        value: "20"
+      - key: WORLD_DIFFICULTY
+        value: normal

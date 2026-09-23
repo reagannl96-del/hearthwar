@@ -253,6 +253,14 @@ async function main() {
   }, 1000);
   setInterval(() => void saveWorld(), 30_000);
 
+  // Free hosts (like Render) put servers to sleep after 15 idle minutes, which
+  // would freeze the world. Knocking on our own front door keeps it awake.
+  const selfUrl = env.KEEPALIVE_URL || env.RENDER_EXTERNAL_URL;
+  if (selfUrl) {
+    setInterval(() => void fetch(selfUrl).catch(() => {}), 10 * 60_000);
+    console.log(`Keep-alive pings ${selfUrl} every 10 minutes.`);
+  }
+
   const shutdown = async () => {
     console.log('Saving before shutdown…');
     await saveWorld();
