@@ -85,6 +85,10 @@ export function terrainAt(w: World, x: number, y: number): string {
 }
 
 export const aiThinkInterval = (w: World) => Math.min(300_000, Math.max(10_000, Math.round(3_000_000 / w.config.speed)));
+/** Beginner protection lasts a fixed 30 real minutes, whatever the world speed. */
+export const PROTECTION_MS = 30 * 60_000;
+export const protectionEnd = (w: World) => w.now + PROTECTION_MS;
+
 export const barbInterval = (w: World) => Math.max(15_000, Math.round((2 * HOUR) / w.config.speed));
 export const sampleInterval = (w: World) => Math.max(30_000, Math.round((5 * HOUR) / w.config.speed));
 export const itemInterval = (w: World) => Math.max(60_000, Math.round((24 * HOUR) / w.config.speed));
@@ -158,7 +162,7 @@ export function createWorld(o: NewWorldOptions): World {
     const hv = createVillage(w, hs[0], hs[1], o.villageName || `${o.playerName || 'Your'}'s village`, human.id);
     hv.res = res(600, 600, 600);
     human.villages.push(hv.id);
-    human.protectedUntil = w.now + Math.round((cfg.protectionHours * HOUR) / cfg.speed);
+    human.protectedUntil = protectionEnd(w);
   }
 
   // --- AI rulers ---
@@ -301,7 +305,7 @@ export function respawnHuman(w: World, villageName: string, pid = w.humanId): Vi
     human.villages.push(v.id);
     human.points = v.points;
     human.eliminated = false;
-    human.protectedUntil = w.now + Math.round((w.config.protectionHours * HOUR) / w.config.speed);
+    human.protectedUntil = protectionEnd(w);
     invalidateSpatial();
     w.mapRev++;
     return v;
@@ -345,7 +349,7 @@ function settle(w: World, p: Player, villageNameText: string): Village | null {
   p.villages.push(v.id);
   p.points = v.points;
   p.eliminated = false;
-  p.protectedUntil = w.now + Math.round((w.config.protectionHours * HOUR) / w.config.speed);
+  p.protectedUntil = protectionEnd(w);
   let made = 0;
   for (let k = 0; k < 80 && made < 5; k++) {
     const bx = x + randInt(w, -6, 6), by = y + randInt(w, -6, 6);

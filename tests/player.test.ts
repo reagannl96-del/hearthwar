@@ -3,6 +3,7 @@ import { applyAction, nobleInfo } from '../src/engine/actions';
 import { resolveBattle, computeLoot } from '../src/engine/combat';
 import { conquer } from '../src/engine/commands';
 import { advance } from '../src/engine/game';
+import { removeEvents } from '../src/engine/events';
 import { HOUR, MINUTE, unitsPop } from '../src/engine/formulas';
 import type { World } from '../src/engine/types';
 import { createWorld, defaultConfig, spawnPlayer } from '../src/engine/world';
@@ -61,6 +62,7 @@ describe('a human player', () => {
   it('builds, recruits, raids, scouts, trades and conquers', () => {
     const w = peacefulWorld();
     const { p, v } = human(w);
+    removeEvents(w, (e) => e.type === 'barb'); // keep the barbarians still for these checks
     const act = (a: Parameters<typeof applyAction>[2]) => {
       const r = applyAction(w, p.id, a);
       if (!r.ok) throw new Error(`${a.type}: ${r.error}`);
@@ -103,6 +105,7 @@ describe('a human player', () => {
 
     // --- raid a barbarian village ---
     const barb = nearestBarb(w, v.x, v.y);
+    barb.units = {}; // barbarians grow a few defenders over time; keep this raid clean
     const reportsBefore = p.reports.length;
     act({ type: 'send', vid: v.id, target: barb.id, kind: 'attack', units: { light: 20 } });
     expect(v.units.light).toBe(30);

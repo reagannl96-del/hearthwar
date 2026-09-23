@@ -98,19 +98,31 @@ function scavengeReturn(w: World, e: GameEvent): void {
 function barbGrowth(w: World): void {
   // barbarian villages slowly rebuild over the life of the world
   const ageDays = (w.now * w.config.speed) / 86_400_000;
-  const cap = Math.min(3000, 160 + ageDays * 35);
+  const cap = Math.min(3000, 160 + ageDays * 25);
   const barbs: Village[] = [];
   for (const id in w.villages) if (w.villages[id].ownerId === null) barbs.push(w.villages[id]);
-  const n = Math.max(1, Math.round(barbs.length * 0.04));
+  const n = Math.max(1, Math.round(barbs.length * 0.025));
   for (let i = 0; i < n && barbs.length > 0; i++) {
     const v = barbs[Math.floor(nextRandom(w) * barbs.length)];
     if (v.points >= cap) continue;
     const b = pick(w, BARB_BUILDINGS);
-    if (b === 'wall' && nextRandom(w) < 0.7) continue;
-    if (v.buildings[b] >= Math.min(BUILDINGS[b].max, b === 'wall' ? 10 : 25)) continue;
+    if (b === 'wall' && nextRandom(w) < 0.5) continue;
+    if (v.buildings[b] >= Math.min(BUILDINGS[b].max, b === 'wall' ? 8 : 25)) continue;
     updateVillage(w, v, w.now);
     v.buildings[b]++;
     refreshPoints(w, v);
+  }
+  // Barbarians never attack, but they slowly gather a few defenders (a bigger
+  // village keeps a bigger garrison), so old barbs are no longer free loot.
+  const share = barbs.length * 0.015;
+  const m = Math.floor(share) + (nextRandom(w) < share % 1 ? 1 : 0);
+  for (let i = 0; i < m && barbs.length > 0; i++) {
+    const v = barbs[Math.floor(nextRandom(w) * barbs.length)];
+    const have = (v.units.spear ?? 0) + (v.units.sword ?? 0) + (v.units.archer ?? 0);
+    if (have >= Math.floor(v.points * 0.25)) continue;
+    v.units.spear = (v.units.spear ?? 0) + 1 + Math.floor(nextRandom(w) * 2);
+    if (nextRandom(w) < 0.4) v.units.sword = (v.units.sword ?? 0) + 1 + Math.floor(nextRandom(w) * 2);
+    else if (w.config.archers && nextRandom(w) < 0.3) v.units.archer = (v.units.archer ?? 0) + 1;
   }
 }
 

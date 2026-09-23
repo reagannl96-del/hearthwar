@@ -363,3 +363,111 @@ export function plot(w: number, d: number): THREE.Group {
   g.add(sign);
   return g;
 }
+
+// ---------- troops ----------
+
+const STEEL = 0xb9c4cc;
+const STEEL_DK = 0x6a7782;
+const SHAFT = 0x7a5230;
+
+export type TroopModel = 'spear' | 'sword' | 'axe' | 'archer' | 'scout' | 'noble' | 'light' | 'marcher' | 'heavy' | 'paladin';
+
+function helmet(g: THREE.Group, color = STEEL) {
+  g.add(cyl(0.16, 0.23, 0.2, color, 7, 0, 1.3));
+}
+
+function bow(color = SHAFT): THREE.Mesh {
+  const m = mesh(new THREE.TorusGeometry(0.45, 0.035, 4, 10, Math.PI), color);
+  m.rotation.set(0, Math.PI / 2, Math.PI / 2);
+  return m;
+}
+
+/** One of your soldiers on foot, carrying what their unit is known for. */
+function footSoldier(kind: TroopModel): THREE.Group {
+  const tunic = { spear: 0x2f5d99, sword: 0x8e3a1f, axe: 0x5a3a22, archer: 0x4f7a2e, scout: 0x3b3a30, noble: C.red }[kind as 'spear'] ?? 0x6f7c35;
+  const g = person(tunic);
+  switch (kind) {
+    case 'spear':
+      helmet(g);
+      g.add(cyl(0.035, 0.035, 2.3, SHAFT, 5, 0.34, 0.1, 0.1));
+      g.add(cone(0.09, 0.32, STEEL, 5, 0.34, 2.4, 0.1));
+      break;
+    case 'sword': {
+      helmet(g);
+      const blade = box(0.07, 0.8, 0.03, STEEL, 0, 0, 0);
+      blade.position.set(0.34, 0.55, 0.22);
+      blade.rotation.x = 0.5;
+      g.add(blade);
+      const shield = cyl(0.36, 0.36, 0.06, C.red, 10);
+      shield.rotation.z = Math.PI / 2;
+      shield.position.set(-0.26, 0.72, 0);
+      g.add(shield);
+      break;
+    }
+    case 'axe': {
+      const handle = box(0.06, 1.1, 0.06, SHAFT);
+      handle.position.set(0.3, 0.9, -0.1);
+      handle.rotation.x = -0.55;
+      g.add(handle);
+      const head = box(0.05, 0.3, 0.26, STEEL);
+      head.position.set(0.3, 1.78, -0.62);
+      head.rotation.x = -0.55;
+      g.add(head);
+      break;
+    }
+    case 'archer': {
+      const b = bow();
+      b.position.set(0.32, 0.8, 0);
+      g.add(b);
+      g.add(box(0.16, 0.5, 0.12, 0x6e4220, 0, 0.6, -0.26));
+      g.add(cone(0.24, 0.35, 0x3a4f22, 6, 0, 1.3));
+      break;
+    }
+    case 'scout':
+      g.add(cone(0.26, 0.5, 0x2a2a22, 6, 0, 1.2));
+      g.add(box(0.5, 0.7, 0.06, 0x2a2a22, 0, 0.35, -0.24));
+      break;
+    case 'noble':
+      g.add(cyl(0.17, 0.17, 0.14, C.gold, 6, 0, 1.4));
+      g.add(box(0.55, 0.9, 0.06, 0x2f5d99, 0, 0.2, -0.24));
+      break;
+  }
+  for (const c of g.children) c.castShadow = true;
+  return g;
+}
+
+/** A rider: a horse (facing +z like everyone else) with a soldier on its back. */
+function rider(kind: TroopModel): THREE.Group {
+  const g = new THREE.Group();
+  const coat = { light: C.horse, marcher: 0x4a3222, heavy: 0xd8d0c0, paladin: 0xefe9dc }[kind as 'light'] ?? C.horse;
+  const h = horse(coat);
+  h.rotation.y = -Math.PI / 2;
+  g.add(h);
+  if (kind === 'heavy' || kind === 'paladin') {
+    const cloth = box(0.62, 0.3, 1.2, kind === 'paladin' ? C.gold : C.red, 0, 0.8, 0);
+    g.add(cloth);
+  }
+  const tunic = { light: 0x8e3a1f, marcher: 0x4f7a2e, heavy: STEEL_DK, paladin: C.gold }[kind as 'light'] ?? 0x8e3a1f;
+  const man = person(tunic);
+  man.scale.setScalar(0.85);
+  man.position.set(0, 1.3, -0.1);
+  g.add(man);
+  if (kind === 'marcher') {
+    const b = bow();
+    b.position.set(0.3, 2.1, -0.1);
+    g.add(b);
+  } else {
+    helmet(man, kind === 'paladin' ? C.gold : STEEL);
+    g.add(cyl(0.035, 0.035, 2.4, SHAFT, 5, 0.34, 1.6, 0));
+    if (kind === 'paladin') g.add(box(0.5, 0.35, 0.03, C.red, 0.6, 3.5, 0));
+    else g.add(cone(0.08, 0.3, STEEL, 5, 0.34, 4, 0));
+  }
+  for (const c of g.children) c.castShadow = true;
+  return g;
+}
+
+export function troop(kind: TroopModel): THREE.Group {
+  return kind === 'light' || kind === 'marcher' || kind === 'heavy' || kind === 'paladin' ? rider(kind) : footSoldier(kind);
+}
+
+export const isRider = (k: TroopModel) => k === 'light' || k === 'marcher' || k === 'heavy' || k === 'paladin';

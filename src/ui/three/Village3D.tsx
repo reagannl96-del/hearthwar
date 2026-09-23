@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { BUILDINGS } from '../../engine/data/buildings';
-import type { BuildingId, Buildings } from '../../engine/types';
+import type { BuildingId, Buildings, Units } from '../../engine/types';
 import { VillageScene } from '../art/VillageScene';
 import { VillageRenderer, webglAvailable } from './VillageRenderer';
 
@@ -13,6 +13,8 @@ interface Props {
   villageId: number;
   winter: boolean;
   night: boolean;
+  /** troops at home; a few of them walk around the village */
+  units?: Units;
   onToggleNight?: () => void;
 }
 
@@ -37,6 +39,7 @@ export function Village3D(p: Props) {
         night: p.night,
       });
       r.current.update(p.buildings, p.building, p.color, p.points);
+      r.current.setTroops(p.units ?? {});
     } catch {
       setFailed(true);
     }
@@ -49,6 +52,10 @@ export function Village3D(p: Props) {
   useEffect(() => {
     r.current?.update(p.buildings, p.building, p.color, p.points);
   }, [p.buildings, p.building, p.color, p.points]);
+
+  useEffect(() => {
+    r.current?.setTroops(p.units ?? {});
+  }, [p.units]);
 
   useEffect(() => {
     r.current?.setNight(p.night);
@@ -101,6 +108,7 @@ export function ShowcaseVillage() {
         timber: 22, claypit: 22, ironmine: 20, farm: 22, warehouse: 20, hiding: 6, wall: 16, watchtower: 8,
       } as Buildings;
       vr.update(b, {}, 0xb3332a, 3000);
+      vr.setTroops({ spear: 200, axe: 150, light: 120, heavy: 20, archer: 30 });
     } catch {
       /* no 3D, the title card still works */
     }

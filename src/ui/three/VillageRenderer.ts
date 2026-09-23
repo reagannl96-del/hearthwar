@@ -4,10 +4,10 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { BUILDINGS } from '../../engine/data/buildings';
-import type { BuildingId, Buildings } from '../../engine/types';
+import type { BuildingId, Buildings, Units } from '../../engine/types';
 import { buildModel, visualTier } from './buildings';
 import { C, bake, disposeTree, mat, rng, setSeason, type Season } from './kit';
-import { person, plot, scaffold } from './props';
+import { isRider, person, plot, scaffold, troop, type TroopModel } from './props';
 import { LAYOUT, WALL_R, buildScenery, buildTerrain, buildWall, heightAt } from './scene';
 
 export interface VillageRendererOpts {
@@ -30,6 +30,7 @@ interface Slot {
 const OUTSIDE: BuildingId[] = ['timber', 'claypit', 'ironmine', 'farm'];
 const ALL: BuildingId[] = ['main', 'barracks', 'stable', 'workshop', 'academy', 'smithy', 'rally', 'statue', 'market', 'warehouse', 'hiding', 'watchtower', 'timber', 'claypit', 'ironmine', 'farm', 'wall'];
 
+const TROOP_KINDS: TroopModel[] = ['spear', 'sword', 'axe', 'archer', 'scout', 'light', 'marcher', 'heavy', 'paladin', 'noble'];
 const TUNICS = [0x8e3a1f, 0x2f5d99, 0x6f7c35, 0xc98f2e, 0x5a3a22, 0x7a2f4a, 0xd9c7a0];
 
 /** default camera: polar angle, azimuth, distance */
@@ -67,6 +68,8 @@ export class VillageRenderer {
   private sun!: THREE.DirectionalLight;
   private fill!: THREE.DirectionalLight;
   private lanterns: THREE.Object3D[] = [];
+  private troops: { kind: TroopModel; g: THREE.Group; path: THREE.Vector3[]; t: number; speed: number; len: number }[] = [];
+  private troopKey = '';
 
   constructor(private container: HTMLElement, private opts: VillageRendererOpts = {}) {
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
@@ -400,6 +403,47 @@ export class VillageRenderer {
     }
   }
 
+  /**
+   * Some of the troops at home stroll around the village too: one of each kind
+   * you have, two once you have a proper company of them.
+   */
+  setTroops(units: Units): void {
+    const want: TroopModel[] = [];
+    for (const k of TROOP_KINDS) {
+      const n = units[k] ?? 0;
+      if (n > 0) want.push(k);
+      if (n >= 100 && k !== 'paladin' && k !== 'noble') want.push(k);
+    }
+    const key = want.join(',');
+    if (key === this.troopKey) return;
+    this.troopKey = key;
+    for (const t of this.troops) {
+      this.scene.remove(t.g);
+      disposeTree(t.g);
+    }
+    this.troops = [];
+    const foot: THREE.Vector3[][] = [
+      circlePath(0, 8, 9.5, 18),
+      [[0, 36], [0, 16], [-10, 12], [-20, 10], [-10, 12], [0, 16]].map(([x, z]) => new THREE.Vector3(x, 0, z)),
+      [[0, 16], [12, 12], [19, 24], [12, 12]].map(([x, z]) => new THREE.Vector3(x, 0, z)),
+      circlePath(0, 0, 28, 36),
+    ];
+    const ride: THREE.Vector3[][] = [
+      circlePath(0, 0, 34, 44).map((p) => new THREE.Vector3(p.x, heightAt(p.x, p.z), p.z)),
+      [[0, 40], [0, 62], [-22, 44], [-42, 46], [-22, 44], [0, 62]].map(([x, z]) => new THREE.Vector3(x, heightAt(x, z), z)),
+    ];
+    want.forEach((kind, i) => {
+      const r = rng(i * 131 + kind.length * 7);
+      const g = troop(kind);
+      g.scale.setScalar(1.3);
+      const pool = isRider(kind) ? ride : foot;
+      const path = pool[i % pool.length];
+      const len = pathLength(path);
+      this.troops.push({ kind, g, path, t: r() * len, speed: isRider(kind) ? 2.6 + r() * 1.2 : 1.1 + r() * 0.8, len });
+      this.scene.add(g);
+    });
+  }
+
   // ---------- leaves ----------
 
   private initLeaves(): void {
@@ -557,6 +601,13 @@ export class VillageRenderer {
       p.t = (p.t + p.speed * dt) % p.len;
       const { pos, dir } = pointOnPath(p.path, p.t);
       p.g.position.set(pos.x, pos.y + Math.abs(Math.sin(t * 9 + p.speed * 10)) * 0.12, pos.z);
+      p.g.rotation.y = Math.atan2(dir.x, dir.z);
+    }
+    for (const p of this.troops) {
+      p.t = (p.t + p.speed * dt) % p.len;
+      const { pos, dir } = pointOnPath(p.path, p.t);
+      const bob = isRider(p.kind) ? Math.abs(Math.sin(t * 7 + p.speed * 10)) * 0.2 : Math.abs(Math.sin(t * 8 + p.speed * 10)) * 0.1;
+      p.g.position.set(pos.x, pos.y + bob, pos.z);
       p.g.rotation.y = Math.atan2(dir.x, dir.z);
     }
     this.stepLeaves(dt, t);
