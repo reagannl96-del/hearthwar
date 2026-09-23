@@ -94,6 +94,8 @@ export interface PlayerView {
     eliminated: boolean;
     history: [number, number][];
     tribeId: number | null;
+    /** the village this ruler started from (white halo on the map) */
+    homeVid: number | null;
   };
   villages: VillageView[];
   commands: CommandView[];
@@ -232,6 +234,7 @@ export function buildView(w: World, pid: number): PlayerView {
       eliminated: !!p.eliminated,
       history: p.history,
       tribeId: p.tribeId,
+      homeVid: p.villages[0] ?? null,
     },
     villages,
     commands,

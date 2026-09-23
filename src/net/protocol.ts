@@ -17,4 +17,6 @@ export type ServerMsg =
   | { t: 'private'; packet: PrivatePacket }
   | { t: 'result'; id: number; result: ActionResult }
   | { t: 'error'; message: string }
-  | { t: 'pong'; now: number };
+  | { t: 'pong'; now: number }
+  /** the server is going down (restart or redeploy); clients show Offline until it is back */
+  | { t: 'shutdown' };

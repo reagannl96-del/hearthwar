@@ -9,6 +9,7 @@ import { isWinter } from '../../engine/world';
 import { Icon } from '../art/icons';
 import { Btn, UnitList } from '../components/common';
 import { coords, continent, fmt, fmtAgo, fmtDur, parseCoords } from '../format';
+import { MARK_COLORS, markFor, marks, setMark, useWorldMarks, type Marks } from '../mapMarks';
 import { act, go, host, marketTarget, now, rallyTarget, view, vid, village, warp } from '../store';
 
 const TERRAIN_COLORS: Record<string, [string, string]> = {
@@ -53,6 +54,9 @@ export function MapScreen({ focus }: { focus?: number }) {
   const wrap = useRef<HTMLDivElement>(null);
   const drag = useRef<{ x: number; y: number; cx: number; cy: number; moved: boolean } | null>(null);
   const colors = useRef<Record<string, string>>({});
+  useWorldMarks(pv.worldName);
+  const mk = marks.value;
+  const markKey = JSON.stringify(mk);
 
   useEffect(() => {
     if (focus !== undefined) {
@@ -154,11 +158,15 @@ export function MapScreen({ focus }: { focus?: number }) {
         const v = grid.get(y * data.size + x);
         if (!v) continue;
         const owner = v.ownerId !== null ? data.players[v.ownerId] : null;
+        const mark = v.ownerId === me ? undefined : markFor(mk, v.id, v.ownerId, owner?.tribeId);
         let fill = col['--map-barb'];
-        if (v.ownerId === me) fill = col['--me'];
+        if (v.ownerId === me) fill = v.id === pv.me.homeVid ? '#ffffff' : col['--me'];
+        else if (mark) fill = mark;
         else if (owner) fill = owner.color;
         const px = sx(x), py = sy(y);
-        if (v.ownerId === me) glow(ctx, px + z / 2, py + z * (z < 10 ? 0.5 : 0.62), Math.max(z * (v.id === cur.id ? 1.35 : 1.1), 10), v.id === cur.id);
+        const gx = px + z / 2, gy = py + z * (z < 10 ? 0.5 : 0.62);
+        if (v.ownerId === me) glow(ctx, gx, gy, Math.max(z * (v.id === cur.id ? 1.35 : 1.1), 10), v.id === cur.id, v.id === pv.me.homeVid ? '#ffffff' : '#ffc43c');
+        else if (mark) glow(ctx, gx, gy, Math.max(z * 1.1, 10), false, mark);
         if (z < 10) {
           const s = Math.max(2, z - 1);
           ctx.fillStyle = fill;
@@ -179,7 +187,7 @@ export function MapScreen({ focus }: { focus?: number }) {
           if (owner) {
             ctx.fillStyle = '#3a2614';
             ctx.fillRect(px + z * 0.78, py + z * 0.02, 1.5, z * 0.3);
-            ctx.fillStyle = v.ownerId === me ? col['--me'] : owner.color;
+            ctx.fillStyle = fill;
             ctx.fillRect(px + z * 0.78 + 1.5, py + z * 0.03, z * 0.16, z * 0.1);
           }
           if (v.bonus) {
@@ -248,42 +256,78 @@ export function MapScreen({ focus }: { focus?: number }) {
     drawMini();
   };
 
+  /** fields shown across the minimap: a close-up of the neighbourhood, not the whole world */
+  const MINI_SPAN = 40;
+  /** the close-up widens when the main map is zoomed out, so your view always fits inside it */
+  const miniSpan = () => {
+    const c = canvas.current;
+    const view = c ? Math.max(c.clientWidth, c.clientHeight) / zoom : 0;
+    return Math.min(data.size, Math.max(MINI_SPAN, Math.ceil(view * 1.5)));
+  };
+  const miniOrigin = (): [number, number] => {
+    const span = miniSpan();
+    const clamp = (c: number) => Math.max(0, Math.min(data.size - span, c - span / 2));
+    return [clamp(center[0]), clamp(center[1])];
+  };
+
   const drawMini = () => {
     const m = mini.current;
     const c = canvas.current;
     if (!m || !c) return;
     const ctx = m.getContext('2d')!;
     const S = m.width;
-    const k = S / data.size;
     const col = colors.current;
-    if (!(m as HTMLCanvasElement & { _base?: ImageData })._base || (m as unknown as { _rev?: number })._rev !== data.rev) {
-      ctx.fillStyle = col['--map-water'];
-      ctx.fillRect(0, 0, S, S);
+    // the whole world, pre-rendered once (and again when villages or markers change)
+    const store = m as HTMLCanvasElement & { _base?: HTMLCanvasElement; _rev?: string };
+    const rev = `${data.rev}:${markKey}`;
+    const P = 4; // pixels per field in the pre-render
+    if (!store._base || store._rev !== rev) {
+      const base = store._base ?? document.createElement('canvas');
+      base.width = base.height = data.size * P;
+      const b = base.getContext('2d')!;
       for (let y = 0; y < data.size; y++)
         for (let x = 0; x < data.size; x++) {
           const t = data.terrain[y * data.size + x];
-          ctx.fillStyle = snow[y * data.size + x] ? SNOW[t === 'w' ? 'w' : t === 'm' ? 'm' : t === 'f' ? 'f' : 'g'] : col[(TERRAIN_COLORS[t] ?? TERRAIN_COLORS['.'])[0]];
-          ctx.fillRect(x * k, y * k, Math.ceil(k), Math.ceil(k));
+          b.fillStyle = snow[y * data.size + x] ? SNOW[t === 'w' ? 'w' : t === 'm' ? 'm' : t === 'f' ? 'f' : 'g'] : col[(TERRAIN_COLORS[t] ?? TERRAIN_COLORS['.'])[0]];
+          b.fillRect(x * P, y * P, P, P);
         }
       for (const v of data.villages) {
-        ctx.fillStyle = v.ownerId === pv.me.id ? col['--me'] : v.ownerId !== null ? data.players[v.ownerId]?.color ?? col['--map-barb'] : col['--map-barb'];
-        ctx.fillRect(v.x * k - 0.5, v.y * k - 0.5, Math.max(1.5, k), Math.max(1.5, k));
+        const owner = v.ownerId !== null ? data.players[v.ownerId] : undefined;
+        const mine = v.ownerId === pv.me.id;
+        const mark = mine ? undefined : markFor(mk, v.id, v.ownerId, owner?.tribeId);
+        b.fillStyle = mine ? (v.id === pv.me.homeVid ? '#ffffff' : col['--me']) : mark ?? owner?.color ?? col['--map-barb'];
+        b.fillRect(v.x * P, v.y * P, P, P);
+        if (mine || mark) {
+          b.strokeStyle = 'rgba(20, 10, 0, 0.85)';
+          b.lineWidth = 1;
+          b.strokeRect(v.x * P + 0.5, v.y * P + 0.5, P - 1, P - 1);
+        }
       }
-      (m as HTMLCanvasElement & { _base?: ImageData })._base = ctx.getImageData(0, 0, S, S);
-      (m as unknown as { _rev?: number })._rev = data.rev;
-    } else {
-      ctx.putImageData((m as HTMLCanvasElement & { _base?: ImageData })._base!, 0, 0);
+      store._base = base;
+      store._rev = rev;
     }
+    const span = miniSpan();
+    const [ox, oy] = miniOrigin();
+    const k = S / span;
+    ctx.imageSmoothingEnabled = false;
+    ctx.fillStyle = col['--map-water'];
+    ctx.fillRect(0, 0, S, S);
+    ctx.drawImage(store._base, ox * P, oy * P, span * P, span * P, 0, 0, S, S);
     const W = c.clientWidth / zoom, H = c.clientHeight / zoom;
-    ctx.strokeStyle = col['--ink'];
+    ctx.strokeStyle = '#fff6dc';
     ctx.lineWidth = 1.5;
-    ctx.strokeRect((center[0] - W / 2) * k, (center[1] - H / 2) * k, W * k, H * k);
+    ctx.strokeRect((center[0] - W / 2 - ox) * k, (center[1] - H / 2 - oy) * k, W * k, H * k);
+    ctx.fillStyle = 'rgba(20, 10, 0, 0.55)';
+    ctx.fillRect(0, S - 16, S, 16);
+    ctx.fillStyle = '#f3e3bd';
+    ctx.font = '600 11px system-ui, sans-serif';
+    ctx.fillText(`${continent(Math.floor(center[0]), Math.floor(center[1]))} · ${coords(Math.floor(center[0]), Math.floor(center[1]))}`, 6, S - 5);
   };
 
   useEffect(() => {
     readColors();
     const mq = window.matchMedia('(prefers-color-scheme: dark)');
-    const onTheme = () => { readColors(); (mini.current as unknown as { _rev?: number })._rev = -1; draw(); };
+    const onTheme = () => { readColors(); (mini.current as unknown as { _rev?: string })._rev = ''; draw(); };
     mq.addEventListener('change', onTheme);
     const obs = new MutationObserver(onTheme);
     obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
@@ -390,11 +434,13 @@ export function MapScreen({ focus }: { focus?: number }) {
           <canvas
             ref={mini}
             class="minimap"
-            width={150}
-            height={150}
+            width={220}
+            height={220}
             onClick={(e) => {
               const r = (e.currentTarget as HTMLCanvasElement).getBoundingClientRect();
-              setCenter([((e.clientX - r.left) / r.width) * data.size, ((e.clientY - r.top) / r.height) * data.size]);
+              const span = miniSpan();
+              const [ox, oy] = miniOrigin();
+              setCenter([ox + ((e.clientX - r.left) / r.width) * span, oy + ((e.clientY - r.top) / r.height) * span]);
             }}
             aria-label="Minimap"
           />
@@ -408,6 +454,7 @@ export function MapScreen({ focus }: { focus?: number }) {
             <p class="muted small">Drag to move · scroll or +/− to zoom · arrow keys pan</p>
           </div>
         )}
+        <MarkersPanel data={data} />
       </aside>
     </div>
   );
@@ -415,21 +462,29 @@ export function MapScreen({ focus }: { focus?: number }) {
 
 const SNOW = { g: '#e7edf1', g2: '#dce4ea', f: '#c9d4d6', w: '#a7c4d6', m: '#c5cacf', peak: '#f5f8fa' };
 
-/** The warm golden halo Tribal Wars puts around your own villages. */
-function glow(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, strong: boolean) {
+/** The halo Tribal Wars puts around villages: gold for yours, white for your home, any colour for markers. */
+function glow(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, strong: boolean, color: string) {
+  const [cr, cg, cb] = rgbOf(color);
+  const rgba = (a: number, lift = 0) =>
+    `rgba(${Math.round(cr + (255 - cr) * lift)}, ${Math.round(cg + (255 - cg) * lift)}, ${Math.round(cb + (255 - cb) * lift)}, ${a})`;
   const g = ctx.createRadialGradient(x, y, 0, x, y, r);
-  g.addColorStop(0, strong ? 'rgba(255, 236, 140, 0.95)' : 'rgba(255, 226, 120, 0.8)');
-  g.addColorStop(0.45, strong ? 'rgba(255, 196, 60, 0.6)' : 'rgba(255, 190, 60, 0.45)');
-  g.addColorStop(1, 'rgba(255, 170, 40, 0)');
+  g.addColorStop(0, rgba(strong ? 0.95 : 0.8, 0.45));
+  g.addColorStop(0.45, rgba(strong ? 0.6 : 0.45));
+  g.addColorStop(1, rgba(0));
   ctx.fillStyle = g;
   ctx.beginPath();
   ctx.ellipse(x, y, r, r * 0.72, 0, 0, Math.PI * 2);
   ctx.fill();
-  ctx.strokeStyle = strong ? 'rgba(255, 224, 110, 0.95)' : 'rgba(255, 214, 100, 0.7)';
+  ctx.strokeStyle = rgba(strong ? 0.95 : 0.75, 0.3);
   ctx.lineWidth = strong ? 2 : 1.4;
   ctx.beginPath();
   ctx.ellipse(x, y, r * 0.62, r * 0.44, 0, 0, Math.PI * 2);
   ctx.stroke();
+}
+
+function rgbOf(hex: string): [number, number, number] {
+  const m = hex.match(/^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
+  return m ? [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)] : [255, 196, 60];
 }
 
 function shade(hex: string, amt: number): string {
@@ -455,7 +510,8 @@ function Legend({ data }: { data: MapData }) {
   const near = Object.values(data.players).filter((p) => p.id !== pv.me.id).sort((a, b) => b.points - a.points).slice(0, 8);
   return (
     <div class="legend">
-      <span><i class="sw" style={{ background: 'var(--me)' }} /> You</span>
+      <span><i class="sw" style={{ background: '#ffffff' }} /> Your home</span>
+      <span><i class="sw" style={{ background: 'var(--me)' }} /> Your other villages</span>
       <span><i class="sw" style={{ background: 'var(--map-barb)' }} /> Barbarians</span>
       {near.map((p) => (
         <button type="button" class="link" onClick={() => go({ name: 'ranking', player: p.id })}>
@@ -548,10 +604,112 @@ function VillagePanel({ v, data }: { v: MapVillage; data: MapData }) {
           {it.buildings && <p class="small muted">Buildings: {Object.entries(it.buildings).filter(([, l]) => (l ?? 0) > 0).map(([b, l]) => `${b} ${l}`).join(', ')}</p>}
         </div>
       )}
+      {!own && <MarkRow v={v} data={data} />}
       <label class="field">
         <span>Notes</span>
         <textarea id="village-note" rows={2} value={note} onInput={(e) => setNote(e.currentTarget.value)} onBlur={() => act({ type: 'note', vid: v.id, text: note })} placeholder="Private notes about this village" />
       </label>
+    </div>
+  );
+}
+
+function Swatches({ value, onPick }: { value?: string; onPick: (c: string | null) => void }) {
+  return (
+    <div class="swatches">
+      {MARK_COLORS.map((c) => (
+        <button type="button" class={`swatch ${value === c ? 'is-on' : ''}`} style={{ background: c }} aria-label={`Colour ${c}`} onClick={() => onPick(c)} />
+      ))}
+      <label class="swatch swatch-custom" title="Any colour">
+        <input type="color" value={value ?? '#3fd16b'} onInput={(e) => onPick(e.currentTarget.value)} aria-label="Pick any colour" />
+      </label>
+      {value && <button type="button" class="link small" onClick={() => onPick(null)}>clear</button>}
+    </div>
+  );
+}
+
+/** Mark the ruler (all their villages) or just this village, straight from the village panel. */
+function MarkRow({ v, data }: { v: MapVillage; data: MapData }) {
+  const m = marks.value;
+  const owner = v.ownerId !== null ? data.players[v.ownerId] : null;
+  return (
+    <div class="mark-row">
+      <h4>Mark on the map</h4>
+      {owner && (
+        <div class="small">
+          <b>All of {owner.name}'s villages</b>
+          <Swatches value={m.players[owner.id]} onPick={(c) => setMark('players', owner.id, c)} />
+        </div>
+      )}
+      <div class="small">
+        <b>Only this village</b>
+        <Swatches value={m.villages[v.id]} onPick={(c) => setMark('villages', v.id, c)} />
+      </div>
+    </div>
+  );
+}
+
+/** Every marker in one place, plus a way to mark any ruler or tribe by name. */
+function MarkersPanel({ data }: { data: MapData }) {
+  const pv = view.value!;
+  const m = marks.value;
+  const [kind, setKind] = useState<'players' | 'tribes'>('players');
+  const [name, setName] = useState('');
+  const [color, setColor] = useState(MARK_COLORS[0]);
+  const players = Object.values(data.players).filter((p) => p.id !== pv.me.id).sort((a, b) => a.name.localeCompare(b.name));
+  const tribes = Object.values(data.tribes).sort((a, b) => a.name.localeCompare(b.name));
+  const add = () => {
+    const q = name.trim().toLowerCase();
+    if (!q) return;
+    const hit = kind === 'players'
+      ? players.find((p) => p.name.toLowerCase() === q) ?? players.find((p) => p.name.toLowerCase().includes(q))
+      : tribes.find((t) => t.name.toLowerCase() === q || t.tag.toLowerCase() === q) ?? tribes.find((t) => t.name.toLowerCase().includes(q));
+    if (!hit) return;
+    setMark(kind, hit.id, color);
+    setName('');
+  };
+  const rows: { kind: keyof Marks; id: number; label: string; sub: string; color: string }[] = [];
+  for (const [id, c] of Object.entries(m.players)) {
+    const p = data.players[Number(id)];
+    rows.push({ kind: 'players', id: Number(id), label: p?.name ?? 'Fallen ruler', sub: p ? `${p.villages} villages` : '', color: c });
+  }
+  for (const [id, c] of Object.entries(m.tribes)) {
+    const t = data.tribes[Number(id)];
+    rows.push({ kind: 'tribes', id: Number(id), label: t ? `[${t.tag}] ${t.name}` : 'Disbanded tribe', sub: 'tribe', color: c });
+  }
+  const byId = new Map(data.villages.map((v) => [v.id, v]));
+  for (const [id, c] of Object.entries(m.villages)) {
+    const v = byId.get(Number(id));
+    rows.push({ kind: 'villages', id: Number(id), label: v ? v.name : 'Lost village', sub: v ? coords(v.x, v.y) : '', color: c });
+  }
+  return (
+    <div class="panel markers">
+      <h3>Map markers</h3>
+      <p class="muted small">Colour a ruler's or tribe's villages so they stand out, with a glow like your own.</p>
+      <form class="mark-add" onSubmit={(e) => { e.preventDefault(); add(); }}>
+        <div class="seg">
+          <button type="button" class={kind === 'players' ? 'is-on' : ''} onClick={() => setKind('players')}>Player</button>
+          <button type="button" class={kind === 'tribes' ? 'is-on' : ''} onClick={() => setKind('tribes')}>Tribe</button>
+        </div>
+        <input type="text" list="mark-names" value={name} onInput={(e) => setName(e.currentTarget.value)} placeholder={kind === 'players' ? 'Ruler name' : 'Tribe name or tag'} aria-label="Name to mark" />
+        <datalist id="mark-names">
+          {kind === 'players' ? players.map((p) => <option value={p.name} />) : tribes.map((t) => <option value={t.name} />)}
+        </datalist>
+        <Swatches value={color} onPick={(c) => c && setColor(c)} />
+        <Btn small type="submit" disabled={!name.trim()}>Mark</Btn>
+      </form>
+      {rows.length > 0 && (
+        <ul class="mark-list">
+          {rows.map((r) => (
+            <li>
+              <label class="mark-chip" style={{ background: r.color }} title="Change colour">
+                <input type="color" value={r.color} onInput={(e) => setMark(r.kind, r.id, e.currentTarget.value)} aria-label={`Colour for ${r.label}`} />
+              </label>
+              <span class="grow"><b>{r.label}</b> <span class="muted small">{r.sub}</span></span>
+              <button type="button" class="icon-btn" aria-label={`Remove marker for ${r.label}`} onClick={() => setMark(r.kind, r.id, null)}><Icon name="close" size={14} /></button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

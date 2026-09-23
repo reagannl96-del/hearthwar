@@ -436,18 +436,19 @@ function footSoldier(kind: TroopModel): THREE.Group {
   return g;
 }
 
+const ROYAL = 0x2f5fb0;
+const GOLD_TRIM = 0xe9b83a;
+
 /** A rider: a horse (facing +z like everyone else) with a soldier on its back. */
 function rider(kind: TroopModel): THREE.Group {
+  if (kind === 'paladin') return paladinRider();
   const g = new THREE.Group();
-  const coat = { light: C.horse, marcher: 0x4a3222, heavy: 0xd8d0c0, paladin: 0xefe9dc }[kind as 'light'] ?? C.horse;
+  const coat = { light: C.horse, marcher: 0x4a3222, heavy: 0xd8d0c0 }[kind as 'light'] ?? C.horse;
   const h = horse(coat);
   h.rotation.y = -Math.PI / 2;
   g.add(h);
-  if (kind === 'heavy' || kind === 'paladin') {
-    const cloth = box(0.62, 0.3, 1.2, kind === 'paladin' ? C.gold : C.red, 0, 0.8, 0);
-    g.add(cloth);
-  }
-  const tunic = { light: 0x8e3a1f, marcher: 0x4f7a2e, heavy: STEEL_DK, paladin: C.gold }[kind as 'light'] ?? 0x8e3a1f;
+  if (kind === 'heavy') g.add(box(0.62, 0.3, 1.2, C.red, 0, 0.8, 0));
+  const tunic = { light: 0x8e3a1f, marcher: 0x4f7a2e, heavy: STEEL_DK }[kind as 'light'] ?? 0x8e3a1f;
   const man = person(tunic);
   man.scale.setScalar(0.85);
   man.position.set(0, 1.3, -0.1);
@@ -457,12 +458,73 @@ function rider(kind: TroopModel): THREE.Group {
     b.position.set(0.3, 2.1, -0.1);
     g.add(b);
   } else {
-    helmet(man, kind === 'paladin' ? C.gold : STEEL);
+    helmet(man, STEEL);
     g.add(cyl(0.035, 0.035, 2.4, SHAFT, 5, 0.34, 1.6, 0));
-    if (kind === 'paladin') g.add(box(0.5, 0.35, 0.03, C.red, 0.6, 3.5, 0));
-    else g.add(cone(0.08, 0.3, STEEL, 5, 0.34, 4, 0));
+    g.add(cone(0.08, 0.3, STEEL, 5, 0.34, 4, 0));
   }
   for (const c of g.children) c.castShadow = true;
+  return g;
+}
+
+/**
+ * The paladin: a knight in full plate on a white charger. Royal blue barding,
+ * tabard and cape, every edge picked out in gold, a gold-crested great helm and
+ * a lance flying a blue-and-gold pennant.
+ */
+function paladinRider(): THREE.Group {
+  const g = new THREE.Group();
+  const h = horse(0xf1ece2);
+  h.rotation.y = -Math.PI / 2;
+  g.add(h);
+  // barding: blue caparison with gold hems, and a steel chanfron on the head
+  g.add(box(0.7, 0.42, 1.36, ROYAL, 0, 0.66, 0));
+  g.add(box(0.74, 0.07, 1.4, GOLD_TRIM, 0, 0.62, 0));
+  g.add(box(0.74, 0.07, 1.4, GOLD_TRIM, 0, 1.06, 0));
+  g.add(box(0.32, 0.3, 0.62, STEEL, 0, 1.62, 0.95));
+  g.add(box(0.34, 0.05, 0.64, GOLD_TRIM, 0, 1.9, 0.95));
+  // the knight: steel plate under a blue tabard with a gold cross and gold edges
+  const man = new THREE.Group();
+  man.add(box(0.32, 0.32, 0.22, STEEL_DK, 0, 0, 0));
+  man.add(cyl(0.22, 0.3, 0.78, STEEL, 7, 0, 0.3));
+  man.add(box(0.46, 0.62, 0.04, ROYAL, 0, 0.36, 0.25));
+  man.add(box(0.07, 0.5, 0.02, GOLD_TRIM, 0, 0.42, 0.28));
+  man.add(box(0.32, 0.07, 0.02, GOLD_TRIM, 0, 0.72, 0.28));
+  man.add(box(0.5, 0.05, 0.05, GOLD_TRIM, 0, 0.34, 0.25));
+  // pauldrons with gold rims
+  for (const x of [-0.3, 0.3]) {
+    man.add(blob(0.17, STEEL, x, 1.0, 0, 1, 0.75, 1));
+    man.add(box(0.3, 0.04, 0.3, GOLD_TRIM, x, 0.9, 0));
+  }
+  // great helm: steel, gold band and visor slit, gold crest with a blue plume
+  man.add(cyl(0.21, 0.21, 0.42, STEEL, 8, 0, 1.08));
+  man.add(cyl(0.225, 0.225, 0.06, GOLD_TRIM, 8, 0, 1.28));
+  man.add(box(0.3, 0.04, 0.02, 0x1a1a1a, 0, 1.36, 0.2));
+  man.add(box(0.05, 0.22, 0.34, GOLD_TRIM, 0, 1.5, 0));
+  man.add(blob(0.12, ROYAL, 0, 1.68, -0.12, 0.8, 1.2, 1.6));
+  // cape
+  const cape = box(0.5, 1.0, 0.04, ROYAL, 0, -0.1, -0.24);
+  cape.rotation.x = 0.18;
+  man.add(cape);
+  man.add(box(0.52, 0.05, 0.05, GOLD_TRIM, 0, -0.1, -0.25));
+  // kite shield on the left arm: blue field, gold rim and cross
+  const shield = new THREE.Group();
+  shield.add(box(0.06, 0.62, 0.44, GOLD_TRIM, 0, 0, 0));
+  shield.add(box(0.07, 0.54, 0.36, ROYAL, 0, 0.04, 0));
+  shield.add(box(0.08, 0.4, 0.06, GOLD_TRIM, 0, 0.1, 0));
+  shield.add(box(0.08, 0.06, 0.28, GOLD_TRIM, 0, 0.3, 0));
+  shield.position.set(-0.36, 0.3, 0.05);
+  man.add(shield);
+  man.scale.setScalar(0.85);
+  man.position.set(0, 1.3, -0.1);
+  g.add(man);
+  // lance with a swallow-tail pennant
+  g.add(cyl(0.04, 0.04, 2.8, 0xf1ece2, 6, 0.34, 1.5, 0.1));
+  g.add(cyl(0.06, 0.06, 0.08, GOLD_TRIM, 6, 0.34, 2.2, 0.1));
+  g.add(cone(0.08, 0.34, STEEL, 5, 0.34, 4.3, 0.1));
+  g.add(box(0.03, 0.3, 0.5, ROYAL, 0.34, 3.9, -0.16));
+  g.add(box(0.035, 0.05, 0.5, GOLD_TRIM, 0.34, 4.18, -0.16));
+  for (const c of g.children) c.castShadow = true;
+  for (const c of man.children) c.castShadow = true;
   return g;
 }
 

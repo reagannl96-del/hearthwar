@@ -268,6 +268,7 @@ async function main() {
 
   const shutdown = async () => {
     console.log('Saving before shutdown…');
+    for (const c of clients) send(c, { t: 'shutdown' });
     await saveWorld();
     process.exit(0);
   };

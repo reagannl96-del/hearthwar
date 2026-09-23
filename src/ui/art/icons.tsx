@@ -238,12 +238,13 @@ const paths: Record<string, () => JSX.Element> = {
   ),
   paladin: () => (
     <Ink>
-      <path d="M5.4 21.4v-9.6C5.4 7 8.4 3.8 12 3.8s6.6 3.2 6.6 8v9.6Z" fill={STEEL} />
-      <path d="M7.6 11.4h8.8v2H7.6Z" fill={O} />
-      <path d="M12 3.8v17.6" stroke={GOLD_DK} stroke-width="1" />
-      <path d="M7.6 8c.8-1.6 2.2-2.6 3.6-2.8" fill="none" stroke={STEEL_LT} stroke-width="1.2" />
-      <path d="M5.4 18h13.2v3.4H5.4Z" fill={GOLD} />
-      <path d="M12 3.8C13 1.4 16 .6 19 1.6c-2 .6-3.6 2-4.4 3.8Z" fill={RED} />
+      <path d="M12 3.4C13 1.2 16 .4 19.2 1.4c-2 .8-3.4 2.2-4.2 4Z" fill={BLUE} />
+      <path d="M4.6 21.6v-9.8C4.6 6.8 7.8 3.4 12 3.4s7.4 3.4 7.4 8.4v9.8Z" fill={BLUE} stroke-width="1.2" />
+      <path d="M6.2 20.4v-8.6C6.2 7.8 8.8 5 12 5s5.8 2.8 5.8 6.8v8.6Z" fill={STEEL} stroke-width=".7" />
+      <path d="M6.2 20.4v-8.6C6.2 7.8 8.8 5 12 5s5.8 2.8 5.8 6.8v8.6Z" fill="none" stroke={GOLD} stroke-width="1" />
+      <path d="M7.4 11.2h9.2v2H7.4Z" fill={O} stroke-width=".6" />
+      <path d="M12 5v6.2M12 13.2v7.2M9.4 16.6h5.2" stroke={GOLD} stroke-width="1.4" />
+      <path d="M8 8.6c.8-1.6 2-2.4 3.2-2.6" fill="none" stroke={STEEL_LT} stroke-width="1.1" />
     </Ink>
   ),
   noble: () => (

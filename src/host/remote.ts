@@ -100,6 +100,16 @@ export class Connection {
   private closed = false;
   private queue: ClientMsg[] = [];
   private ping: ReturnType<typeof setInterval> | null = null;
+  private watchdog: ReturnType<typeof setInterval> | null = null;
+  private lastMsgAt = 0;
+  private up = false;
+
+  /** report the connection state, once per change */
+  private setUp(up: boolean) {
+    if (up === this.up) return;
+    this.up = up;
+    this.onStatus?.(up);
+  }
 
   constructor(private url: string, private getToken: () => Promise<string | null>) {}
 
@@ -119,9 +129,15 @@ export class Connection {
       };
       ws.onmessage = (ev) => {
         const m = JSON.parse(ev.data as string) as ServerMsg;
+        this.lastMsgAt = Date.now();
+        if (m.t === 'shutdown') {
+          this.setUp(false);
+          return;
+        }
+        if (greeted) this.setUp(true);
         if (m.t === 'hello' && !greeted) {
           greeted = true;
-          this.onStatus?.(true);
+          this.setUp(true);
           for (const q of this.queue.splice(0)) ws.send(JSON.stringify(q));
           resolve(m);
           return;
@@ -136,11 +152,15 @@ export class Connection {
         if (!greeted) reject(new Error('Could not reach the game server.'));
       };
       ws.onclose = () => {
-        this.onStatus?.(false);
+        this.setUp(false);
         if (greeted && !this.closed) setTimeout(() => this.reconnect(), 2000);
       };
       if (this.ping) clearInterval(this.ping);
       this.ping = setInterval(() => this.send({ t: 'ping' }), 25_000);
+      // the server sends something every second; a long silence means it is down
+      if (!this.watchdog) this.watchdog = setInterval(() => {
+        if (this.up && Date.now() - this.lastMsgAt > 8000) this.setUp(false);
+      }, 2000);
     });
   }
 
@@ -173,6 +193,7 @@ export class Connection {
 
   close() {
     this.closed = true;
+    if (this.watchdog) clearInterval(this.watchdog);
     if (this.ping) clearInterval(this.ping);
     this.ws?.close();
   }

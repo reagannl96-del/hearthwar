@@ -164,9 +164,9 @@ function Header() {
 
 function OnlineBadge() {
   return (
-    <div class="timectl" title={online.value ? 'Connected to the shared realm' : 'Reconnecting…'}>
+    <div class="timectl" title={online.value ? 'Connected to the shared realm' : 'The game server is down or restarting. Reconnecting automatically…'}>
       <Clock t={now.value} />
-      <span class={`online-pill ${online.value ? '' : 'is-down'}`}>{online.value ? 'Online' : 'Reconnecting'}</span>
+      <span class={`online-pill ${online.value ? '' : 'is-down'}`}>{online.value ? 'Online' : 'Offline'}</span>
     </div>
   );
 }

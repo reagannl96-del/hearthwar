@@ -40,6 +40,7 @@ export function Village3D(p: Props) {
       });
       r.current.update(p.buildings, p.building, p.color, p.points);
       r.current.setTroops(p.units ?? {});
+      if (import.meta.env.DEV) (window as unknown as { __vr: VillageRenderer }).__vr = r.current;
     } catch {
       setFailed(true);
     }

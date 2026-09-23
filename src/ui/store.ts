@@ -214,8 +214,10 @@ export function startHost(h: HostBase) {
     const r = h as HostBase & { onServerError: ((m: string) => void) | null; onConnection: ((up: boolean) => void) | null };
     r.onServerError = (m) => toast(m, 'bad');
     r.onConnection = (up) => {
+      const was = online.value;
       online.value = up;
-      if (!up) toast('Lost the connection to the realm. Reconnecting…', 'warn');
+      if (!up) toast('The realm is offline (the server may be restarting). Reconnecting automatically…', 'warn');
+      else if (!was) toast('Back online.', 'good');
     };
   }
   paused.value = h.paused;

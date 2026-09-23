@@ -798,7 +798,7 @@ input.tiny { width: 56px; padding: 2px 4px; }
 }
 .map-canvas { width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
 .map-canvas:active { cursor: grabbing; }
-.minimap { position: absolute; right: 10px; bottom: 10px; width: 150px; height: 150px; border-radius: 3px; border: 2px solid var(--brass-dark); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45); cursor: pointer; }
+.minimap { position: absolute; right: 10px; bottom: 10px; width: 220px; height: 220px; border-radius: 3px; border: 2px solid var(--brass-dark); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45); cursor: pointer; }
 .map-hover { position: absolute; left: 10px; top: 10px; background: rgba(36, 24, 12, 0.92); color: #f6e7c4; border: 1px solid var(--brass-dark); border-radius: 4px; padding: 6px 10px; pointer-events: none; max-width: calc(100% - 180px); }
 .map-hover .muted { color: #cdb58a; }
 .legend {
@@ -945,7 +945,7 @@ input.tiny { width: 56px; padding: 2px 4px; }
   .battle-sides { grid-template-columns: 1fr; text-align: left; }
   .battle-sides .right { text-align: left; }
   .map-wrap { height: 60vh; }
-  .minimap { width: 100px; height: 100px; }
+  .minimap { width: 130px; height: 130px; }
   .toasts { bottom: calc(80px + env(safe-area-inset-bottom, 0px)); }
   h1 { font-size: 1.65rem; }
   .scene-wrap { aspect-ratio: 4 / 5; }
@@ -982,3 +982,26 @@ input.tiny { width: 56px; padding: 2px 4px; }
 
 /* full-colour icons keep their ink outline readable on dark leather */
 .topbar .icon, .nav-item:not(.is-active) .icon { filter: drop-shadow(0 0 1px rgba(255, 234, 196, 0.55)) drop-shadow(0 1px 0 rgba(0, 0, 0, 0.4)); }
+
+/* ---------- map markers ---------- */
+.markers { margin-top: 12px; display: grid; gap: 8px; }
+.markers h3 { margin: 0; }
+.mark-add { display: grid; gap: 8px; }
+.mark-add input[type="text"] { width: 100%; }
+.seg { display: inline-flex; border: 1px solid var(--brass-dark); border-radius: 4px; overflow: hidden; width: max-content; }
+.seg button { background: transparent; border: 0; padding: 4px 12px; font: inherit; font-weight: 700; color: var(--ink-2); cursor: pointer; }
+.seg button.is-on { background: var(--accent); color: var(--accent-ink); }
+.swatches { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; margin-top: 4px; }
+.swatch { width: 20px; height: 20px; border-radius: 50%; border: 2px solid rgba(40, 20, 5, 0.55); cursor: pointer; padding: 0; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35); }
+.swatch.is-on { outline: 2px solid var(--ink); outline-offset: 2px; }
+.swatch-custom { position: relative; overflow: hidden; background: conic-gradient(#e5484d, #ff8a1f, #f2d64b, #3fd16b, #19d3d3, #3b8cff, #b86bff, #e5484d); }
+.swatch-custom input, .mark-chip input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; border: 0; padding: 0; }
+.mark-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.mark-list li { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 4px; background: rgba(120, 80, 30, 0.08); }
+.mark-list .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mark-chip { position: relative; width: 18px; height: 18px; flex: none; border-radius: 50%; border: 2px solid rgba(40, 20, 5, 0.6); }
+.mark-row { display: grid; gap: 6px; }
+.mark-row h4 { margin: 0; }
+.online-pill.is-down { animation: offline-pulse 1.6s ease-in-out infinite; }
+@keyframes offline-pulse { 50% { background: rgba(179, 38, 26, 0.5); } }
+@media (prefers-reduced-motion: reduce) { .online-pill.is-down { animation: none; } }
