@@ -177,6 +177,9 @@ export function resolveBattle(input: CombatInput): CombatResult {
     if (vs && Atot > 0) defHeroMult += HERO_VS_BONUS * (A[CLS_INDEX[vs]] / Atot);
   }
   D *= defHeroMult;
+  // a defending sorcerer raises an arcane barrier, and warding items add to it
+  if (defHeroes.includes('sorcerer')) D *= 1.1;
+  if (defItems.some((i) => i.special === 'ward')) D *= 1.1;
   D = D * wallMultiplier(battleWall) + wallBase(battleWall);
 
   let winner: 'attacker' | 'defender';

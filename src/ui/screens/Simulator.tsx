@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks';
-import { ITEMS, ITEM_BY_ID, UNITS, UNIT_ORDER } from '../../engine/data/units';
+import { HEROES, ITEM_BY_ID, UNITS, UNIT_ORDER, itemsFor } from '../../engine/data/units';
 import type { UnitId, Units } from '../../engine/types';
 import { Icon } from '../art/icons';
 import { Btn, NumInput, Section, UnitTable, UnitIcon, unitName } from '../components/common';
@@ -47,10 +47,10 @@ export function Simulator() {
           </div>
           {pv.config.paladin && (
             <label class="field">
-              <span>Paladin's item</span>
+              <span>Hero's legendary item</span>
               <select id="sim-item" value={item} onChange={(e) => setItem((e.currentTarget as HTMLSelectElement).value)}>
                 <option value="">None</option>
-                {ITEMS.map((i) => <option value={i.id}>{i.name}</option>)}
+                {HEROES.map((h) => <optgroup label={UNITS[h].name}>{itemsFor(h).map((i) => <option value={i.id}>{i.name}</option>)}</optgroup>)}
               </select>
             </label>
           )}

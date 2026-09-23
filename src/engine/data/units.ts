@@ -98,13 +98,13 @@ export const UNITS: Record<UnitId, UnitDef> = {
   },
   sorcerer: {
     id: 'sorcerer', name: 'Sorcerer', plural: 'Sorcerers',
-    description: 'A hero of the statue. Arcane fire tears through massed footmen.',
-    cost: r(40, 60, 40), pop: 10, attack: 200, def: [150, 150, 300], speed: 12, carry: 0, time: 21600,
+    description: 'A hero of the statue. Arcane fire tears through massed footmen, and a shimmering barrier shields the village he guards.',
+    cost: r(40, 60, 40), pop: 10, attack: 200, def: [200, 200, 300], speed: 12, carry: 0, time: 21600,
     cls: 'arc', building: 'statue', req: { statue: 1 }, research: false, smithy: 0,
   },
   druid: {
     id: 'druid', name: 'Druid', plural: 'Druids',
-    description: 'A hero of the statue. Thorn and root stop archers, and snare siege engines at the gate.',
+    description: 'A hero of the statue. Thorn and root stop archers and snare siege engines at the gate; the old paths of the forest carry his allies swiftly.',
     cost: r(60, 40, 20), pop: 10, attack: 100, def: [300, 250, 300], speed: 12, carry: 50, time: 21600,
     cls: 'inf', building: 'statue', req: { statue: 1 }, research: false, smithy: 0,
   },
@@ -153,8 +153,8 @@ export const HERO_VS_BONUS = 0.25;
 
 export const HERO_INFO: Record<string, HeroInfo> = {
   paladin: { vs: 'cav', vsLabel: 'Cavalry', perks: ['+25% strength against cavalry', 'Carries your legendary items into battle'] },
-  sorcerer: { vs: 'inf', vsLabel: 'Infantry', perks: ['+25% strength against infantry'] },
-  druid: { vs: 'arc', vsLabel: 'Archers', perks: ['+25% strength against archers', 'Defending: enemy rams and catapults work at half power'] },
+  sorcerer: { vs: 'inf', vsLabel: 'Infantry', perks: ['+25% strength against infantry', 'Arcane barrier: while he defends, every defender in the village fights 10% harder'] },
+  druid: { vs: 'arc', vsLabel: 'Archers', perks: ['+25% strength against archers', 'Defending: enemy rams and catapults work at half power', 'Support he marches with arrives 25% faster'] },
   necromancer: { vsLabel: 'the fallen', perks: ['Raise the dead: when his side wins, one in ten enemy foot soldiers who fell rise as skeleton spearmen in his army (farm space permitting)', 'Wins in attack or in defense both count'] },
   goblin: { vsLabel: 'Scouts', perks: ['Scouts fight twice as hard, in attack and defense', 'The army carries 25% more loot', 'The fastest hero on the road'] },
 };
@@ -172,10 +172,12 @@ export interface ItemDef {
   id: string;
   name: string;
   description: string;
+  /** the hero who finds and carries it (the paladin, unless said otherwise) */
+  hero?: UnitId;
   unit?: UnitId;
   att?: number;
   def?: number;
-  special?: 'ramx2' | 'catx2' | 'scout' | 'loyalty' | 'speed' | 'loot';
+  special?: 'ramx2' | 'catx2' | 'scout' | 'loyalty' | 'speed' | 'loot' | 'ward' | 'raise';
 }
 
 export const ITEMS: ItemDef[] = [
@@ -192,6 +194,39 @@ export const ITEMS: ItemDef[] = [
   { id: 'sceptre', name: 'Crown Sceptre', description: 'Noblemen lower loyalty by 10 extra points.', unit: 'noble', special: 'loyalty' },
   { id: 'banner', name: 'Banner of the March', description: 'The army the paladin leads marches 15% faster.', special: 'speed' },
   { id: 'saddlebags', name: 'Bottomless Saddlebags', description: 'The army the paladin leads carries 20% more loot.', special: 'loot' },
+  // the sorcerer's
+  { id: 'wardstaff', hero: 'sorcerer', name: 'Staff of Warding', description: 'Defending, every defender in the village fights 10% harder (on top of the arcane barrier).', special: 'ward' },
+  { id: 'stormtome', hero: 'sorcerer', name: 'Tome of Storms', description: 'Storm Riders attack with 30% more strength.', unit: 'light', att: 0.3, def: 0.1 },
+  { id: 'spellblade', hero: 'sorcerer', name: 'Spellbound Blade', description: 'Runeblades fight 25% harder in attack and defense.', unit: 'sword', att: 0.25, def: 0.25 },
+  { id: 'seeingorb', hero: 'sorcerer', name: 'Seeing Orb', description: 'Owl familiars are twice as effective and see everything.', unit: 'scout', special: 'scout' },
+  { id: 'grimoire', hero: 'sorcerer', name: 'Grimoire of Ruin', description: 'Orb throwers deal double building damage.', unit: 'catapult', special: 'catx2' },
+  { id: 'hourglass', hero: 'sorcerer', name: 'Hourglass of Haste', description: 'The army the sorcerer leads marches 15% faster.', special: 'speed' },
+  // the druid's
+  { id: 'oakstaff', hero: 'druid', name: 'Staff of the Old Oak', description: 'Thornguards fight 25% harder in attack and defense.', unit: 'spear', att: 0.25, def: 0.25 },
+  { id: 'heartbow', hero: 'druid', name: 'Heartwood Bow', description: 'Rangers fight 25% harder in attack and defense.', unit: 'archer', att: 0.25, def: 0.25 },
+  { id: 'bearclaw', hero: 'druid', name: 'Bear-Claw Amulet', description: 'Bear Riders fight 25% harder in attack and defense.', unit: 'heavy', att: 0.25, def: 0.25 },
+  { id: 'hawkfeather', hero: 'druid', name: 'Hawk-Feather Charm', description: 'Spirit hawks are twice as effective and see everything.', unit: 'scout', special: 'scout' },
+  { id: 'thornseed', hero: 'druid', name: 'Thornseed Pouch', description: 'Defending, every defender in the village fights 10% harder behind a hedge of thorns.', special: 'ward' },
+  { id: 'rootpath', hero: 'druid', name: 'Rootpath Stone', description: 'The army the druid leads marches 15% faster.', special: 'speed' },
+  // the goblin chief's
+  { id: 'grabsack', hero: 'goblin', name: "Grabbin' Sack", description: 'The army the goblin chief leads carries 20% more loot.', special: 'loot' },
+  { id: 'rustycleaver', hero: 'goblin', name: 'Rusty Cleaver', description: 'Goblin choppers attack with 30% more strength.', unit: 'axe', att: 0.3, def: 0.1 },
+  { id: 'wolffang', hero: 'goblin', name: 'Wolf-Fang Necklace', description: 'Wolf riders attack with 30% more strength.', unit: 'light', att: 0.3, def: 0.1 },
+  { id: 'sneakglass', hero: 'goblin', name: 'Sneaky Spyglass', description: 'Goblin sneaks are twice as effective and see everything.', unit: 'scout', special: 'scout' },
+  { id: 'bossbonnet', hero: 'goblin', name: "Boss's Big Hat", description: 'Goblin bosses lower loyalty by 10 extra points.', unit: 'noble', special: 'loyalty' },
+  { id: 'boomlog', hero: 'goblin', name: 'Boom-Log', description: 'Log bashers break walls twice as fast.', unit: 'ram', special: 'ramx2' },
+  // the necromancer's
+  { id: 'soullantern', hero: 'necromancer', name: 'Soul Lantern', description: 'Twice as many of the fallen rise again after a won battle.', special: 'raise' },
+  { id: 'bonescythe', hero: 'necromancer', name: 'Bone Scythe', description: 'Grave reavers attack with 30% more strength.', unit: 'axe', att: 0.3, def: 0.1 },
+  { id: 'deathplate', hero: 'necromancer', name: "Death Knight's Plate", description: 'Death knights fight 25% harder in attack and defense.', unit: 'heavy', att: 0.25, def: 0.25 },
+  { id: 'batwhistle', hero: 'necromancer', name: 'Bat Whistle', description: 'Bat swarms are twice as effective and see everything.', unit: 'scout', special: 'scout' },
+  { id: 'phylactery', hero: 'necromancer', name: "Lich's Phylactery", description: 'Lich lords lower loyalty by 10 extra points.', unit: 'noble', special: 'loyalty' },
+  { id: 'wailingskull', hero: 'necromancer', name: 'Wailing Skull', description: 'Skull catapults deal double building damage.', unit: 'catapult', special: 'catx2' },
 ];
+
+/** The hero an item belongs to. */
+export const itemHero = (i: ItemDef): UnitId => i.hero ?? 'paladin';
+export const itemsFor = (hero: UnitId, archers = true): ItemDef[] =>
+  ITEMS.filter((i) => itemHero(i) === hero && (archers || (i.unit !== 'archer' && i.unit !== 'marcher')));
 
 export const ITEM_BY_ID: Record<string, ItemDef> = Object.fromEntries(ITEMS.map((i) => [i.id, i]));

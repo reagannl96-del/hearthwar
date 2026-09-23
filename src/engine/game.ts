@@ -2,13 +2,13 @@
 // `advance(world, t)` is deterministic and knows nothing about the UI, so a
 // multiplayer server can run exactly the same code.
 
-import { hasPaladin } from './actions';
+import { gearOf, hasHero } from './actions';
 import { rolloverDay } from './awards';
 import { finishRound } from './round';
 import { aiOnBattle, aiOnConquest, aiThink } from './ai/ai';
 import { handleArrival, addReport, type ArrivalHooks, sendTroops, updateIntel } from './commands';
 import { BUILDINGS } from './data/buildings';
-import { ITEMS, ITEM_BY_ID, UNITS } from './data/units';
+import { HEROES, ITEM_BY_ID, UNITS, itemsFor } from './data/units';
 import { peekEvent, popEvent, pushEvent } from './events';
 import { addUnits, unitsPop } from './formulas';
 import { replenishExchange } from './market';
@@ -139,21 +139,24 @@ function sample(w: World): void {
   replenishExchange(w, sampleInterval(w) / 3_600_000);
 }
 
+/** Now and then one of the player's heroes turns up a legendary item of its own kind. */
 function paladinItem(w: World, e: GameEvent): void {
   const p = w.players[e.a];
   if (!p) return;
   pushEvent(w, 'item', w.now + itemInterval(w), p.id);
-  const pal = p.paladin;
-  if (!pal || !hasPaladin(w, p.id)) return;
-  const missing = ITEMS.filter((i) => !pal.items.includes(i.id) && (w.config.archers || (i.unit !== 'archer' && i.unit !== 'marcher')));
-  if (missing.length === 0) return;
+  const searching = HEROES.filter((h) => gearOf(p, h) && hasHero(w, p.id, h))
+    .map((h) => ({ h, gear: gearOf(p, h)!, missing: itemsFor(h, w.config.archers).filter((i) => !gearOf(p, h)!.items.includes(i.id)) }))
+    .filter((x) => x.missing.length > 0);
+  if (searching.length === 0) return;
+  const { h, gear, missing } = pick(w, searching);
   const item = pick(w, missing);
-  pal.items.push(item.id);
-  if (!pal.equipped) pal.equipped = item.id;
+  gear.items.push(item.id);
+  if (!gear.equipped) gear.equipped = item.id;
+  const finder = h === 'paladin' && p.paladin ? p.paladin.name : `Your ${UNITS[h].name.toLowerCase()}`;
   addReport(w, p.id, {
     kind: 'info', color: 'blue',
-    title: `${pal.name} found the ${item.name}!`,
-    text: `${item.description} Equip it at the statue.`,
+    title: `${finder} found the ${item.name}!`,
+    text: `${item.description} Equip it at the statue of a village that keeps a ${UNITS[h].name.toLowerCase()}.`,
   });
 }
 

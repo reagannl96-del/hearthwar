@@ -1,6 +1,7 @@
+import { themeOfHero } from '../../engine/data/themes';
 import { useState } from 'preact/hooks';
 import { BUILDINGS, BUILDING_ORDER } from '../../engine/data/buildings';
-import { HEROES, HERO_INFO, ITEMS, ITEM_BY_ID, UNITS, UNIT_ORDER } from '../../engine/data/units';
+import { HEROES, HERO_INFO, ITEM_BY_ID, UNITS, UNIT_ORDER, itemsFor } from '../../engine/data/units';
 import {
   COIN_COST, farmCap, hideCap, mineRate, researchCost, storageCap, techMultiplier, wallBase, wallMultiplier,
   watchtowerRange, unitsPop,
@@ -456,30 +457,53 @@ function StatuePanel({ v }: { v: VillageView }) {
           })}
         </div>
       </Section>
-      <Section title="Legendary items">
-        <p class="muted small">
-          Your paladins search for legendary weapons, one roughly every <span class="num">{fmtDur((24 * 3600_000) / pv.config.speed / warp.value)}</span>.
-          The equipped item boosts the troops any of your paladins fight beside.
-          {!pv.me.hasPaladin && ' Train a paladin in any village to start finding them.'}
-        </p>
-        <div class="items">
-          {ITEMS.filter((i) => pv.config.archers || (i.unit !== 'archer' && i.unit !== 'marcher')).map((it) => {
-            const found = pal?.items.includes(it.id);
-            const eq = pal?.equipped === it.id;
-            return (
-              <div class={`item ${found ? '' : 'is-missing'} ${eq ? 'is-equipped' : ''}`}>
-                <div class="item-head">
-                  {it.unit ? <Icon name={it.unit} size={20} /> : <Icon name="star" size={20} />}
-                  <b>{found ? it.name : 'Undiscovered'}</b>
-                </div>
-                <p class="small">{found ? it.description : 'Your paladin has not found this yet.'}</p>
-                {found && (eq ? <span class="pill">Equipped</span> : <Btn small variant="ghost" onClick={() => act({ type: 'equip', item: it.id }, `${it.name} equipped.`)}>Equip</Btn>)}
-              </div>
-            );
-          })}
-        </div>
-      </Section>
+      <HeroItems kind={current ?? sworn ?? null} />
     </div>
+  );
+}
+
+/**
+ * The legendary items of this village's kind of hero: each kind finds its own,
+ * and the one equipped goes into battle with every hero of that kind.
+ */
+function HeroItems({ kind }: { kind: UnitId | null }) {
+  const pv = view.value!;
+  if (!kind) {
+    return (
+      <Section title="Legendary items">
+        <p class="muted small">Every kind of hero hunts for its own legendary items. Train a hero here and it starts searching.</p>
+      </Section>
+    );
+  }
+  const gear = pv.me.heroGear[kind];
+  const theme = themeOfHero(kind);
+  const heroName = UNITS[kind].name;
+  return (
+    <Section title={`${heroName}'s legendary items`}>
+      <p class="muted small">
+        Your {heroName.toLowerCase()}s search for legendary items, one roughly every <span class="num">{fmtDur((24 * 3600_000) / pv.config.speed / warp.value)}</span>.
+        The equipped item goes into battle with every {heroName.toLowerCase()} of yours, boosting the troops it fights beside.
+        {!gear && ` Train a ${heroName.toLowerCase()} to start finding them.`}
+      </p>
+      <div class="items">
+        {itemsFor(kind, pv.config.archers).map((it) => {
+          const found = gear?.items.includes(it.id);
+          const eq = gear?.equipped === it.id;
+          return (
+            <div class={`item ${found ? '' : 'is-missing'} ${eq ? 'is-equipped' : ''}`}>
+              <div class="item-head">
+                {it.unit ? <UnitIcon u={it.unit} size={20} theme={theme} /> : <Icon name={kind} size={20} />}
+                <b>{found ? it.name : 'Undiscovered'}</b>
+              </div>
+              <p class="small">{found ? it.description : `Your ${heroName.toLowerCase()} has not found this yet.`}</p>
+              {found && (eq
+                ? <Btn small variant="quiet" onClick={() => act({ type: 'equip', item: null, hero: kind }, `${it.name} put away.`)}>Equipped · put away</Btn>
+                : <Btn small variant="ghost" onClick={() => act({ type: 'equip', item: it.id }, `${it.name} equipped.`)}>Equip</Btn>)}
+            </div>
+          );
+        })}
+      </div>
+    </Section>
   );
 }
 

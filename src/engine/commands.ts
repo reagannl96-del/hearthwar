@@ -4,7 +4,7 @@ import { bumpDaily } from './awards';
 import { themeOfHero, unitNameAt } from './data/themes';
 import { computeLoot, resolveBattle, type DefStackInput } from './combat';
 import { BUILDINGS, BUILDING_ORDER } from './data/buildings';
-import { ITEM_BY_ID, MERCHANT_CARRY, MERCHANT_SPEED, UNITS, type ItemDef } from './data/units';
+import { HEROES, ITEM_BY_ID, MERCHANT_CARRY, MERCHANT_SPEED, UNITS, type ItemDef } from './data/units';
 import { pushEvent } from './events';
 import { addCommand, commandsFrom, commandsOf, removeCommand } from './cmdindex';
 import {
@@ -48,16 +48,28 @@ export function news(w: World, text: string, kind: 'conquest' | 'player' | 'worl
   if (w.news.length > 200) w.news.length = 200;
 }
 
+/** The legendary item carried by the hero marching with these troops, if any. */
 function equippedItem(w: World, ownerId: number | null, units: Units): ItemDef | null {
-  if (ownerId === null || !(units.paladin && units.paladin > 0)) return null;
-  const pal = w.players[ownerId]?.paladin;
-  return pal?.equipped ? ITEM_BY_ID[pal.equipped] ?? null : null;
+  if (ownerId === null) return null;
+  const p = w.players[ownerId];
+  if (!p) return null;
+  for (const h of HEROES) {
+    if ((units[h] ?? 0) <= 0) continue;
+    const gear = h === 'paladin' ? p.paladin : p.heroGear?.[h];
+    if (gear?.equipped) return ITEM_BY_ID[gear.equipped] ?? null;
+  }
+  return null;
 }
 
-export function travelTime(w: World, from: Village, to: Village, units: Units, ownerId: number | null): number {
+/**
+ * How long an army takes between two villages. Support marching with a druid
+ * takes the forest's old paths and arrives 25% sooner.
+ */
+export function travelTime(w: World, from: Village, to: Village, units: Units, ownerId: number | null, support = false): number {
   const item = equippedItem(w, ownerId, units);
   const per = armyMsPerField(units, w.config.unitSpeed, item?.special === 'speed' ? 0.15 : 0);
-  return Math.max(1000, Math.round(distance(from.x, from.y, to.x, to.y) * per));
+  const druid = support && (units.druid ?? 0) > 0 ? 0.75 : 1;
+  return Math.max(1000, Math.round(distance(from.x, from.y, to.x, to.y) * per * druid));
 }
 
 export function merchantTime(w: World, from: Village, to: Village): number {
@@ -121,7 +133,7 @@ export function sendTroops(w: World, o: SendOpts): ActionResult {
     const me = w.players[o.ownerId];
     if (me.protectedUntil > w.now) me.protectedUntil = w.now;
   }
-  let dur = travelTime(w, from, to, units, o.ownerId);
+  let dur = travelTime(w, from, to, units, o.ownerId, o.kind === 'support');
   if (o.arriveAt !== undefined && o.arriveAt - w.now > dur) dur = o.arriveAt - w.now;
   for (const k in units) from.units[k as UnitId]! -= units[k as UnitId]!;
   for (const k in from.units) if ((from.units[k as UnitId] ?? 0) <= 0) delete from.units[k as UnitId];
@@ -213,7 +225,7 @@ export function withdrawSupport(w: World, playerId: number, hostVid: number, fro
   if (!hasUnits(send)) return { ok: false, error: 'Select some troops.' };
   addUnits(st.units, send, -1);
   if (!hasUnits(st.units)) host.support.splice(idx, 1);
-  const dur = travelTime(w, host, home, send, st.ownerId);
+  const dur = travelTime(w, host, home, send, st.ownerId, true);
   const c: Command = {
     id: w.nextId++, kind: 'return', ownerId: st.ownerId, fromVid: fromVid, toVid: fromVid, origin: hostVid,
     units: send, depart: w.now, arrive: w.now + dur,
@@ -528,15 +540,16 @@ function resolveAttack(w: World, c: Command, hooks: ArrivalHooks): void {
   let risen: BattleData['risen'];
   if (!result.pureScout) {
     const fallen = (u: Units) => RAISABLE.reduce((n, k) => n + (u[k] ?? 0), 0);
+    const share = (lantern: boolean) => (lantern ? 0.2 : 0.1);
     if (result.winner === 'attacker' && (survivors.necromancer ?? 0) > 0 && home && home.ownerId === c.ownerId) {
-      const n = Math.min(Math.floor(fallen(defLostTotal) * 0.1), Math.max(0, popFree(home)));
+      const n = Math.min(Math.floor(fallen(defLostTotal) * share(attItem?.special === 'raise')), Math.max(0, popFree(home)));
       if (n > 0) {
         survivors.spear = (survivors.spear ?? 0) + n;
         home.outPop += n * UNITS.spear.pop;
         risen = { side: 'attacker', n };
       }
     } else if (result.winner === 'defender' && target.ownerId !== null && stacks.some((st) => (st.units.necromancer ?? 0) > 0)) {
-      const n = Math.min(Math.floor(fallen(result.attLost) * 0.1), Math.max(0, popFree(target)));
+      const n = Math.min(Math.floor(fallen(result.attLost) * share(defItems.some((i) => i.special === 'raise'))), Math.max(0, popFree(target)));
       if (n > 0) {
         target.units.spear = (target.units.spear ?? 0) + n;
         risen = { side: 'defender', n };

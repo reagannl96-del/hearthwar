@@ -3,7 +3,7 @@
 
 import { BUILDINGS } from './data/buildings';
 import { unitNameAt } from './data/themes';
-import { HEROES, ITEM_BY_ID, UNITS, isHero } from './data/units';
+import { HEROES, ITEM_BY_ID, UNITS, isHero, itemHero } from './data/units';
 import { cancelCommand, sendResources, sendTrain, sendTroops, withdrawSupport } from './commands';
 import { commandsFrom, commandsOf } from './cmdindex';
 import { pushEvent } from './events';
@@ -11,7 +11,7 @@ import {
   COIN_COST, SCAVENGE_TIERS, buildCost, buildPopDelta, buildTime, coinsForNoble, noblesFromCoins, recruitTime,
   res, resGte, researchCost, researchSmithyReq, researchTime, scavengeDuration, scavengeLoot, unitsCarry, unitsPop,
 } from './formulas';
-import type { ActionResult, BuildingId, Diplomacy, RecruitBuilding, Res, TribeRight, UnitId, Units, Village, World } from './types';
+import type { ActionResult, HeroGear, Player, BuildingId, Diplomacy, RecruitBuilding, Res, TribeRight, UnitId, Units, Village, World } from './types';
 import { RES_KEYS } from './types';
 import {
   canBuildReq, farmMax, popFree, queuedLevel, rechainRecruit, recruitQueueEnd, storageOf, unitAvailable, updateVillage,
@@ -42,7 +42,7 @@ export type Action =
   | { type: 'mintCoin'; vid: number; count: number }
   | { type: 'militia'; vid: number }
   | { type: 'rename'; vid: number; name: string }
-  | { type: 'equip'; item: string | null }
+  | { type: 'equip'; item: string | null; hero?: UnitId }
   | { type: 'scavengeUnlock'; vid: number; tier: number }
   | { type: 'scavenge'; vid: number; tier: number; units: Units }
   | { type: 'claimQuest'; quest: string; vid?: number }
@@ -205,17 +205,25 @@ export function recruitCheck(w: World, v: Village, u: UnitId, count: number): { 
   return { ok: true, max };
 }
 
-/** Does the player have a paladin anywhere: at home, in training, on the road or stationed abroad? */
-export function hasPaladin(w: World, pid: number): boolean {
+/** Does the player have a hero of this kind anywhere: at home, in training, on the road or stationed abroad? */
+export function hasHero(w: World, pid: number, hero: UnitId): boolean {
   const p = w.players[pid];
   for (const vid of p.villages) {
     const v = w.villages[vid];
-    if ((v.units.paladin ?? 0) > 0) return true;
-    if (v.recruit.statue.some((j) => j.unit === 'paladin')) return true;
+    if ((v.units[hero] ?? 0) > 0) return true;
+    if (v.recruit.statue.some((j) => j.unit === hero)) return true;
   }
-  if (commandsOf(w, pid).some((c) => (c.units.paladin ?? 0) > 0)) return true;
-  for (const id in w.villages) if (w.villages[id].support.some((s) => s.ownerId === pid && (s.units.paladin ?? 0) > 0)) return true;
+  if (commandsOf(w, pid).some((c) => (c.units[hero] ?? 0) > 0)) return true;
+  for (const id in w.villages) if (w.villages[id].support.some((s) => s.ownerId === pid && (s.units[hero] ?? 0) > 0)) return true;
   return false;
+}
+
+export const hasPaladin = (w: World, pid: number): boolean => hasHero(w, pid, 'paladin');
+
+/** A player's legendary items for one kind of hero (null until they have trained one). */
+export function gearOf(p: Player, hero: UnitId): HeroGear | null {
+  if (hero === 'paladin') return p.paladin;
+  return p.heroGear?.[hero] ?? null;
 }
 
 /** The hero this village already has (home, training, marching or stationed elsewhere), if any. */
@@ -272,6 +280,9 @@ function recruit(w: World, pid: number, vid: number, u: UnitId, count: number): 
   if (u === 'paladin') {
     const p = w.players[pid];
     if (!p.paladin) p.paladin = { name: 'Sir Aldous', items: [], equipped: null, nextItemAt: 0, vid: null };
+  } else if (isHero(u)) {
+    const p = w.players[pid];
+    (p.heroGear ??= {})[u] ??= { items: [], equipped: null };
   }
   return { ok: true };
 }
@@ -371,12 +382,15 @@ function rename(w: World, pid: number, vid: number, name: string): ActionResult 
   return { ok: true };
 }
 
-function equip(w: World, pid: number, item: string | null): ActionResult {
+function equip(w: World, pid: number, item: string | null, heroKind?: UnitId): ActionResult {
   const p = w.players[pid];
-  if (!p.paladin) return fail('Train a paladin first.');
-  if (item !== null && !p.paladin.items.includes(item)) return fail('Your paladin has not found that item yet.');
-  if (item !== null && !ITEM_BY_ID[item]) return fail('Unknown item.');
-  p.paladin.equipped = item;
+  const def = item !== null ? ITEM_BY_ID[item] : undefined;
+  if (item !== null && !def) return fail('Unknown item.');
+  const hero = def ? itemHero(def) : heroKind ?? 'paladin';
+  const gear = gearOf(p, hero);
+  if (!gear) return fail(`Train a ${UNITS[hero].name.toLowerCase()} first.`);
+  if (item !== null && !gear.items.includes(item)) return fail(`Your ${UNITS[hero].name.toLowerCase()} has not found that item yet.`);
+  gear.equipped = item;
   return { ok: true };
 }
 
@@ -467,7 +481,7 @@ export function applyAction(w: World, pid: number, a: Action): ActionResult {
     case 'mintCoin': return mintCoin(w, pid, a.vid, a.count);
     case 'militia': return callMilitia(w, pid, a.vid);
     case 'rename': return rename(w, pid, a.vid, a.name);
-    case 'equip': return equip(w, pid, a.item);
+    case 'equip': return equip(w, pid, a.item, a.hero);
     case 'scavengeUnlock': return scavengeUnlock(w, pid, a.vid, a.tier);
     case 'scavenge': return scavenge(w, pid, a.vid, a.tier, a.units);
     case 'claimQuest': return claimQuest(w, pid, a.quest, a.vid);

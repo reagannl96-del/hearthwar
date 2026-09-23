@@ -175,3 +175,52 @@ describe('a round of the realm', () => {
     expect(w.endsAt).toBe(19 * 86_400_000);
   });
 });
+
+describe('heroes, rebalanced', () => {
+  it("the sorcerer's arcane barrier and warding items make every defender fight harder", async () => {
+    const { resolveBattle } = await import('../src/engine/combat');
+    const { ITEM_BY_ID } = await import('../src/engine/data/units');
+    const fight = (def: Record<string, number>, items: string[] = []) => resolveBattle({
+      att: { axe: 400 }, attTech: {}, attItem: null, defStacks: [{ units: def, tech: {} }],
+      defItems: items.map((i) => ITEM_BY_ID[i]), wall: 0, luck: 0, morale: 1,
+    }).defStrength;
+    const plain = fight({ spear: 100 });
+    const barrier = fight({ spear: 100, sorcerer: 1 });
+    expect(barrier).toBeGreaterThan((plain + 200) * 1.09);
+    expect(fight({ spear: 100, sorcerer: 1 }, ['wardstaff'])).toBeGreaterThan(barrier * 1.09);
+  });
+
+  it('support marching with a druid arrives a quarter sooner', async () => {
+    const { travelTime } = await import('../src/engine/commands');
+    const w = createWorld({ worldName: 'T', playerName: 'P', villageName: 'H', seed: 51, config: { ...defaultConfig(), aiCount: 2, size: 60 } });
+    const vs = Object.values(w.villages);
+    const [a, b] = [vs[0], vs[vs.length - 1]];
+    const units = { spear: 10, druid: 1 };
+    expect(travelTime(w, a, b, units, w.humanId, true)).toBeCloseTo(travelTime(w, a, b, units, w.humanId) * 0.75, -2);
+    expect(travelTime(w, a, b, { spear: 10 }, w.humanId, true)).toBe(travelTime(w, a, b, { spear: 10 }, w.humanId));
+  });
+
+  it('every hero finds its own themed legendary items, and they are equipped per hero', () => {
+    const w = createWorld({ worldName: 'T', playerName: 'P', villageName: 'H', seed: 52, config: { ...defaultConfig(), difficulty: 'peaceful', aiCount: 2, size: 60 } });
+    const p = w.players[w.humanId];
+    const v = w.villages[p.villages[0]];
+    Object.assign(v.buildings, { statue: 1 });
+    v.res = { wood: 9999, clay: 9999, iron: 9999 };
+    expect(applyAction(w, p.id, { type: 'recruit', vid: v.id, unit: 'goblin', count: 1 }).ok).toBe(true);
+    // a few item searches later
+    for (let i = 0; i < 4; i++) {
+      w.events = w.events.filter((e) => e.type !== 'item');
+      pushEvent(w, 'item', w.now + 1, p.id);
+      advance(w, w.now + 2);
+    }
+    const gear = p.heroGear?.goblin;
+    expect(gear?.items.length).toBe(4);
+    expect(gear?.items.every((id) => ['grabsack', 'rustycleaver', 'wolffang', 'sneakglass', 'bossbonnet', 'boomlog'].includes(id))).toBe(true);
+    expect(p.paladin).toBeNull();
+    const other = gear!.items.find((id) => id !== gear!.equipped)!;
+    expect(applyAction(w, p.id, { type: 'equip', item: other }).ok).toBe(true);
+    expect(gear!.equipped).toBe(other);
+    // nobody can wear another hero's items
+    expect(applyAction(w, p.id, { type: 'equip', item: 'wardstaff' }).ok).toBe(false);
+  });
+});

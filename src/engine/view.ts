@@ -1,11 +1,11 @@
 // Player-scoped read models. The UI only ever sees these projections, never the raw
 // world, so a multiplayer server can send exactly this data to each client.
 
-import { hasPaladin, nobleInfo, buildQueueSlots, villageHero } from './actions';
+import { gearOf, hasPaladin, nobleInfo, buildQueueSlots, villageHero } from './actions';
 import { themeOfHero, type VillageTheme } from './data/themes';
 import { cancelWindow, playerName, travelTime } from './commands';
 import { commandsOf, commandsTo } from './cmdindex';
-import { UNITS } from './data/units';
+import { HEROES, UNITS } from './data/units';
 import {
   armyMsPerField, distance, hideCap, merchantCount, storageCap, unitsCount, watchtowerRange,
 } from './formulas';
@@ -15,7 +15,7 @@ import { awardsSummary, dayOf } from './awards';
 import { DOMINATION, roundDays, standings, type Standings } from './round';
 import type {
   BonusType, BuildJob, Buildings, Intel, PaladinState, PlayerStats, RecruitBuilding, RecruitJob, Report, Res,
-  ResearchJob, ScavengeRun, UnitId, Units, World, WorldConfig, Diplomacy, ForumThread, TribeAlert, TribeRight, RoundResult } from './types';
+  ResearchJob, ScavengeRun, UnitId, Units, World, WorldConfig, Diplomacy, ForumThread, TribeAlert, TribeRight, RoundResult, HeroGear } from './types';
 import { farmMax, popUsed, productionRates, updateVillage } from './village';
 
 export interface SupportView { fromVid: number; fromName: string; ownerId: number; ownerName: string; units: Units }
@@ -97,6 +97,8 @@ export interface PlayerView {
     protectedUntil: number;
     paladin: PaladinState | null;
     hasPaladin: boolean;
+    /** legendary items found by each kind of hero the player keeps */
+    heroGear: Partial<Record<UnitId, HeroGear>>;
     stats: PlayerStats;
     eliminated: boolean;
     history: [number, number][];
@@ -244,6 +246,7 @@ export function buildView(w: World, pid: number): PlayerView {
       protectedUntil: p.protectedUntil,
       paladin: p.paladin ? { ...p.paladin, items: [...p.paladin.items] } : null,
       hasPaladin: hasPaladin(w, pid),
+      heroGear: Object.fromEntries(HEROES.map((h) => [h, gearOf(p, h)]).filter(([, g]) => g).map(([h, g]) => [h, { items: [...(g as HeroGear).items], equipped: (g as HeroGear).equipped }])),
       stats: { ...p.stats },
       eliminated: !!p.eliminated,
       history: p.history,

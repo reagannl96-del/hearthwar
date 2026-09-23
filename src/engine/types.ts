@@ -218,6 +218,9 @@ export interface Intel {
   wall?: number;
 }
 
+/** A hero kind's legendary items: those found, and the one carried into battle. */
+export interface HeroGear { items: string[]; equipped: string | null }
+
 export interface PaladinState {
   name: string;
   items: string[];               // discovered item ids
@@ -291,6 +294,8 @@ export interface Player {
   questsClaimed: string[];
   achievements: Record<string, number>;
   paladin: PaladinState | null;
+  /** legendary items of the other heroes (the paladin's live in `paladin`) */
+  heroGear?: Partial<Record<UnitId, HeroGear>>;
   protectedUntil: number;
   createdAt: number;
   history: [number, number][];  // [time, points]

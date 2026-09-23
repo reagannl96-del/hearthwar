@@ -1,6 +1,6 @@
 import { useState } from 'preact/hooks';
 import { BUILDINGS, BUILDING_ORDER } from '../../engine/data/buildings';
-import { ARMY_ORDER, ITEM_BY_ID, UNITS } from '../../engine/data/units';
+import { ARMY_ORDER, ITEM_BY_ID, UNITS, itemHero } from '../../engine/data/units';
 import type { BattleData, Report, ResKey, SideInfo, UnitId, Units, SharedReport } from '../../engine/types';
 import { Icon } from '../art/icons';
 import { Btn, Empty, PlayerLink, Res, Section, VillageLink, UnitIcon, unitName } from '../components/common';
@@ -256,7 +256,7 @@ function Battle({ b, kind, shared }: { b: BattleData; kind: Report['kind']; shar
         {b.nightOwl && <div class="factor"><span>Night bonus</span><b class="good-text">×2 defense</b></div>}
         {b.militia && <div class="factor"><Icon name="militia" size={16} /><span>Militia fought</span></div>}
         {b.risen && <div class="factor"><Icon name="necromancer" size={16} /><span>{b.risen.n} of the fallen rose again for the {b.risen.side}</span></div>}
-        {b.paladinItem && <div class="factor"><Icon name="paladin" size={16} /><span>{ITEM_BY_ID[b.paladinItem]?.name}</span></div>}
+        {b.paladinItem && ITEM_BY_ID[b.paladinItem] && <div class="factor"><Icon name={itemHero(ITEM_BY_ID[b.paladinItem])} size={16} /><span>{ITEM_BY_ID[b.paladinItem].name}</span></div>}
       </div>
 
       <div class="rep-block">
