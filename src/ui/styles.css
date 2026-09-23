@@ -1176,3 +1176,37 @@ input.tiny { width: 56px; padding: 2px 4px; }
 .move-group h4 { margin: 0 0 4px; }
 .scene-col > .panel { margin-top: 12px; }
 .hero-card.is-locked { opacity: 0.55; filter: saturate(0.5); }
+
+/* ---------- tribes ---------- */
+.tribe-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.tribe-head h1 { margin: 0; font-size: 1.5rem; }
+.tribe-crest { display: grid; place-items: center; width: 54px; height: 54px; border-radius: 10px; border: 2px solid var(--brass-dark); box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.25); color: #fff; flex: none; }
+.tribe-tag { font-weight: 800; }
+.tribe-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; vertical-align: 0; border: 1px solid rgba(0, 0, 0, 0.4); }
+.pill-gold { background: linear-gradient(#f3d27a, #d9a441); color: #3a2410; border-color: #a8741a; }
+.rel-ally { background: rgba(25, 180, 190, 0.18); border-color: #149aa3; color: #0c6d74; }
+.rel-nap { background: rgba(140, 80, 200, 0.16); border-color: #8a4fc8; color: #5d2c94; }
+.rel-enemy { background: rgba(200, 50, 40, 0.14); border-color: #b3261a; color: #8e1e14; }
+.rel-list, .tribe-invites, .forum-threads, .forum-mini, .forum-posts { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.tribe-invites li, .forum-threads li { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 4px; background: rgba(120, 80, 30, 0.07); flex-wrap: wrap; }
+.forum-threads li { display: block; }
+.forum-posts li { padding: 8px 10px; border-radius: 4px; background: rgba(255, 250, 235, 0.6); border: 1px solid var(--line); }
+.post-head { display: flex; gap: 8px; align-items: baseline; }
+.post-head .link { margin-left: auto; }
+.prewrap { white-space: pre-wrap; margin: 0; }
+.stack-sm { display: grid; gap: 8px; }
+.rel-edit { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.rights-edit { display: flex; gap: 14px; flex-wrap: wrap; padding: 6px 4px; }
+.check { display: inline-flex; gap: 6px; align-items: center; font-size: 0.9rem; }
+tr.clickable { cursor: pointer; }
+tr.clickable:hover td { background: rgba(217, 164, 65, 0.12); }
+.nowrap { white-space: nowrap; }
+button.pill.link { cursor: pointer; }
+/* ten tabs: keep them on one line on laptop screens */
+@media (max-width: 1280px) {
+  .nav { gap: 2px; padding: 6px 8px 0; }
+  .nav-item { padding: 7px 9px 6px; font-size: 0.86rem; gap: 5px; }
+}
+@media (max-width: 1100px) {
+  .nav-item { padding: 7px 7px 6px; font-size: 0.8rem; }
+}

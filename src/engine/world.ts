@@ -9,6 +9,7 @@ import type { AIState, BonusType, BuildingId, Player, PlayerStats, Village, Worl
 import { commandsOf, removeCommand } from './cmdindex';
 import { addReport, news, withdrawSupport } from './commands';
 import { villageHero } from './actions';
+import { normalizeTribes } from './tribes';
 import { createVillage, updateVillage } from './village';
 
 export const WORLD_VERSION = 1;
@@ -96,6 +97,7 @@ export const protectionEnd = (w: World) => w.now + PROTECTION_MS;
  */
 export function migrateWorld(w: World): void {
   const cap = protectionEnd(w);
+  normalizeTribes(w);
   for (const id in w.villages) {
     const v = w.villages[id];
     if (!v.heroKind && v.ownerId !== null) v.heroKind = villageHero(w, v) ?? undefined;
@@ -232,7 +234,10 @@ export function createWorld(o: NewWorldOptions): World {
     const members = tribeless.splice(0, randInt(w, 2, 3));
     if (members.length < 2) break;
     const tn = tribeName(w);
-    const tribe = { id: w.nextId++, name: tn.name, tag: tn.tag, color: members[0].color, members: members.map((m) => m.id) };
+    const tribe = {
+      id: w.nextId++, name: tn.name, tag: tn.tag, color: members[0].color, members: members.map((m) => m.id), founderId: members[0].id,
+      createdAt: 0, description: '', internal: '', rights: {}, invites: [], diplomacy: {}, forum: [],
+    };
     w.tribes[tribe.id] = tribe;
     for (const m of members) m.tribeId = tribe.id;
   }

@@ -230,6 +230,10 @@ export interface AIState {
   lastHit?: Record<number, number>;
   /** when the current grudge (targetPlayer) was last renewed */
   grudgeAt?: number;
+  /** village id -> a scouting mission waiting for its report */
+  plans?: Record<number, { target: number; since: number; scoutCmd: number }>;
+  /** target village -> until when it is left alone (scouted and not worth it, or too strong) */
+  avoid?: Record<number, number>;
 }
 
 export interface PlayerStats {
@@ -267,12 +271,35 @@ export interface Player {
   eliminated?: boolean;
 }
 
+/** What a tribe member may do, as in Tribal Wars. */
+export type TribeRight = 'lead' | 'invite' | 'diplomacy' | 'forum' | 'internal';
+export type Diplomacy = 'ally' | 'nap' | 'enemy';
+
+export interface ForumPost { id: number; by: number; t: number; text: string }
+export interface ForumThread { id: number; title: string; by: number; t: number; posts: ForumPost[]; sticky?: boolean }
+export interface TribeInvite { pid: number; by: number; t: number }
+
+/** Someone in the tribe is under attack (members with the "internal" right see these). */
+export interface TribeAlert { cid: number; memberId: number; vid: number; vname: string; x: number; y: number; attacker: string; arrive: number }
+
 export interface Tribe {
   id: number;
   name: string;
   tag: string;
   color: string;
   members: number[];
+  founderId?: number;
+  createdAt?: number;
+  /** public profile text */
+  description?: string;
+  /** members-only announcement */
+  internal?: string;
+  /** rights per member; the founder always has them all */
+  rights?: Record<number, TribeRight[]>;
+  invites?: TribeInvite[];
+  /** other tribe id -> relation */
+  diplomacy?: Record<number, Diplomacy>;
+  forum?: ForumThread[];
 }
 
 export type GameEventType = 'build' | 'arrive' | 'research' | 'ai' | 'barb' | 'scav' | 'item' | 'sample';
@@ -315,6 +342,8 @@ export interface World {
   createdReal: number;
   /** online worlds: sign-in account id -> player id */
   accounts?: Record<string, number>;
+  /** client-side shadow only: attacks on fellow tribe members, as sent by the server */
+  tribeAlerts?: TribeAlert[];
 }
 
 export interface ActionResult {

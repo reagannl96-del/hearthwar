@@ -5,6 +5,7 @@ import { coords, continent, fmt, fmtDur } from './format';
 import { BuildingScreen } from './screens/BuildingScreen';
 import { MapScreen } from './screens/MapScreen';
 import { NewsScreen } from './screens/NewsScreen';
+import { TribeScreen } from './screens/TribeScreen';
 import { OverviewsScreen } from './screens/OverviewsScreen';
 import { QuestsScreen } from './screens/QuestsScreen';
 import { RankingScreen } from './screens/RankingScreen';
@@ -72,6 +73,7 @@ function Game() {
         {r.name === 'overviews' && <OverviewsScreen />}
         {r.name === 'settings' && <SettingsScreen />}
         {r.name === 'news' && <NewsScreen />}
+        {r.name === 'tribe' && <TribeScreen id={r.id} tab={r.tab} />}
       </main>
       <Toasts />
       {v.me.eliminated && <GameOver />}
@@ -207,6 +209,7 @@ function Nav() {
     { r: { name: 'reports' }, icon: 'report', label: 'Reports', key: 'reports', badge: v.unreadReports },
     { r: { name: 'quests' }, icon: 'quest', label: 'Quests', key: 'quests', badge: claimable },
     { r: { name: 'overviews' }, icon: 'overview', label: 'Overview', key: 'overviews' },
+    { r: { name: 'tribe' }, icon: 'tribe', label: 'Tribe', key: 'tribe', badge: v.tribeInvites || undefined },
     { r: { name: 'ranking' }, icon: 'rank', label: 'Rankings', key: 'ranking' },
     { r: { name: 'news' }, icon: 'news', label: 'Chronicle', key: 'news' },
     { r: { name: 'settings' }, icon: 'settings', label: 'Settings', key: 'settings' },

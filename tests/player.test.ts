@@ -334,7 +334,7 @@ describe('a human player', () => {
     expect(home.res.wood + home.res.clay + home.res.iron).toBeGreaterThanOrEqual(taken * 0.99);
   });
 
-  it('AI rulers attack when it is worth it, not on a timer', () => {
+  it('AI rulers attack when a scouting report makes it worth it, not on a timer', () => {
     const setup = (rich: boolean) => {
       const w = createWorld({
         worldName: 'T', playerName: 'P', villageName: 'Home', seed: 5,
@@ -363,8 +363,39 @@ describe('a human player', () => {
       for (let i = 0; i < 60; i++) { keep(); advance(w, w.now + 60_000); }
       return hits();
     };
-    expect(setup(false)).toBe(0); // nothing to take and nothing to fear: they leave it be
-    expect(setup(true)).toBeGreaterThan(0); // a fat, poorly guarded stockpile draws raids
+    const poor = setup(false), rich = setup(true);
+    // an empty village only sees the odd impulsive raid; a fat, poorly guarded one draws far more
+    expect(rich).toBeGreaterThan(poor);
+    expect(poor).toBeLessThanOrEqual(6);
+  });
+
+  it('AI rulers with noblemen send noble trains at players after scouting them', () => {
+    const w = createWorld({
+      worldName: 'T', playerName: 'P', villageName: 'Home', seed: 5,
+      config: { ...defaultConfig(), difficulty: 'hard', aiCount: 6, size: 50 },
+    });
+    removeEvents(w, (e) => e.type === 'barb');
+    const p = w.players[w.humanId];
+    const v = w.villages[p.villages[0]];
+    p.protectedUntil = 0;
+    v.units = { spear: 5 };
+    v.buildings.main = 10; v.buildings.farm = 10; v.buildings.warehouse = 10;
+    v.points = 400;
+    let trains = 0;
+    for (const ai of Object.values(w.players).filter((x) => x.kind === 'ai')) {
+      ai.ai!.hostile = true;
+      ai.ai!.aggression = 1;
+      for (const vid of ai.villages) {
+        const av = w.villages[vid];
+        av.buildings.rally = 1;
+        av.units = { axe: 4000, light: 1000, scout: 50, noble: 3 };
+      }
+    }
+    for (let i = 0; i < 40 && trains === 0; i++) {
+      advance(w, w.now + 60_000);
+      for (const c of Object.values(w.commands)) if (c.kind === 'attack' && c.toVid === v.id && (c.units.noble ?? 0) > 0) trains++;
+    }
+    expect(trains).toBeGreaterThan(0);
   });
 
   it('a statue stays sworn to the first hero trained there, even after it dies', () => {

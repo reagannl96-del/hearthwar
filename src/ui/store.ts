@@ -19,7 +19,8 @@ export type Route =
   | { name: 'quests' }
   | { name: 'overviews' }
   | { name: 'settings' }
-  | { name: 'news' };
+  | { name: 'news' }
+  | { name: 'tribe'; id?: number; tab?: string };
 
 export interface Toast {
   id: number;
@@ -172,6 +173,10 @@ function diff(prev: PlayerView | null, next: PlayerView) {
         sfx.build();
       }
     }
+  }
+  // tribe invitations
+  if (next.tribeInvites > prev.tribeInvites) {
+    toast('A tribe has invited you to join.', 'info', { label: 'Show', run: () => go({ name: 'tribe' }) });
   }
   // lost villages
   for (const v of prev.villages) {

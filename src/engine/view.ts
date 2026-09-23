@@ -9,10 +9,10 @@ import {
   armyMsPerField, distance, hideCap, merchantCount, storageCap, unitsCount, watchtowerRange,
 } from './formulas';
 import { achievementLevels, questStatus } from './quests';
+import { TRIBE_RIGHTS, invitesFor, relation, tribeAlerts, tribePoints } from './tribes';
 import type {
   BonusType, BuildJob, Buildings, Intel, PaladinState, PlayerStats, RecruitBuilding, RecruitJob, Report, Res,
-  ResearchJob, ScavengeRun, UnitId, Units, World, WorldConfig,
-} from './types';
+  ResearchJob, ScavengeRun, UnitId, Units, World, WorldConfig, Diplomacy, ForumThread, TribeAlert, TribeRight } from './types';
 import { farmMax, popUsed, productionRates, updateVillage } from './village';
 
 export interface SupportView { fromVid: number; fromName: string; ownerId: number; ownerName: string; units: Units }
@@ -102,6 +102,8 @@ export interface PlayerView {
     homeVid: number | null;
   };
   villages: VillageView[];
+  /** tribe invitations waiting for me */
+  tribeInvites: number;
   commands: CommandView[];
   incoming: CommandView[];
   unreadReports: number;
@@ -242,6 +244,7 @@ export function buildView(w: World, pid: number): PlayerView {
       homeVid: p.villages[0] ?? null,
     },
     villages,
+    tribeInvites: invitesFor(w, pid).length,
     commands,
     incoming,
     unreadReports: p.reports.reduce((n, r) => n + (r.read ? 0 : 1), 0),
@@ -262,7 +265,7 @@ export interface MapVillage {
   bonus?: BonusType;
 }
 export interface MapPlayer { id: number; name: string; color: string; tribeId: number | null; points: number; villages: number; kind: 'human' | 'ai' }
-export interface MapTribe { id: number; name: string; tag: string; color: string }
+export interface MapTribe { id: number; name: string; tag: string; color: string; diplomacy: Record<number, Diplomacy> }
 export interface MapData {
   rev: number;
   size: number;
@@ -287,7 +290,7 @@ export function buildMap(w: World): MapData {
   const tribes: Record<number, MapTribe> = {};
   for (const id in w.tribes) {
     const t = w.tribes[id];
-    tribes[t.id] = { id: t.id, name: t.name, tag: t.tag, color: t.color };
+    tribes[t.id] = { id: t.id, name: t.name, tag: t.tag, color: t.color, diplomacy: { ...(t.diplomacy ?? {}) } };
   }
   return { rev: w.mapRev, size: w.config.size, terrain: w.terrain, villages, players, tribes };
 }
@@ -346,7 +349,7 @@ export function rankingFor(w: World) {
     .filter((p) => !p.eliminated)
     .map((p) => ({
       id: p.id, name: p.name, kind: p.kind, color: p.color, points: p.points, villages: p.villages.length,
-      tribe: p.tribeId ? tribes[p.tribeId]?.tag ?? '' : '', killsAtt: p.stats.killsAtt, killsDef: p.stats.killsDef,
+      tribe: p.tribeId ? tribes[p.tribeId]?.tag ?? '' : '', tribeId: p.tribeId, killsAtt: p.stats.killsAtt, killsDef: p.stats.killsDef,
       conquered: p.stats.conquered, personality: p.ai?.personality,
     }))
     .sort((a, b) => b.points - a.points);
@@ -370,3 +373,101 @@ export function achievementsFor(w: World, pid: number) {
 }
 
 export { travelTime, unitsCount };
+
+// ---------- tribes ----------
+
+export interface TribeMemberView {
+  id: number;
+  name: string;
+  kind: 'human' | 'ai';
+  points: number;
+  villages: number;
+  rank: number;
+  founder: boolean;
+  rights: TribeRight[];
+}
+
+export interface TribeProfileView {
+  id: number;
+  name: string;
+  tag: string;
+  color: string;
+  points: number;
+  rank: number;
+  villages: number;
+  createdAt: number;
+  founder: string;
+  description: string;
+  members: TribeMemberView[];
+  relations: { id: number; name: string; tag: string; status: Diplomacy }[];
+  /** how my tribe sees this one */
+  myRelation: Diplomacy | 'own' | null;
+}
+
+export function tribeProfile(w: World, tid: number, viewer: number): TribeProfileView | null {
+  const t = w.tribes[tid];
+  if (!t) return null;
+  const ranked = Object.values(w.players).filter((x) => !x.eliminated).sort((a, b) => b.points - a.points);
+  const rankOf = new Map(ranked.map((x, i) => [x.id, i + 1]));
+  const tribeRanks = Object.values(w.tribes).map((x) => ({ id: x.id, pts: tribePoints(w, x) })).sort((a, b) => b.pts - a.pts);
+  const members = t.members
+    .map((m) => w.players[m])
+    .filter(Boolean)
+    .map((m) => ({
+      id: m.id, name: m.name, kind: m.kind, points: m.points, villages: m.villages.length, rank: rankOf.get(m.id) ?? 0,
+      founder: t.founderId === m.id, rights: t.founderId === m.id ? [...TRIBE_RIGHTS] : [...(t.rights?.[m.id] ?? [])],
+    }))
+    .sort((a, b) => b.points - a.points);
+  const me = w.players[viewer];
+  return {
+    id: t.id, name: t.name, tag: t.tag, color: t.color, points: tribePoints(w, t),
+    rank: tribeRanks.findIndex((x) => x.id === t.id) + 1,
+    villages: members.reduce((s, m) => s + m.villages, 0),
+    createdAt: t.createdAt ?? 0,
+    founder: w.players[t.founderId ?? -1]?.name ?? '',
+    description: t.description ?? '',
+    members,
+    relations: Object.entries(t.diplomacy ?? {})
+      .filter(([id]) => w.tribes[Number(id)])
+      .map(([id, status]) => ({ id: Number(id), name: w.tribes[Number(id)].name, tag: w.tribes[Number(id)].tag, status })),
+    myRelation: relation(w, me?.tribeId ?? null, t.id),
+  };
+}
+
+export interface MyTribeView extends TribeProfileView {
+  internal: string;
+  myRights: TribeRight[];
+  isFounder: boolean;
+  invites: { pid: number; name: string; by: string; t: number }[];
+  forum: ForumThread[];
+  names: Record<number, string>;
+  alerts: TribeAlert[];
+}
+
+/** Everything the tribe screen needs: my tribe (if any) and invitations waiting for me. */
+export function tribeHome(w: World, pid: number): { tribe: MyTribeView | null; invitations: { id: number; name: string; tag: string; by: string; t: number; points: number; members: number }[] } {
+  const me = w.players[pid];
+  const invitations = invitesFor(w, pid).map((i) => ({
+    id: i.tribe.id, name: i.tribe.name, tag: i.tribe.tag, by: w.players[i.by]?.name ?? '?', t: i.t,
+    points: tribePoints(w, i.tribe), members: i.tribe.members.length,
+  }));
+  const t = me?.tribeId != null ? w.tribes[me.tribeId] : null;
+  if (!t) return { tribe: null, invitations };
+  const prof = tribeProfile(w, t.id, pid)!;
+  const names: Record<number, string> = {};
+  for (const id in w.players) names[Number(id)] = w.players[id].name;
+  const myRights = t.founderId === pid ? [...TRIBE_RIGHTS] : (t.rights?.[pid]?.includes('lead') ? [...TRIBE_RIGHTS] : [...(t.rights?.[pid] ?? [])]);
+  return {
+    invitations,
+    tribe: {
+      ...prof,
+      internal: t.internal ?? '',
+      myRights,
+      isFounder: t.founderId === pid,
+      invites: (t.invites ?? []).map((i) => ({ pid: i.pid, name: w.players[i.pid]?.name ?? '?', by: w.players[i.by]?.name ?? '?', t: i.t })),
+      forum: [...(t.forum ?? [])].sort((a, b) => Number(!!b.sticky) - Number(!!a.sticky)),
+      names,
+      alerts: myRights.includes('internal') ? (w.tribeAlerts ?? tribeAlerts(w, pid)) : [],
+    },
+  };
+}

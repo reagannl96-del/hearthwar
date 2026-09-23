@@ -10,7 +10,7 @@ import {
   COIN_COST, SCAVENGE_TIERS, buildCost, buildPopDelta, buildTime, coinsForNoble, noblesFromCoins, recruitTime,
   res, resGte, researchCost, researchSmithyReq, researchTime, scavengeDuration, scavengeLoot, unitsCarry, unitsPop,
 } from './formulas';
-import type { ActionResult, BuildingId, RecruitBuilding, Res, UnitId, Units, Village, World } from './types';
+import type { ActionResult, BuildingId, Diplomacy, RecruitBuilding, Res, TribeRight, UnitId, Units, Village, World } from './types';
 import { RES_KEYS } from './types';
 import {
   canBuildReq, farmMax, popFree, queuedLevel, rechainRecruit, recruitQueueEnd, storageOf, unitAvailable, updateVillage,
@@ -18,6 +18,10 @@ import {
 import { claimQuest } from './quests';
 import { exchangeQuote } from './market';
 import { restartPlayer } from './world';
+import {
+  acceptInvite, cancelInvite, createTribe, declineInvite, disbandTribe, editTribe, forumDelete, forumNewThread, forumPin, forumReply,
+  invitePlayer, kickMember, leaveTribe, setDiplomacy, setRights,
+} from './tribes';
 
 export type Action =
   | { type: 'build'; vid: number; building: BuildingId }
@@ -44,7 +48,22 @@ export type Action =
   | { type: 'readReport'; id: number | 'all' }
   | { type: 'deleteReport'; id: number | 'all' | 'read' }
   | { type: 'note'; vid: number; text: string }
-  | { type: 'restart'; village: string };
+  | { type: 'restart'; village: string }
+  | { type: 'tribeCreate'; name: string; tag: string }
+  | { type: 'tribeInvite'; name: string }
+  | { type: 'tribeCancelInvite'; pid: number }
+  | { type: 'tribeAccept'; tribe: number }
+  | { type: 'tribeDecline'; tribe: number }
+  | { type: 'tribeLeave' }
+  | { type: 'tribeKick'; pid: number }
+  | { type: 'tribeRights'; pid: number; rights: TribeRight[] }
+  | { type: 'tribeDiplomacy'; tribe: number; status: Diplomacy | null }
+  | { type: 'tribeEdit'; description?: string; internal?: string; name?: string; tag?: string }
+  | { type: 'tribeDisband' }
+  | { type: 'forumThread'; title: string; text: string }
+  | { type: 'forumReply'; thread: number; text: string }
+  | { type: 'forumDelete'; thread: number; post?: number }
+  | { type: 'forumPin'; thread: number; sticky: boolean };
 
 const fail = (error: string): ActionResult => ({ ok: false, error });
 
@@ -454,6 +473,21 @@ export function applyAction(w: World, pid: number, a: Action): ActionResult {
       p.reports = p.reports.filter((r) => !(a.id === 'all' || (a.id === 'read' && r.read) || r.id === a.id));
       return { ok: true };
     }
+    case 'tribeCreate': return createTribe(w, pid, a.name, a.tag);
+    case 'tribeInvite': return invitePlayer(w, pid, a.name);
+    case 'tribeCancelInvite': return cancelInvite(w, pid, a.pid);
+    case 'tribeAccept': return acceptInvite(w, pid, a.tribe);
+    case 'tribeDecline': return declineInvite(w, pid, a.tribe);
+    case 'tribeLeave': return leaveTribe(w, pid);
+    case 'tribeKick': return kickMember(w, pid, a.pid);
+    case 'tribeRights': return setRights(w, pid, a.pid, Array.isArray(a.rights) ? a.rights : []);
+    case 'tribeDiplomacy': return setDiplomacy(w, pid, a.tribe, a.status);
+    case 'tribeEdit': return editTribe(w, pid, a);
+    case 'tribeDisband': return disbandTribe(w, pid);
+    case 'forumThread': return forumNewThread(w, pid, a.title, a.text);
+    case 'forumReply': return forumReply(w, pid, a.thread, a.text);
+    case 'forumDelete': return forumDelete(w, pid, a.thread, a.post);
+    case 'forumPin': return forumPin(w, pid, a.thread, a.sticky);
     case 'restart': {
       if (p.kind !== 'human') return fail('Only rulers can start over.');
       const v = restartPlayer(w, pid, String(a.village ?? ''));

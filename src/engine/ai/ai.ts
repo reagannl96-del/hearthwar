@@ -12,6 +12,7 @@ import { nextRandom } from '../rng';
 import { villagesNear } from '../spatial';
 import { exchangeQuote } from '../market';
 import { commandsTo } from '../cmdindex';
+import { acceptInvite, declineInvite, hasRight, invitePlayer, invitesFor, relation, setDiplomacy, tribeOf, tribePoints } from '../tribes';
 import type { BattleData, BuildingId, Command, Player, Res, UnitId, Units, Village, World } from '../types';
 import { RES_KEYS } from '../types';
 import { farmMax, popFree, queuedLevel, recruitQueueEnd, storageOf, unitAvailable, updateVillage } from '../village';
@@ -101,6 +102,7 @@ export function aiThink(w: World, p: Player): void {
     war(w, p);
   }
   conquestDrive(w, p);
+  tribeLife(w, p);
   // forget stale farm memory
   if (nextRandom(w) < 0.05) {
     for (const k in ai.memory) if (ai.memory[k] < w.now - 30 * aiThinkInterval(w)) delete ai.memory[k];
@@ -352,6 +354,8 @@ function chooseNobleTarget(w: World, p: Player, from: Village): Village | null {
     } else {
       const o = w.players[v.ownerId];
       if (!o || isProtected(w, o.id) || (o.tribeId !== null && o.tribeId === p.tribeId)) continue;
+      const rel = relation(w, p.tribeId, o.tribeId);
+      if (rel === 'ally' || rel === 'nap') continue;
       if (o.kind === 'human' && !p.ai!.hostile) continue;
       const intel = p.intel[v.id];
       // only go after player villages we have recently cleared
@@ -481,58 +485,112 @@ const unitWorth = (units: Units) => {
 /** A grudge fades after this long without fresh fighting. */
 const GRUDGE_MS = 60 * 60_000;
 
+/**
+ * War, the way a sensible ruler wages it: pick a target, send scouts, wait for the
+ * report, then strike only if the report says it will go well (with a noble train
+ * if there are noblemen to spare). Now and then a ruler acts on impulse and throws
+ * a full or partial attack at someone without scouting first.
+ */
 function war(w: World, p: Player): void {
   const ai = p.ai!;
   const diff = w.config.difficulty;
   if (ai.targetPlayer != null && w.players[ai.targetPlayer]?.kind === 'human' && w.now - (ai.grudgeAt ?? 0) > GRUDGE_MS) ai.targetPlayer = null;
-  const margin = diff === 'hard' ? 1.15 : diff === 'easy' ? 2.2 : 1.45;
   const minArmy = diff === 'hard' ? 1500 : diff === 'easy' ? 6000 : 3000;
-  if (nextRandom(w) > ai.aggression + 0.15) return;
+  const think = aiThinkInterval(w);
+  ai.plans ??= {};
+  ai.avoid ??= {};
+  for (const k in ai.avoid) if (ai.avoid[k] < w.now) delete ai.avoid[k];
   for (const vid of p.villages) {
     const v = w.villages[vid];
     if (!v || v.buildings.rally < 1) continue;
     const army = offensiveArmy(v);
-    const A = attackValue(army);
-    if (A < minArmy) continue;
-    const target = pickWarTarget(w, p, v);
-    if (!target) continue;
-    const intel = p.intel[target.id];
-    const fresh = intel?.scoutT !== undefined && w.now - intel.scoutT < aiThinkInterval(w) * 12;
-    if (!fresh) {
-      const scouts = v.units.scout ?? 0;
-      if (scouts >= 3) {
-        sendTroops(w, { ownerId: p.id, fromVid: v.id, toVid: target.id, kind: 'attack', units: { scout: Math.min(scouts, 5) }, tag: 'scout' });
+    // a scouting mission is out: wait for its report, then decide
+    const plan = ai.plans[vid];
+    if (plan) {
+      const target = w.villages[plan.target];
+      if (!target || target.ownerId === p.id || w.now - plan.since > think * 40) { delete ai.plans[vid]; continue; }
+      const intel = p.intel[plan.target];
+      const reported = intel?.scoutT !== undefined && intel.scoutT >= plan.since;
+      if (!reported) {
+        if (w.commands[plan.scoutCmd]?.kind === 'attack') continue; // still on the road
+        // the scouts never came back: whatever is there is strong enough to kill them
+        delete ai.plans[vid];
+        ai.avoid[plan.target] = w.now + think * 60;
+        continue;
       }
+      delete ai.plans[vid];
+      strike(w, p, v, target, army);
       continue;
     }
-    const wall = intel!.buildings?.wall ?? intel!.wall ?? 0;
-    const sim = resolveBattle({
-      att: army, attTech: v.tech, attItem: null, defStacks: [{ units: intel!.units ?? {}, tech: {} }], defItems: [],
-      wall, luck: 0, morale: 1,
-    });
-    if (sim.winner !== 'attacker' || sim.attStrength < sim.defStrength * margin) continue;
-    // don't march out with the enemy at the gates
-    if (commandsTo(w, v.id).some((c) => c.kind === 'attack' && c.ownerId !== p.id && c.arrive - w.now < aiThinkInterval(w) * 6)) continue;
-    // is it worth it? loot we can carry and enemy troops we'd destroy, against what we'd lose
-    const hidden = hideCap(intel!.buildings?.hiding ?? 0);
-    const r0 = intel!.res;
-    const lootable = r0 ? Math.max(0, r0.wood - hidden) + Math.max(0, r0.clay - hidden) + Math.max(0, r0.iron - hidden) : 0;
-    const gain = Math.min(lootable, unitsCarry(sim.attSurvivors)) + unitWorth(intel!.units ?? {}) * 0.5
-      + (target.ownerId !== null && ai.targetPlayer === target.ownerId ? 2000 + unitWorth(army) * 0.05 : 0);
-    const cost = unitWorth(sim.attLost);
-    if (gain < 1500 || gain < cost * 0.8) continue;
-    const send = { ...army };
-    if (wall === 0) delete send.ram;
-    const cat = (send.catapult ?? 0) > 0 ? pickCatTarget(intel!.buildings) : undefined;
-    const sent = sendTroops(w, { ownerId: p.id, fromVid: v.id, toVid: target.id, kind: 'attack', units: send, catTarget: cat, tag: 'war' });
-    if (target.ownerId !== null && sent.ok) {
-      if (ai.targetPlayer !== target.ownerId) ai.grudgeAt = w.now;
-      ai.targetPlayer = target.ownerId;
-      if (w.players[target.ownerId]?.kind === 'human') {
-        (ai.lastHit ??= {})[target.ownerId] = w.now;
+    if (attackValue(army) < minArmy) continue;
+    if (nextRandom(w) > ai.aggression + 0.15) continue;
+    // never march out with the enemy at the gates
+    if (commandsTo(w, v.id).some((c) => c.kind === 'attack' && c.ownerId !== p.id && c.arrive - w.now < think * 6)) continue;
+    const target = pickWarTarget(w, p, v);
+    if (!target) continue;
+    // every so often a ruler acts on impulse: a blind full or partial attack
+    if (nextRandom(w) < 0.1 * (0.5 + ai.aggression)) {
+      const share = nextRandom(w) < 0.5 ? 1 : 0.4 + nextRandom(w) * 0.3;
+      const send: Units = {};
+      for (const k in army) {
+        const n = Math.floor((army[k as UnitId] ?? 0) * share);
+        if (n > 0) send[k as UnitId] = n;
       }
+      if (attackValue(send) >= minArmy * 0.5 && sendTroops(w, { ownerId: p.id, fromVid: v.id, toVid: target.id, kind: 'attack', units: send, tag: 'war' }).ok) noteHit(w, p, target);
+      continue;
     }
+    const scouts = v.units.scout ?? 0;
+    if (scouts < 3) continue;
+    const r = sendTroops(w, { ownerId: p.id, fromVid: v.id, toVid: target.id, kind: 'attack', units: { scout: Math.min(scouts, 8) }, tag: 'scout' });
+    if (r.ok) ai.plans[vid] = { target: target.id, since: w.now, scoutCmd: (r.data as { id: number }).id };
   }
+}
+
+/** Remember who we hit (grudges and the human's attack history). */
+function noteHit(w: World, p: Player, target: Village): void {
+  const ai = p.ai!;
+  if (target.ownerId === null) return;
+  if (ai.targetPlayer !== target.ownerId) ai.grudgeAt = w.now;
+  ai.targetPlayer = target.ownerId;
+  if (w.players[target.ownerId]?.kind === 'human') (ai.lastHit ??= {})[target.ownerId] = w.now;
+}
+
+/** The scouting report is in: attack, send a noble train, or let this one be. */
+function strike(w: World, p: Player, v: Village, target: Village, army: Units): void {
+  const ai = p.ai!;
+  const diff = w.config.difficulty;
+  const think = aiThinkInterval(w);
+  const margin = diff === 'hard' ? 1.15 : diff === 'easy' ? 2.2 : 1.45;
+  const intel = p.intel[target.id]!;
+  const wall = intel.buildings?.wall ?? intel.wall ?? 0;
+  const sim = resolveBattle({
+    att: army, attTech: v.tech, attItem: null, defStacks: [{ units: intel.units ?? {}, tech: {} }], defItems: [],
+    wall, luck: 0, morale: 1,
+  });
+  if (sim.winner !== 'attacker' || sim.attStrength < sim.defStrength * margin) { ai.avoid![target.id] = w.now + think * 45; return; }
+  if (commandsTo(w, v.id).some((c) => c.kind === 'attack' && c.ownerId !== p.id && c.arrive - w.now < think * 6)) return;
+  const send = { ...army };
+  if (wall === 0) delete send.ram;
+  const cat = (send.catapult ?? 0) > 0 ? pickCatTarget(intel.buildings) : undefined;
+  // noblemen to spare and a village worth taking: a noble train right behind the clearing wave
+  const nobles = v.units.noble ?? 0;
+  if (target.ownerId !== null && nobles >= 2 && target.points >= 150) {
+    const escort = Math.min(60, Math.floor((send.axe ?? 0) * 0.08));
+    const waves: Units[] = [{ ...send }];
+    const n = Math.min(nobles, 5);
+    if (escort > 0) waves[0].axe = (send.axe ?? 0) - escort * n;
+    for (let i = 0; i < n; i++) waves.push(escort > 0 ? { noble: 1, axe: escort } : { noble: 1 });
+    if (sendTrain(w, p.id, v.id, target.id, waves, cat).ok) { noteHit(w, p, target); return; }
+  }
+  // is a plain attack worth it? loot we can carry and troops we'd destroy, against what we'd lose
+  const hidden = hideCap(intel.buildings?.hiding ?? 0);
+  const r0 = intel.res;
+  const lootable = r0 ? Math.max(0, r0.wood - hidden) + Math.max(0, r0.clay - hidden) + Math.max(0, r0.iron - hidden) : 0;
+  const gain = Math.min(lootable, unitsCarry(sim.attSurvivors)) + unitWorth(intel.units ?? {}) * 0.5
+    + (target.ownerId !== null && ai.targetPlayer === target.ownerId ? 2000 + unitWorth(army) * 0.05 : 0);
+  const cost = unitWorth(sim.attLost);
+  if (gain < 1500 || gain < cost * 0.8) { ai.avoid![target.id] = w.now + think * 25; return; }
+  if (sendTroops(w, { ownerId: p.id, fromVid: v.id, toVid: target.id, kind: 'attack', units: send, catTarget: cat, tag: 'war' }).ok) noteHit(w, p, target);
 }
 
 function pickCatTarget(b: Partial<Record<BuildingId, number>> | undefined): BuildingId {
@@ -553,6 +611,10 @@ function pickWarTarget(w: World, p: Player, v: Village): Village | null {
     const o = w.players[t.ownerId];
     if (!o || isProtected(w, o.id)) continue;
     if (o.tribeId !== null && o.tribeId === p.tribeId) continue;
+    const rel = relation(w, p.tribeId, o.tribeId);
+    if (rel === 'ally' || rel === 'nap') continue;
+    if ((ai.avoid?.[t.id] ?? 0) > w.now) continue;
+    if (Object.values(ai.plans ?? {}).some((pl) => pl.target === t.id)) continue;
     if (o.kind === 'human') {
       if (!ai.hostile) continue;
       if (ai.targetPlayer !== o.id && humansTargetedBy(w, o.id) >= humanCap) continue;
@@ -590,6 +652,60 @@ export function aiOnBattle(w: World, c: Command, target: Village, data: BattleDa
     victim.ai.targetPlayer = attacker.id;
     victim.ai.grudgeAt = w.now;
     victim.ai.aggression = Math.min(1, victim.ai.aggression + 0.1);
+  }
+}
+
+// ---------- tribes ----------
+
+/**
+ * Rulers take part in tribe life: they answer invitations (joining tribes that are
+ * worth it), tribe leaders recruit nearby rulers now and then, and they answer
+ * other tribes' diplomacy: a pact from an equal is returned, a declaration of war
+ * is returned in kind.
+ */
+function tribeLife(w: World, p: Player): void {
+  if (nextRandom(w) > 0.12) return;
+  const myPts = p.points;
+  // invitations waiting for us
+  if (p.tribeId == null) {
+    for (const inv of invitesFor(w, p.id)) {
+      const theirs = tribePoints(w, inv.tribe);
+      if (theirs >= myPts * 0.6 || nextRandom(w) < 0.25) {
+        acceptInvite(w, p.id, inv.tribe.id);
+        return;
+      }
+      if (nextRandom(w) < 0.3) declineInvite(w, p.id, inv.tribe.id);
+    }
+  }
+  const t = tribeOf(w, p.id);
+  if (!t || !hasRight(t, p.id, 'invite')) return;
+  const tp = tribePoints(w, t);
+  // recruit a nearby tribeless ruler now and then
+  if (t.members.length < 10 && nextRandom(w) < 0.2) {
+    const home = w.villages[p.villages[0]];
+    if (home) {
+      for (const v of villagesNear(w, home.x, home.y, 25)) {
+        const o = v.ownerId !== null ? w.players[v.ownerId] : null;
+        if (!o || o.id === p.id || o.tribeId != null || o.eliminated) continue;
+        if (t.invites?.some((i) => i.pid === o.id)) continue;
+        if (o.points < myPts * 0.3 || o.points > myPts * 3) continue;
+        invitePlayer(w, p.id, o.name);
+        break;
+      }
+    }
+  }
+  // answer other tribes' diplomacy
+  if (!hasRight(t, p.id, 'diplomacy')) return;
+  for (const id in w.tribes) {
+    const other = w.tribes[id];
+    if (other.id === t.id) continue;
+    const theirView = other.diplomacy?.[t.id];
+    const ours = t.diplomacy?.[other.id];
+    if (!theirView || ours === theirView) continue;
+    const op = tribePoints(w, other);
+    if (theirView === 'enemy') setDiplomacy(w, p.id, other.id, 'enemy');
+    else if (theirView === 'nap' && !ours && op >= tp * 0.6) setDiplomacy(w, p.id, other.id, 'nap');
+    else if (theirView === 'ally' && !ours && op >= tp * 0.8) setDiplomacy(w, p.id, other.id, nextRandom(w) < 0.5 ? 'ally' : 'nap');
   }
 }
 

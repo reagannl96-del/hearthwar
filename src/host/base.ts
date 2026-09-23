@@ -12,7 +12,7 @@ import { villageAt } from '../engine/spatial';
 import type { ActionResult, BuildingId, Report, UnitId, Units, World } from '../engine/types';
 import { unitAvailable, updateVillage } from '../engine/village';
 import {
-  achievementsFor, buildMap, buildView, playerProfile, rankingFor, villageInfo, type MapData, type PlayerView,
+  achievementsFor, buildMap, buildView, playerProfile, rankingFor, tribeHome, tribeProfile, villageInfo, type MapData, type PlayerView,
 } from '../engine/view';
 
 export abstract class HostBase {
@@ -102,6 +102,14 @@ export abstract class HostBase {
       villages: t.members.reduce((s, m) => s + (this.world.players[m]?.villages.length ?? 0), 0),
       memberNames: t.members.map((m) => this.world.players[m]?.name ?? '?'),
     }));
+  }
+
+  tribeHome() {
+    return tribeHome(this.world, this.pid);
+  }
+
+  tribeProfile(tid: number) {
+    return tribeProfile(this.world, tid, this.pid);
   }
 
   simulate(input: CombatInput) {

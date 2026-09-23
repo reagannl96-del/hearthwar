@@ -30,7 +30,7 @@ export function RankingScreen({ player }: { player?: number }) {
                 <thead><tr><th>#</th><th>Tribe</th><th>Members</th><th class="right">Villages</th><th class="right">Points</th></tr></thead>
                 <tbody>
                   {tribes.map((t, i) => (
-                    <tr>
+                    <tr class="clickable" onClick={() => go({ name: 'tribe', id: t.id })} title="Show the tribe and its members">
                       <td class="num">{i + 1}</td>
                       <td><i class="sw" style={{ background: t.color }} /> <b>[{t.tag}]</b> {t.name}</td>
                       <td class="small">{t.memberNames.join(', ')}</td>
@@ -60,7 +60,7 @@ export function RankingScreen({ player }: { player?: number }) {
                       </button>
                       {p.personality && <span class="muted small"> · {PERSONA[p.personality]}</span>}
                     </td>
-                    <td>{p.tribe && <span class="pill">{p.tribe}</span>}</td>
+                    <td>{p.tribe && p.tribeId != null && <button type="button" class="pill link" onClick={(e) => { e.stopPropagation(); go({ name: 'tribe', id: p.tribeId! }); }}>{p.tribe}</button>}</td>
                     <td class="right num">{p.villages}</td>
                     <td class="right num">{fmt(tab === 'oda' ? p.killsAtt : tab === 'odd' ? p.killsDef : p.points)}</td>
                   </tr>
@@ -88,7 +88,7 @@ function Profile({ pid }: { pid: number }) {
       </div>
       <div class="page-head">
         <h1><i class="sw lg" style={{ background: p.id === me ? 'var(--me)' : p.color }} /> {p.name}</h1>
-        {p.tribe && <span class="pill">[{p.tribe.tag}] {p.tribe.name}</span>}
+        {p.tribe && <button type="button" class="pill link" onClick={() => go({ name: 'tribe', id: p.tribe!.id })}>[{p.tribe.tag}] {p.tribe.name}</button>}
       </div>
       <div class="grid-2">
         <Section title="Standing">

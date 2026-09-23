@@ -6,7 +6,8 @@
 import { UNITS } from './data/units';
 import { distance, watchtowerRange } from './formulas';
 import { commandsOf, commandsTo } from './cmdindex';
-import type { Command, Player, SupportStack, UnitId, Units, Village, World } from './types';
+import type { Command, Player, SupportStack, Tribe, TribeAlert, UnitId, Units, Village, World } from './types';
+import { invitesFor, tribeAlerts } from './tribes';
 import { emptyBuildings } from './village';
 
 export interface PublicSnapshot {
@@ -24,6 +25,12 @@ export interface PrivatePacket {
   commands: Command[];
   exchange: World['exchange'];
   news: World['news'];
+  /** the player's own tribe in full (forum, invites, internal notes) */
+  tribe?: Tribe;
+  /** tribes inviting this player (just enough to show the invitation) */
+  invitedBy: { tribeId: number; by: number; t: number }[];
+  /** attacks on fellow tribe members, for those with internal access */
+  tribeAlerts: TribeAlert[];
 }
 
 function publicVillage(v: Village, now: number): Village {
@@ -52,6 +59,12 @@ export function publicSnapshot(w: World): PublicSnapshot {
   for (const id in w.villages) villages[id] = publicVillage(w.villages[id], w.now);
   const players: World['players'] = {};
   for (const id in w.players) players[id] = publicPlayer(w.players[id]);
+  // what the world may know of a tribe: who is in it, who leads, and its diplomacy
+  const tribes: World['tribes'] = {};
+  for (const id in w.tribes) {
+    const t = w.tribes[id];
+    tribes[id] = { ...t, internal: '', invites: [], forum: [] };
+  }
   return {
     rev: w.mapRev,
     world: {
@@ -59,6 +72,7 @@ export function publicSnapshot(w: World): PublicSnapshot {
       rng: 0,
       villages,
       players,
+      tribes,
       commands: {},
       events: [],
       accounts: undefined,
@@ -113,6 +127,9 @@ export function privatePacket(w: World, pid: number): PrivatePacket {
     commands,
     exchange: w.exchange,
     news: w.news.slice(0, 60),
+    tribe: p.tribeId != null ? w.tribes[p.tribeId] : undefined,
+    invitedBy: invitesFor(w, pid).map((i) => ({ tribeId: i.tribe.id, by: i.by, t: i.t })),
+    tribeAlerts: tribeAlerts(w, pid),
   };
 }
 
@@ -136,6 +153,13 @@ export function mergeShadow(pub: World, priv: PrivatePacket): World {
     if (host) w.villages[a.host] = { ...host, support: [...host.support.filter((s) => s.fromVid !== a.stack.fromVid), a.stack] };
   }
   w.players[priv.pid] = priv.player;
+  w.tribes = { ...pub.tribes };
+  if (priv.tribe) w.tribes[priv.tribe.id] = priv.tribe;
+  for (const inv of priv.invitedBy ?? []) {
+    const t = w.tribes[inv.tribeId];
+    if (t) w.tribes[inv.tribeId] = { ...t, invites: [...(t.invites ?? []).filter((i) => i.pid !== priv.pid), { pid: priv.pid, by: inv.by, t: inv.t }] };
+  }
+  w.tribeAlerts = priv.tribeAlerts ?? [];
   for (const c of priv.commands) w.commands[c.id] = c;
   return w;
 }

@@ -7,7 +7,7 @@ import type { BuildingId, UnitId } from '../../engine/types';
 
 type IconName = 'wood' | 'clay' | 'iron' | 'pop' | 'storage' | 'time' | 'points' | 'loyalty' | 'coin' | 'merchant' | 'hide'
   | UnitId | `b_${BuildingId}`
-  | 'attack' | 'support' | 'return' | 'report' | 'map' | 'village' | 'quest' | 'rank' | 'settings' | 'overview' | 'pause' | 'play' | 'ff' | 'bell' | 'close' | 'star' | 'shield' | 'trade' | 'news' | 'prev' | 'next' | 'flag';
+  | 'attack' | 'support' | 'return' | 'report' | 'map' | 'village' | 'quest' | 'rank' | 'settings' | 'overview' | 'pause' | 'play' | 'ff' | 'bell' | 'close' | 'star' | 'shield' | 'trade' | 'news' | 'prev' | 'next' | 'flag' | 'tribe';
 
 const S = (props: { children: preact.ComponentChildren; size: number; class?: string; title?: string }) => (
   <svg viewBox="0 0 24 24" width={props.size} height={props.size} class={`icon ${props.class ?? ''}`} aria-hidden={props.title ? undefined : 'true'} role={props.title ? 'img' : undefined}>
@@ -558,6 +558,17 @@ const paths: Record<string, () => JSX.Element> = {
       <path d="M18.4 8h2.8v11a2 2 0 0 1-4 0" fill={PARCH_DK} />
       <rect x="6.6" y="6.8" width="9.6" height="3" fill={RED} stroke-width=".6" />
       <path d="M6.6 12.4h9.6M6.6 15h9.6M6.6 17.6h6" stroke="#7a5a34" stroke-width=".9" />
+    </Ink>
+  ),
+  tribe: () => (
+    <Ink>
+      <path d="M4 2.5h16v13.5l-8 5.5-8-5.5Z" fill={BLUE} />
+      <path d="M4 2.5h16v3H4Z" fill={GOLD} />
+      <circle cx="12" cy="9.6" r="2" fill={SKIN} stroke-width=".7" />
+      <path d="M8.4 16c0-2.2 1.6-3.8 3.6-3.8s3.6 1.6 3.6 3.8Z" fill={GOLD_LT} stroke-width=".7" />
+      <circle cx="7.6" cy="10.8" r="1.4" fill={SKIN} stroke-width=".6" />
+      <circle cx="16.4" cy="10.8" r="1.4" fill={SKIN} stroke-width=".6" />
+      <path d="M5.4 15.2c0-1.6 1-2.7 2.2-2.7M18.6 15.2c0-1.6-1-2.7-2.2-2.7" fill="none" stroke={GOLD_LT} stroke-width="1.2" />
     </Ink>
   ),
   flag: () => (

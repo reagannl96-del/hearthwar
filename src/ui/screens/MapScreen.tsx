@@ -9,6 +9,7 @@ import { isWinter } from '../../engine/world';
 import { Icon } from '../art/icons';
 import { Btn, UnitList } from '../components/common';
 import { coords, continent, fmt, fmtAgo, fmtDur, parseCoords } from '../format';
+import { TribeTag } from './TribeScreen';
 import { MARK_COLORS, markFor, marks, setMark, useWorldMarks, type Marks } from '../mapMarks';
 import { act, go, host, marketTarget, now, rallyTarget, view, vid, village, warp } from '../store';
 
@@ -160,11 +161,15 @@ export function MapScreen({ focus }: { focus?: number }) {
         const owner = v.ownerId !== null ? data.players[v.ownerId] : null;
         const mark = v.ownerId === me ? undefined : markFor(mk, v.id, v.ownerId, owner?.tribeId);
         let fill = col['--map-barb'];
+        const rel = owner ? tribeColor(data, myTribe, owner.tribeId) : undefined;
         if (v.ownerId === me) fill = v.id === pv.me.homeVid ? '#ffffff' : col['--me'];
         else if (mark) fill = mark;
+        else if (rel) fill = rel;
         else if (owner) fill = owner.color;
         const px = sx(x), py = sy(y);
         const gx = px + z / 2, gy = py + z * (z < 10 ? 0.5 : 0.62);
+        // bonus villages glow orange so they stand out at any zoom
+        if (v.bonus) glow(ctx, gx, gy, Math.max(z * 1.25, 12), true, '#ff8a1f');
         if (v.ownerId === me) glow(ctx, gx, gy, Math.max(z * (v.id === cur.id ? 1.35 : 1.1), 10), v.id === cur.id, v.id === pv.me.homeVid ? '#ffffff' : '#ffc43c');
         else if (mark) glow(ctx, gx, gy, Math.max(z * 1.1, 10), false, mark);
         if (z < 10) {
@@ -191,11 +196,11 @@ export function MapScreen({ focus }: { focus?: number }) {
             ctx.fillRect(px + z * 0.78 + 1.5, py + z * 0.03, z * 0.16, z * 0.1);
           }
           if (v.bonus) {
-            ctx.strokeStyle = col['--me'];
-            ctx.lineWidth = 1.5;
-            ctx.beginPath();
-            ctx.arc(px + z * 0.82, py + z * 0.2, z * 0.1, 0, Math.PI * 2);
-            ctx.stroke();
+            // a little orange star on the flag post
+            ctx.fillStyle = '#ffb347';
+            ctx.strokeStyle = 'rgba(60, 25, 0, 0.9)';
+            ctx.lineWidth = 1;
+            star(ctx, px + z * 0.2, py + z * 0.14, Math.max(3, z * 0.13));
           }
           if (owner && myTribe !== null && owner.tribeId === myTribe && v.ownerId !== me) {
             ctx.strokeStyle = '#3a73c0';
@@ -297,7 +302,7 @@ export function MapScreen({ focus }: { focus?: number }) {
         const owner = v.ownerId !== null ? data.players[v.ownerId] : undefined;
         const mine = v.ownerId === pv.me.id;
         const mark = mine ? undefined : markFor(mk, v.id, v.ownerId, owner?.tribeId);
-        b.fillStyle = mine ? (v.id === pv.me.homeVid ? '#ffffff' : col['--me']) : mark ?? owner?.color ?? col['--map-barb'];
+        b.fillStyle = mine ? (v.id === pv.me.homeVid ? '#ffffff' : col['--me']) : mark ?? (owner ? tribeColor(data, pv.me.tribeId, owner.tribeId) : undefined) ?? owner?.color ?? (v.bonus ? '#ff8a1f' : col['--map-barb']);
         b.fillRect(v.x * P, v.y * P, P, P);
         if (mine || mark) {
           b.strokeStyle = 'rgba(20, 10, 0, 0.85)';
@@ -497,6 +502,27 @@ function glow(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, st
   ctx.restore();
 }
 
+/** Tribal Wars map colours: your tribe blue, allies turquoise, pacts purple, enemies red. */
+export const TRIBE_COLORS = { own: '#3b7bff', ally: '#19c7cf', nap: '#a66bff', enemy: '#ff3b30' } as const;
+function tribeColor(data: MapData, myTribe: number | null, theirs: number | null): string | undefined {
+  if (myTribe == null || theirs == null) return undefined;
+  if (myTribe === theirs) return TRIBE_COLORS.own;
+  const rel = data.tribes[myTribe]?.diplomacy?.[theirs];
+  return rel ? TRIBE_COLORS[rel] : undefined;
+}
+
+function star(ctx: CanvasRenderingContext2D, x: number, y: number, r: number) {
+  ctx.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const a = -Math.PI / 2 + (i * Math.PI) / 5;
+    const rr = i % 2 === 0 ? r : r * 0.45;
+    ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+}
+
 function rgbOf(hex: string): [number, number, number] {
   const m = hex.match(/^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
   return m ? [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)] : [255, 196, 60];
@@ -539,6 +565,13 @@ function Legend({ data }: { data: MapData }) {
       <span><i class="sw" style={{ background: '#ffffff' }} /> Your home</span>
       <span><i class="sw" style={{ background: 'var(--me)' }} /> Your other villages</span>
       <span><i class="sw" style={{ background: 'var(--map-barb)' }} /> Barbarians</span>
+      <span><i class="sw" style={{ background: '#ff8a1f', boxShadow: '0 0 6px #ff8a1f' }} /> Bonus village</span>
+      {pv.me.tribeId != null && <>
+        <span><i class="sw" style={{ background: TRIBE_COLORS.own }} /> Tribe</span>
+        <span><i class="sw" style={{ background: TRIBE_COLORS.ally }} /> Allies</span>
+        <span><i class="sw" style={{ background: TRIBE_COLORS.nap }} /> Pact</span>
+        <span><i class="sw" style={{ background: TRIBE_COLORS.enemy }} /> Enemies</span>
+      </>}
       {near.map((p) => (
         <button type="button" class="link" onClick={() => go({ name: 'ranking', player: p.id })}>
           <i class="sw" style={{ background: p.color }} /> {p.name}
@@ -577,7 +610,7 @@ function VillagePanel({ v, data }: { v: MapVillage; data: MapData }) {
       </header>
       <dl class="facts">
         <dt>Ruler</dt>
-        <dd>{owner ? <button type="button" class="link" onClick={() => go({ name: 'ranking', player: owner.id })}>{owner.name}</button> : 'Barbarians'}{info.tribe && <span class="muted"> [{info.tribe}]</span>}</dd>
+        <dd>{owner ? <button type="button" class="link" onClick={() => go({ name: 'ranking', player: owner.id })}>{owner.name}</button> : 'Barbarians'}{owner?.tribeId != null && data.tribes[owner.tribeId] && <> <TribeTag id={owner.tribeId} tag={data.tribes[owner.tribeId].tag} /></>}</dd>
         {info.bonus && <><dt>Bonus</dt><dd>{info.bonus === 'all' ? '+30% all resources' : info.bonus === 'farm' ? '+10% population' : info.bonus === 'storage' ? '+50% storage' : info.bonus === 'recruit' ? 'faster recruitment' : `+100% ${info.bonus}`}</dd></>}
         {!own && <><dt>Distance</dt><dd class="num">{info.distanceFrom?.toFixed(1)} fields</dd></>}
         {info.protected && <><dt>Status</dt><dd>Beginner protection</dd></>}
