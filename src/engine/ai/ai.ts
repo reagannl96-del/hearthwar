@@ -7,7 +7,7 @@ import { resolveBattle } from '../combat';
 import { isProtected, sendTrain, sendTroops } from '../commands';
 import { BUILDINGS, BUILDING_ORDER } from '../data/buildings';
 import { UNITS } from '../data/units';
-import { COIN_COST, distance, hasUnits, recruitTime, resGte, unitsCount } from '../formulas';
+import { COIN_COST, distance, hasUnits, hideCap, recruitTime, resGte, unitsCarry, unitsCount } from '../formulas';
 import { nextRandom } from '../rng';
 import { villagesNear } from '../spatial';
 import { exchangeQuote } from '../market';
@@ -472,8 +472,12 @@ function humansTargetedBy(w: World, humanId: number): number {
   return n;
 }
 
-/** Real minutes an AI ruler waits before attacking the same human again. */
-const HUMAN_BREATHER_MIN = { easy: 25, normal: 15, hard: 10, peaceful: 60 } as const;
+/** What a unit is worth to its owner, in resources. */
+const unitWorth = (units: Units) => {
+  let n = 0;
+  for (const k in units) { const u = k as UnitId; const c = UNITS[u].cost; n += (units[u] ?? 0) * (c.wood + c.clay + c.iron); }
+  return n;
+};
 /** A grudge fades after this long without fresh fighting. */
 const GRUDGE_MS = 60 * 60_000;
 
@@ -507,6 +511,16 @@ function war(w: World, p: Player): void {
       wall, luck: 0, morale: 1,
     });
     if (sim.winner !== 'attacker' || sim.attStrength < sim.defStrength * margin) continue;
+    // don't march out with the enemy at the gates
+    if (commandsTo(w, v.id).some((c) => c.kind === 'attack' && c.ownerId !== p.id && c.arrive - w.now < aiThinkInterval(w) * 6)) continue;
+    // is it worth it? loot we can carry and enemy troops we'd destroy, against what we'd lose
+    const hidden = hideCap(intel!.buildings?.hiding ?? 0);
+    const r0 = intel!.res;
+    const lootable = r0 ? Math.max(0, r0.wood - hidden) + Math.max(0, r0.clay - hidden) + Math.max(0, r0.iron - hidden) : 0;
+    const gain = Math.min(lootable, unitsCarry(sim.attSurvivors)) + unitWorth(intel!.units ?? {}) * 0.5
+      + (target.ownerId !== null && ai.targetPlayer === target.ownerId ? 2000 + unitWorth(army) * 0.05 : 0);
+    const cost = unitWorth(sim.attLost);
+    if (gain < 1500 || gain < cost * 0.8) continue;
     const send = { ...army };
     if (wall === 0) delete send.ram;
     const cat = (send.catapult ?? 0) > 0 ? pickCatTarget(intel!.buildings) : undefined;
@@ -516,8 +530,6 @@ function war(w: World, p: Player): void {
       ai.targetPlayer = target.ownerId;
       if (w.players[target.ownerId]?.kind === 'human') {
         (ai.lastHit ??= {})[target.ownerId] = w.now;
-        // each blow takes a little of the fury out of them
-        ai.aggression = Math.max(0.15, ai.aggression - 0.05);
       }
     }
   }
@@ -544,8 +556,6 @@ function pickWarTarget(w: World, p: Player, v: Village): Village | null {
     if (o.kind === 'human') {
       if (!ai.hostile) continue;
       if (ai.targetPlayer !== o.id && humansTargetedBy(w, o.id) >= humanCap) continue;
-      // give the human a breather between attacks from this ruler
-      if (w.now - (ai.lastHit?.[o.id] ?? -Infinity) < HUMAN_BREATHER_MIN[diff] * 60_000) continue;
       if (diff === 'easy' && o.points > p.points * 0.8) continue;
     }
     const d = distance(v.x, v.y, t.x, t.y);

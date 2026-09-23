@@ -334,40 +334,37 @@ describe('a human player', () => {
     expect(home.res.wood + home.res.clay + home.res.iron).toBeGreaterThanOrEqual(taken * 0.99);
   });
 
-  it('AI rulers give a human a breather between attacks', () => {
-    const w = createWorld({
-      worldName: 'T', playerName: 'P', villageName: 'Home', seed: 5,
-      config: { ...defaultConfig(), difficulty: 'hard', aiCount: 6, size: 50 },
-    });
-    const p = w.players[w.humanId];
-    const v = w.villages[p.villages[0]];
-    p.protectedUntil = 0;
-    v.units = { spear: 5 };
-    for (const ai of Object.values(w.players).filter((x) => x.kind === 'ai')) {
-      ai.ai!.hostile = true;
-      ai.ai!.aggression = 1;
-      for (const vid of ai.villages) {
-        const av = w.villages[vid];
-        av.buildings.rally = 1;
-        av.units = { axe: 3000, light: 1000, scout: 50 };
+  it('AI rulers attack when it is worth it, not on a timer', () => {
+    const setup = (rich: boolean) => {
+      const w = createWorld({
+        worldName: 'T', playerName: 'P', villageName: 'Home', seed: 5,
+        config: { ...defaultConfig(), difficulty: 'hard', aiCount: 6, size: 50 },
+      });
+      removeEvents(w, (e) => e.type === 'barb');
+      const p = w.players[w.humanId];
+      const v = w.villages[p.villages[0]];
+      p.protectedUntil = 0;
+      v.units = { spear: 5 };
+      v.buildings.warehouse = 25;
+      v.buildings.hiding = 0;
+      for (const ai of Object.values(w.players).filter((x) => x.kind === 'ai')) {
+        ai.ai!.hostile = true;
+        ai.ai!.aggression = 1;
+        ai.ai!.targetPlayer = null;
+        for (const vid of ai.villages) {
+          const av = w.villages[vid];
+          av.buildings.rally = 1;
+          av.units = { axe: 3000, light: 1000, scout: 50 };
+        }
       }
-    }
-    advance(w, w.now + 2 * HOUR);
-    const hits = new Map<number, number[]>();
-    for (const r of p.reports) {
-      const b = r.battle;
-      if (!b || b.attacker.playerId === null || b.attacker.playerId === p.id) continue;
-      if (!Object.entries(b.attUnits).some(([k, n]) => k !== 'scout' && (n ?? 0) > 0)) continue;
-      const list = hits.get(b.attacker.playerId) ?? [];
-      list.push(r.t);
-      hits.set(b.attacker.playerId, list);
-    }
-    expect(hits.size).toBeGreaterThan(0); // they do still come
-    for (const times of hits.values()) {
-      times.sort((a, b) => a - b);
-      // launches are at least 10 minutes apart on hard; arrivals can bunch a little with travel time
-      for (let i = 1; i < times.length; i++) expect(times[i] - times[i - 1]).toBeGreaterThan(8 * 60_000);
-    }
+      const hits = () => p.reports.filter((r) => r.battle && r.battle.attacker.playerId !== p.id && Object.entries(r.battle.attUnits).some(([k, n]) => k !== 'scout' && (n ?? 0) > 0)).length;
+      // keep the village's stockpile where the test wants it for the whole hour
+      const keep = () => { updateVillage(w, v, w.now); v.res = rich ? { wood: 150000, clay: 150000, iron: 150000 } : { wood: 0, clay: 0, iron: 0 }; };
+      for (let i = 0; i < 60; i++) { keep(); advance(w, w.now + 60_000); }
+      return hits();
+    };
+    expect(setup(false)).toBe(0); // nothing to take and nothing to fear: they leave it be
+    expect(setup(true)).toBeGreaterThan(0); // a fat, poorly guarded stockpile draws raids
   });
 
   it('a statue stays sworn to the first hero trained there, even after it dies', () => {
