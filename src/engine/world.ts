@@ -124,6 +124,18 @@ function newPlayer(w: World, name: string, kind: 'human' | 'ai', color: string):
 
 const PERSONALITIES: AIState['personality'][] = ['farmer', 'warlord', 'turtle', 'expander'];
 
+function aiState(w: World, personality: AIState['personality']): AIState {
+  return {
+    personality,
+    nextThink: 0,
+    lastWarCheck: 0,
+    aggression: personality === 'warlord' ? 0.8 : personality === 'expander' ? 0.6 : personality === 'farmer' ? 0.4 : 0.2,
+    hostile: w.config.difficulty !== 'peaceful',
+    memory: {},
+    targetPlayer: null,
+  };
+}
+
 export function createWorld(o: NewWorldOptions): World {
   const seed = o.seed ?? Math.floor(Math.random() * 2 ** 31);
   const cfg = { ...o.config };
@@ -204,15 +216,7 @@ export function createWorld(o: NewWorldOptions): World {
     spots.push(spot);
     const p = newPlayer(w, uniqueName(w), 'ai', colors[i % colors.length]);
     const personality = i < 2 ? (i === 0 ? 'warlord' : 'farmer') : pick(w, PERSONALITIES);
-    p.ai = {
-      personality,
-      nextThink: 0,
-      lastWarCheck: 0,
-      aggression: personality === 'warlord' ? 0.8 : personality === 'expander' ? 0.6 : personality === 'farmer' ? 0.4 : 0.2,
-      hostile: cfg.difficulty !== 'peaceful',
-      memory: {},
-      targetPlayer: null,
-    };
+    p.ai = aiState(w, personality);
     const v = createVillage(w, spot[0], spot[1], villageName(w), p.id);
     p.villages.push(v.id);
     aiPlayers.push(p);
@@ -340,14 +344,14 @@ export function respawnHuman(w: World, villageName: string, pid = w.humanId): Vi
  * elbow room, and never right on top of another human ruler. If the realm is
  * crowded, the rules relax.
  */
-function freshSpot(w: World): [number, number] | null {
+function freshSpot(w: World, strict = false): [number, number] | null {
   const size = w.config.size;
   const clear = (x: number, y: number, r: number) => {
     for (const v of Object.values(w.villages)) if (Math.abs(v.x - x) <= r && Math.abs(v.y - y) <= r) return false;
     return true;
   };
   const humanVillages = Object.values(w.villages).filter((v) => v.ownerId !== null && w.players[v.ownerId]?.kind === 'human');
-  const rules: [number, number][] = [[3, 10], [2, 7], [1, 4], [1, 0]];
+  const rules: [number, number][] = strict ? [[3, 10], [2, 7]] : [[3, 10], [2, 7], [1, 4], [1, 0]];
   for (const [room, gap] of rules) {
     for (let tries = 0; tries < 800; tries++) {
       const x = randInt(w, 5, size - 6), y = randInt(w, 5, size - 6);
@@ -362,8 +366,8 @@ function freshSpot(w: World): [number, number] | null {
 }
 
 /** Found a starting village for `p` at a fresh spot, with a few barbarian villages to raid nearby. */
-function settle(w: World, p: Player, villageNameText: string): Village | null {
-  const spot = freshSpot(w);
+function settle(w: World, p: Player, villageNameText: string, strict = false): Village | null {
+  const spot = freshSpot(w, strict);
   if (!spot) return null;
   const [x, y] = spot;
   const v = createVillage(w, x, y, villageNameText.slice(0, 32) || `${p.name}'s hold`, p.id);
@@ -387,6 +391,60 @@ function settle(w: World, p: Player, villageNameText: string): Village | null {
   invalidateSpatial();
   w.mapRev++;
   return v;
+}
+
+/**
+ * The realm keeps filling in while it runs, as a real server does: now and then a
+ * new AI ruler turns up and settles wherever there is still elbow room (with a
+ * few barbarian villages around it and beginner protection, like any newcomer),
+ * and the odd barbarian village springs up in open country. Arrivals thin out as
+ * the map fills and stop once there is no proper room left. Called on every
+ * barbarian tick; the timing is random, about every hour and a half of real time
+ * for rulers and every half hour for barbarians on a normal-speed world.
+ */
+export function realmGrowth(w: World): void {
+  const tick = barbInterval(w);
+  const size = w.config.size;
+  const rulers = Object.values(w.players).filter((p) => p.kind === 'ai' && !p.eliminated).length;
+  const cap = Math.max(4, Math.round(w.config.aiCount * 2));
+  const rulerGap = Math.min(6 * HOUR, Math.max(20 * 60_000, (180 * HOUR) / w.config.speed));
+  const crowding = Math.max(0, 1 - rulers / cap);
+  if (w.config.aiCount > 0 && nextRandom(w) < (tick / rulerGap) * crowding) {
+    const taken = new Set(Object.values(w.players).map((p) => p.color));
+    const color = PLAYER_COLORS.find((col) => !taken.has(col)) ?? pick(w, PLAYER_COLORS);
+    const p = newPlayer(w, uniqueName(w), 'ai', color);
+    const v = settle(w, p, villageName(w), true);
+    if (!v) {
+      delete w.players[p.id];
+    } else {
+      p.ai = aiState(w, pick(w, PERSONALITIES));
+      pushEvent(w, 'ai', w.now + randInt(w, 1000, aiThinkInterval(w)), p.id);
+      news(w, `${p.name} has arrived in the realm and founded ${v.name}.`, 'player', v.id);
+    }
+  }
+  // a new barbarian village, only while the realm has fewer than it started with
+  // and only on open ground with no neighbour within two fields
+  const barbGap = Math.min(3 * HOUR, Math.max(10 * 60_000, (75 * HOUR) / w.config.speed));
+  const target = Math.round(size * size * w.config.barbDensity);
+  let barbs = 0;
+  for (const id in w.villages) if (w.villages[id].ownerId === null) barbs++;
+  if (barbs < target && nextRandom(w) < tick / barbGap) {
+    for (let tries = 0; tries < 60; tries++) {
+      const x = randInt(w, 3, size - 4), y = randInt(w, 3, size - 4);
+      const t = terrainAt(w, x, y);
+      if (t !== '.' && t !== 'f') continue;
+      if (Object.values(w.villages).some((o) => Math.abs(o.x - x) <= 2 && Math.abs(o.y - y) <= 2)) continue;
+      const b = createVillage(w, x, y, 'Barbarian village', null);
+      b.buildings.timber = randInt(w, 1, 3); b.buildings.claypit = randInt(w, 1, 3); b.buildings.ironmine = randInt(w, 1, 2);
+      b.buildings.warehouse = randInt(w, 1, 3); b.buildings.main = 1; b.buildings.farm = 1;
+      b.points = villagePoints(b.buildings);
+      b.res = res(randInt(w, 50, 300), randInt(w, 50, 300), randInt(w, 50, 300));
+      b.grownAt = w.now;
+      invalidateSpatial();
+      w.mapRev++;
+      break;
+    }
+  }
 }
 
 /**

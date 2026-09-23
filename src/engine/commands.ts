@@ -1,6 +1,7 @@
 // Troop & merchant movements: sending, arrival, battles, conquest and reports.
 
 import { bumpDaily } from './awards';
+import { themeOfHero, unitNameAt } from './data/themes';
 import { computeLoot, resolveBattle, type DefStackInput } from './combat';
 import { BUILDINGS, BUILDING_ORDER } from './data/buildings';
 import { ITEM_BY_ID, MERCHANT_CARRY, MERCHANT_SPEED, UNITS, type ItemDef } from './data/units';
@@ -29,7 +30,7 @@ export function playerName(w: World, id: number | null): string {
 }
 
 export function sideInfo(w: World, v: Village, ownerId: number | null = v.ownerId): SideInfo {
-  return { playerId: ownerId, playerName: playerName(w, ownerId), vid: v.id, vname: v.name, x: v.x, y: v.y };
+  return { theme: themeOfHero(v.heroKind), playerId: ownerId, playerName: playerName(w, ownerId), vid: v.id, vname: v.name, x: v.x, y: v.y };
 }
 
 export function addReport(w: World, playerId: number | null, r: Omit<Report, 'id' | 't' | 'read'> & { read?: boolean }): Report | null {
@@ -98,7 +99,7 @@ export function sendTroops(w: World, o: SendOpts): ActionResult {
     const n = Math.floor(o.units[u] ?? 0);
     if (n <= 0) continue;
     if (u === 'militia') return { ok: false, error: 'Militia never leave the village.' };
-    if ((from.units[u] ?? 0) < n) return { ok: false, error: `Not enough ${UNITS[u].plural.toLowerCase()} at home.` };
+    if ((from.units[u] ?? 0) < n) return { ok: false, error: `Not enough ${unitNameAt(from, u, true).toLowerCase()} at home.` };
     units[u] = n;
   }
   if (!hasUnits(units)) return { ok: false, error: 'Select some troops first.' };
@@ -160,7 +161,7 @@ export function sendTrain(w: World, ownerId: number, fromVid: number, toVid: num
   const need: Units = {};
   for (const u of list) addUnits(need, u);
   for (const k in need) {
-    if ((from.units[k as UnitId] ?? 0) < (need[k as UnitId] ?? 0)) return { ok: false, error: `Not enough ${UNITS[k as UnitId].plural.toLowerCase()} for every wave.` };
+    if ((from.units[k as UnitId] ?? 0) < (need[k as UnitId] ?? 0)) return { ok: false, error: `Not enough ${unitNameAt(from, k as UnitId, true).toLowerCase()} for every wave.` };
   }
   const slowest = Math.max(...list.map((u) => travelTime(w, from, to, u, ownerId)));
   const land = w.now + slowest;

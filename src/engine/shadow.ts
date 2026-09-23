@@ -40,6 +40,7 @@ function publicVillage(v: Village, now: number): Village {
     units: {}, support: [], buildQueue: [], recruit: { barracks: [], stable: [], workshop: [], academy: [], statue: [] },
     research: [], tech: {}, scavengeUnlocked: 0, scavenge: [null, null, null, null], foundedAt: v.foundedAt, outPop: 0,
     merchantsOut: 0,
+    heroKind: v.heroKind,
   };
 }
 

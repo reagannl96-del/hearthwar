@@ -6,7 +6,7 @@ import type { BuildingId, UnitId, Units } from '../../engine/types';
 import type { CommandView, VillageView } from '../../engine/view';
 import { lsGet, lsSet } from '../../host/storage';
 import { Icon } from '../art/icons';
-import { Btn, Clock, Cost, Countdown, Empty, NumInput, Progress, Section, Tabs, UnitList, UnitTable, VillageLink } from '../components/common';
+import { Btn, Clock, Cost, Countdown, Empty, NumInput, Progress, Section, Tabs, UnitList, UnitTable, VillageLink, UnitIcon, unitName } from '../components/common';
 import { coords, fmt, fmtAgo, fmtDur, parseCoords } from '../format';
 import { act, go, host, now, rallyTarget, view, village, warp } from '../store';
 import { Simulator } from './Simulator';
@@ -90,7 +90,7 @@ function SendTroops({ v }: { v: VillageView }) {
           <div class="unit-inputs">
             {available.map((u) => (
               <label class="unit-input">
-                <span class="uname"><Icon name={u} size={20} /> {UNITS[u].name}</span>
+                <span class="uname"><UnitIcon u={u} size={20} /> {unitName(u)}</span>
                 <NumInput id={`send-${u}`} value={units[u] ?? ''} max={v.units[u] ?? 0} onInput={(n) => setUnits({ ...units, [u]: n === '' ? 0 : n })} />
               </label>
             ))}
@@ -205,7 +205,7 @@ function NobleTrain({ v }: { v: VillageView }) {
           <div class="unit-inputs compact">
             {offensive.map((u) => (
               <label class="unit-input">
-                <span class="uname"><Icon name={u} size={18} /> {UNITS[u].name}</span>
+                <span class="uname"><UnitIcon u={u} size={18} /> {unitName(u)}</span>
                 <NumInput id={`train-${u}`} value={clear[u] ?? ''} max={clearMax(u)} onInput={(x) => setClear({ ...clear, [u]: x === '' ? 0 : Math.min(x, clearMax(u)) })} />
               </label>
             ))}
@@ -222,7 +222,7 @@ function NobleTrain({ v }: { v: VillageView }) {
             <span class="row gap">
               <input id="train-escort" type="number" min={0} value={escort} style={{ width: '80px' }} onInput={(e) => setEscort(e.currentTarget.value === '' ? '' : Math.max(0, Number(e.currentTarget.value)))} />
               <select id="train-escort-unit" value={escortUnit} onChange={(e) => setEscortUnit((e.currentTarget as HTMLSelectElement).value as UnitId)}>
-                {ESCORT_UNITS.map((u) => <option value={u}>{UNITS[u].plural}</option>)}
+                {ESCORT_UNITS.map((u) => <option value={u}>{unitName(u, true)}</option>)}
               </select>
             </span>
           </label>
@@ -377,7 +377,7 @@ export function CommandRow({ c, compact }: { c: CommandView; compact?: boolean }
           <div class="muted small">
             {c.units && <UnitList units={c.units} />}
             {c.res && <> · carrying <span class="num">{fmt(c.res.wood + c.res.clay + c.res.iron)}</span></>}
-            {incoming && c.kind === 'attack' && (c.detected ? <> · lookouts report <b>{UNITS[c.detected].plural}</b></> : <> · troops unknown</>)}
+            {incoming && c.kind === 'attack' && (c.detected ? <> · lookouts report <b>{unitName(c.detected, true)}</b></> : <> · troops unknown</>)}
           </div>
         )}
       </div>
@@ -458,7 +458,7 @@ function FarmAssistant({ v }: { v: VillageView }) {
                 <div class="unit-inputs compact">
                   {(['spear', 'sword', 'axe', 'archer', 'scout', 'light', 'marcher', 'heavy'] as UnitId[]).filter((u) => pv.config.archers || (u !== 'archer' && u !== 'marcher')).map((u) => (
                     <label class="unit-input">
-                      <span class="uname"><Icon name={u} size={18} /></span>
+                      <span class="uname"><UnitIcon u={u} size={18} /></span>
                       <NumInput id={`tpl-${k}-${u}`} value={tpl[k][u] ?? ''} onInput={(n) => saveTpl({ ...tpl, [k]: { ...tpl[k], [u]: n === '' ? 0 : n } })} />
                     </label>
                   ))}
@@ -546,7 +546,7 @@ function Scavenge({ v }: { v: VillageView }) {
           <div class="unit-inputs">
             {avail.map((u) => (
               <label class="unit-input">
-                <span class="uname"><Icon name={u} size={20} /> {UNITS[u].name}</span>
+                <span class="uname"><UnitIcon u={u} size={20} /> {unitName(u)}</span>
                 <NumInput id={`scav-${u}`} value={units[u] ?? ''} max={v.units[u] ?? 0} onInput={(n) => setUnits({ ...units, [u]: n === '' ? 0 : n })} />
               </label>
             ))}

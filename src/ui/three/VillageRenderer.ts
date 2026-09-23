@@ -48,6 +48,17 @@ const TUNICS = [0x8e3a1f, 0x2f5d99, 0x6f7c35, 0xc98f2e, 0x5a3a22, 0x7a2f4a, 0xd9
 /** default camera: polar angle, azimuth, distance */
 const CAM: [number, number, number] = [0.93, 0.24, 320];
 
+/**
+ * The hammer's angle through one blow (radians about the shoulder, 1.8 = head resting on the timber):
+ * a steady lift overhead, a quick strike down onto the wood, and a beat resting there.
+ */
+function hammerSwing(t: number): number {
+  const p = t - Math.floor(t);
+  if (p < 0.55) return 1.8 * (1 - Math.sin((p / 0.55) * Math.PI / 2));
+  if (p < 0.72) { const q = (p - 0.55) / 0.17; return 1.8 * q * q; }
+  return 1.8 - Math.sin(((p - 0.72) / 0.28) * Math.PI) * 0.06;
+}
+
 export class VillageRenderer {
   private renderer: THREE.WebGLRenderer;
   private scene = new THREE.Scene();
@@ -156,6 +167,7 @@ export class VillageRenderer {
     this.setNight(!!opts.night);
 
     const controls = new OrbitControls(this.camera, renderer.domElement);
+    if (import.meta.env.DEV) (window as unknown as { __vr: unknown }).__vr = this;
     controls.enableDamping = true;
     controls.dampingFactor = 0.09;
     controls.minZoom = 0.75;
@@ -622,15 +634,20 @@ export class VillageRenderer {
       const dx = 0 - x, dz = 4 - z;
       const d = Math.hypot(dx, dz) || 1;
       const ux = dx / d, uz = dz / d;
-      const r = slot.radius * 0.85 + 1.2;
+      const r = slot.radius * 0.85 + 2.2;
       for (const side of [-1, 1]) {
         const w = person(side < 0 ? 0x8e3a1f : 0x6f7c35);
         const arm = new THREE.Group();
         arm.position.set(0.3, 1.0, 0);
         arm.add(box(0.07, 0.75, 0.07, 0x6e4a2a, 0, 0, 0.0));
-        arm.add(box(0.3, 0.16, 0.16, 0x5d6b75, 0, 0.72, 0.05));
+        // the head runs along the swing, so the face comes down square on the work
+        arm.add(box(0.16, 0.17, 0.36, 0x5d6b75, 0, 0.72, 0.04));
         w.add(arm);
         arms.push(arm);
+        // the timber they are working, on a trestle right where the hammer comes down
+        w.add(box(1.0, 0.16, 0.24, 0xa0703c, 0.15, 0.46, 0.8));
+        w.add(box(0.9, 0.03, 0.02, 0xc98f55, 0.15, 0.62, 0.69));
+        for (const lx of [-0.25, 0.55]) w.add(box(0.08, 0.46, 0.3, 0x6e4a2a, lx, 0, 0.8));
         const px = x + ux * r - uz * side * 1.3, pz = z + uz * r + ux * side * 1.3;
         w.position.set(px, OUTSIDE.includes(id) ? heightAt(px, pz) : 0, pz);
         w.rotation.y = Math.atan2(-ux, -uz);
@@ -809,7 +826,7 @@ export class VillageRenderer {
       p.g.rotation.y = Math.atan2(dir.x, dir.z);
     }
     if (this.guards) for (const gd of this.guards.children) gd.rotation.y += Math.sin(t * 0.6 + (gd.userData.guard as number) * 1.7) * 0.004;
-    for (const b of this.builders.values()) b.arms.forEach((a, i) => { a.rotation.x = 0.9 + Math.sin(t * 9 + i * 1.7) * 0.9; });
+    for (const b of this.builders.values()) b.arms.forEach((a, i) => { a.rotation.x = hammerSwing(t * 1.4 + i * 0.47); });
     this.stepMarches(dt, t);
     this.stepMilitia(dt, t);
     for (const m of this.motes) {

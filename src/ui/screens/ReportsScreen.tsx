@@ -3,7 +3,7 @@ import { BUILDINGS, BUILDING_ORDER } from '../../engine/data/buildings';
 import { ARMY_ORDER, ITEM_BY_ID, UNITS } from '../../engine/data/units';
 import type { BattleData, Report, ResKey, SideInfo, UnitId, Units } from '../../engine/types';
 import { Icon } from '../art/icons';
-import { Btn, Empty, PlayerLink, Res, Section, VillageLink } from '../components/common';
+import { Btn, Empty, PlayerLink, Res, Section, VillageLink, UnitIcon, unitName } from '../components/common';
 import { fmt, fmtAgo, fmtClock } from '../format';
 import { act, go, host, now, rallyTarget, view, warp } from '../store';
 
@@ -135,7 +135,7 @@ function SideTable({ role, side, cols, rows, win }: {
         </tr>
         <tr class="rep-icons">
           <th />
-          {cols.map((u) => <td title={UNITS[u].name}><Icon name={u} size={20} /></td>)}
+          {cols.map((u) => <td title={unitName(u, false, side.theme ?? 'classic')}><UnitIcon u={u} size={20} theme={side.theme ?? 'classic'} /></td>)}
         </tr>
         {rows.map((r) => (
           <tr class={`rep-count ${r.tone ?? ''}`}>
@@ -248,7 +248,7 @@ function Battle({ b, kind }: { b: BattleData; kind: Report['kind'] }) {
           {b.scout.unitsOutside && (
             <table class="rep-side rep-outside">
               <tbody>
-                <tr class="rep-icons"><th /> {cols.map((u) => <td title={UNITS[u].name}><Icon name={u} size={20} /></td>)}</tr>
+                <tr class="rep-icons"><th /> {cols.map((u) => <td title={unitName(u, false, b.defender.theme ?? 'classic')}><UnitIcon u={u} size={20} theme={b.defender.theme ?? 'classic'} /></td>)}</tr>
                 <tr class="rep-count"><th scope="row">Outside:</th>{cols.map((u) => { const n = b.scout!.unitsOutside![u] ?? 0; return <td class={`num ${n === 0 ? 'zero' : ''}`}>{fmt(n)}</td>; })}</tr>
               </tbody>
             </table>

@@ -2,6 +2,7 @@
 // which validates everything server-side style, so the same code can back multiplayer.
 
 import { BUILDINGS } from './data/buildings';
+import { unitNameAt } from './data/themes';
 import { HEROES, ITEM_BY_ID, UNITS, isHero } from './data/units';
 import { cancelCommand, sendResources, sendTrain, sendTroops, withdrawSupport } from './commands';
 import { commandsFrom, commandsOf } from './cmdindex';
@@ -401,7 +402,7 @@ function scavenge(w: World, pid: number, vid: number, tier: number, units: Units
     const n = Math.floor(units[u] ?? 0);
     if (n <= 0) continue;
     if (u === 'noble' || u === 'militia' || u === 'scout' || u === 'ram' || u === 'catapult') continue;
-    if ((v.units[u] ?? 0) < n) return fail(`Not enough ${UNITS[u].plural.toLowerCase()}.`);
+    if ((v.units[u] ?? 0) < n) return fail(`Not enough ${unitNameAt(v, u, true).toLowerCase()}.`);
     send[u] = n;
   }
   const carry = unitsCarry(send);

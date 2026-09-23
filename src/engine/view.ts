@@ -2,6 +2,7 @@
 // world, so a multiplayer server can send exactly this data to each client.
 
 import { hasPaladin, nobleInfo, buildQueueSlots, villageHero } from './actions';
+import { themeOfHero, type VillageTheme } from './data/themes';
 import { cancelWindow, playerName, travelTime } from './commands';
 import { commandsOf, commandsTo } from './cmdindex';
 import { UNITS } from './data/units';
@@ -267,6 +268,8 @@ export interface MapVillage {
   ownerId: number | null;
   points: number;
   bonus?: BonusType;
+  /** the village's look (left out for classic villages) */
+  theme?: VillageTheme;
 }
 export interface MapPlayer { id: number; name: string; color: string; tribeId: number | null; points: number; villages: number; kind: 'human' | 'ai' }
 export interface MapTribe { id: number; name: string; tag: string; color: string; diplomacy: Record<number, Diplomacy> }
@@ -283,7 +286,8 @@ export function buildMap(w: World): MapData {
   const villages: MapVillage[] = [];
   for (const id in w.villages) {
     const v = w.villages[id];
-    villages.push({ id: v.id, x: v.x, y: v.y, name: v.name, ownerId: v.ownerId, points: v.points, bonus: v.bonus });
+    const theme = themeOfHero(v.heroKind);
+    villages.push({ id: v.id, x: v.x, y: v.y, name: v.name, ownerId: v.ownerId, points: v.points, bonus: v.bonus, ...(theme !== 'classic' ? { theme } : {}) });
   }
   const players: Record<number, MapPlayer> = {};
   for (const id in w.players) {

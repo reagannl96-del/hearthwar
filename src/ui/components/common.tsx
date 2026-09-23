@@ -2,9 +2,10 @@ import type { ComponentChildren, JSX } from 'preact';
 import { useEffect, useRef } from 'preact/hooks';
 import { ARMY_ORDER, UNITS } from '../../engine/data/units';
 import type { Res, ResKey, UnitId, Units } from '../../engine/types';
-import { Icon } from '../art/icons';
+import { themeOfHero, themedUnitName, type VillageTheme } from '../../engine/data/themes';
+import { Icon, themedUnitIcon } from '../art/icons';
 import { coords, fmt, fmtClock, fmtDur, fmtShort } from '../format';
-import { go, now, warp } from '../store';
+import { go, now, village, warp } from '../store';
 
 export const RES_LABEL: Record<ResKey, string> = { wood: 'Wood', clay: 'Clay', iron: 'Iron' };
 
@@ -66,27 +67,39 @@ export function Bar({ value, max, tone }: { value: number; max: number; tone?: '
   );
 }
 
-export function UnitBadge({ u, n, dim }: { u: UnitId; n?: number; dim?: boolean }) {
+/** The look of the village being viewed: its army takes the form of its statue hero's people. */
+export const viewTheme = (): VillageTheme => themeOfHero(village.value?.hero);
+
+/** A troop's name as a village of this theme (by default, the one in view) calls it. */
+export function unitName(u: UnitId, plural = false, theme: VillageTheme = viewTheme()): string {
+  return themedUnitName(u, theme, plural, [UNITS[u].name, UNITS[u].plural]);
+}
+
+export function UnitIcon({ u, size = 18, theme = viewTheme(), title }: { u: UnitId; size?: number; theme?: VillageTheme; title?: string }) {
+  return <Icon name={themedUnitIcon(u, theme)} size={size} title={title} />;
+}
+
+export function UnitBadge({ u, n, dim, theme = viewTheme() }: { u: UnitId; n?: number; dim?: boolean; theme?: VillageTheme }) {
   return (
-    <span class={`unit-badge ${dim ? 'is-dim' : ''}`} title={UNITS[u].name}>
-      <Icon name={u} size={16} />
+    <span class={`unit-badge ${dim ? 'is-dim' : ''}`} title={unitName(u, false, theme)}>
+      <UnitIcon u={u} size={16} theme={theme} />
       {n !== undefined && <span class="num">{fmt(n)}</span>}
     </span>
   );
 }
 
-export function UnitList({ units, empty = 'none' }: { units: Units | undefined; empty?: string }) {
+export function UnitList({ units, empty = 'none', theme }: { units: Units | undefined; empty?: string; theme?: VillageTheme }) {
   const list = ARMY_ORDER.filter((u) => (units?.[u] ?? 0) > 0);
   if (!units || list.length === 0) return <span class="muted">{empty}</span>;
   return (
     <span class="unit-list">
-      {list.map((u) => <UnitBadge u={u} n={units[u]!} />)}
+      {list.map((u) => <UnitBadge u={u} n={units[u]!} theme={theme} />)}
     </span>
   );
 }
 
 /** Grid table of units with optional loss row (battle reports). */
-export function UnitTable({ rows, show }: { rows: { label: string; units?: Units; tone?: string }[]; show?: UnitId[] }) {
+export function UnitTable({ rows, show, theme }: { rows: { label: string; units?: Units; tone?: string }[]; show?: UnitId[]; theme?: VillageTheme }) {
   const cols = show ?? ARMY_ORDER.filter((u) => rows.some((r) => (r.units?.[u] ?? 0) > 0));
   if (cols.length === 0) return <p class="muted">No troops.</p>;
   return (
@@ -96,8 +109,8 @@ export function UnitTable({ rows, show }: { rows: { label: string; units?: Units
           <tr>
             <th />
             {cols.map((u) => (
-              <th title={UNITS[u].name}>
-                <Icon name={u} size={18} />
+              <th title={unitName(u, false, theme)}>
+                <UnitIcon u={u} size={18} theme={theme} />
               </th>
             ))}
           </tr>

@@ -249,6 +249,9 @@ describe('a human player', () => {
     expect(cmds.length).toBe(5);
     expect(cmds[0].units.noble ?? 0).toBe(0);
     expect(cmds[4].arrive - cmds[0].arrive).toBe(400);
+    // an earlier noble has already worn the village down, so four more (20-35 each) always take it
+    advance(w, cmds[0].arrive + 1);
+    target.loyalty = 80;
     advance(w, cmds[4].arrive + 1);
     expect(target.ownerId).toBe(p.id);
   });

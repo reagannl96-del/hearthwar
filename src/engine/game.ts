@@ -15,7 +15,7 @@ import { nextRandom, pick } from './rng';
 import type { Command, GameEvent, Player, UnitId, Village, World } from './types';
 import { RES_KEYS } from './types';
 import { refreshPoints, storageOf, updateVillage } from './village';
-import { BARB_BUILDINGS, aiThinkInterval, barbInterval, itemInterval, sampleInterval } from './world';
+import { BARB_BUILDINGS, aiThinkInterval, barbInterval, itemInterval, realmGrowth, sampleInterval } from './world';
 
 const hooks: ArrivalHooks = {
   onConquest(w, v, oldOwner, newOwner) {
@@ -172,6 +172,7 @@ export function processEvent(w: World, e: GameEvent): void {
     }
     case 'barb':
       barbGrowth(w);
+      realmGrowth(w);
       pushEvent(w, 'barb', w.now + barbInterval(w), 0);
       break;
     case 'sample':

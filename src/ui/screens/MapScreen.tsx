@@ -7,7 +7,7 @@ import { lsGet } from '../../host/storage';
 import { forestSprite, villageSprite } from '../mapSprites';
 import { isWinter } from '../../engine/world';
 import { Icon } from '../art/icons';
-import { Btn, UnitList } from '../components/common';
+import { Btn, UnitList, UnitIcon, unitName } from '../components/common';
 import { coords, continent, fmt, fmtAgo, fmtDur, parseCoords } from '../format';
 import { TribeTag } from './TribeScreen';
 import { MARK_COLORS, markFor, marks, setMark, useWorldMarks, type Marks } from '../mapMarks';
@@ -647,7 +647,7 @@ function VillagePanel({ v, data }: { v: MapVillage; data: MapData }) {
           <table class="level-table">
             <tbody>
               {quick.map((u) => (
-                <tr><td><Icon name={u} size={16} /> {UNITS[u].name}</td><td class="right num">{fmtDur((info.travel![u] ?? 0) / warp.value)}</td></tr>
+                <tr><td><UnitIcon u={u} size={16} /> {unitName(u)}</td><td class="right num">{fmtDur((info.travel![u] ?? 0) / warp.value)}</td></tr>
               ))}
             </tbody>
           </table>
@@ -659,7 +659,7 @@ function VillagePanel({ v, data }: { v: MapVillage; data: MapData }) {
           {it.lastAttackT && <p class="small"><span class={`dot dot-${it.lastColor}`} /> Last battle {fmtAgo(it.lastAttackT, now.value)}{it.lastLoot !== undefined && <> · looted <span class="num">{fmt(it.lastLoot)}</span>/{fmt(it.lastCapacity ?? 0)}</>}</p>}
           {it.wall !== undefined && <p class="small">Wall: <b class="num">{it.wall}</b></p>}
           {it.scoutT && it.res && <p class="small">Scouted {fmtAgo(it.scoutT, now.value)}: <span class="num">{fmt(it.res.wood)} / {fmt(it.res.clay)} / {fmt(it.res.iron)}</span></p>}
-          {it.units && <div class="small">Troops seen: <UnitList units={it.units} empty="none" /></div>}
+          {it.units && <div class="small">Troops seen: <UnitList units={it.units} empty="none" theme={v.theme ?? 'classic'} /></div>}
           {it.buildings && <p class="small muted">Buildings: {Object.entries(it.buildings).filter(([, l]) => (l ?? 0) > 0).map(([b, l]) => `${b} ${l}`).join(', ')}</p>}
         </div>
       )}

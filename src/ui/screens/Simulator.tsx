@@ -2,7 +2,7 @@ import { useState } from 'preact/hooks';
 import { ITEMS, ITEM_BY_ID, UNITS, UNIT_ORDER } from '../../engine/data/units';
 import type { UnitId, Units } from '../../engine/types';
 import { Icon } from '../art/icons';
-import { Btn, NumInput, Section, UnitTable } from '../components/common';
+import { Btn, NumInput, Section, UnitTable, UnitIcon, unitName } from '../components/common';
 import { fmt } from '../format';
 import { host, view, village } from '../store';
 
@@ -40,7 +40,7 @@ export function Simulator() {
           <div class="unit-inputs compact">
             {units(ATT_UNITS).map((u) => (
               <label class="unit-input">
-                <span class="uname"><Icon name={u} size={18} /> {UNITS[u].name}</span>
+                <span class="uname"><UnitIcon u={u} size={18} /> {unitName(u)}</span>
                 <NumInput id={`sim-a-${u}`} value={att[u] ?? ''} onInput={(n) => setAtt({ ...att, [u]: n === '' ? 0 : n })} />
               </label>
             ))}
@@ -60,7 +60,7 @@ export function Simulator() {
           <div class="unit-inputs compact">
             {units(DEF_UNITS).map((u) => (
               <label class="unit-input">
-                <span class="uname"><Icon name={u} size={18} /> {UNITS[u].name}</span>
+                <span class="uname"><UnitIcon u={u} size={18} /> {unitName(u)}</span>
                 <NumInput id={`sim-d-${u}`} value={def[u] ?? ''} onInput={(n) => setDef({ ...def, [u]: n === '' ? 0 : n })} />
               </label>
             ))}

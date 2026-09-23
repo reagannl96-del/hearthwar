@@ -3,7 +3,7 @@ import { BUILDINGS } from '../../engine/data/buildings';
 import { ARMY_ORDER, UNITS } from '../../engine/data/units';
 import type { UnitId } from '../../engine/types';
 import { Icon } from '../art/icons';
-import { Countdown, Section, Tabs } from '../components/common';
+import { Countdown, Section, Tabs, UnitIcon, unitName } from '../components/common';
 import { coords, fmt, fmtShort } from '../format';
 import { go, liveRes, view, vid } from '../store';
 
@@ -56,7 +56,7 @@ export function OverviewsScreen() {
           )}
           {tab === 'troops' && (
             <table class="rank-table">
-              <thead><tr><th>Village</th>{unitCols.map((u) => <th class="right" title={UNITS[u].name}><Icon name={u} size={16} /></th>)}</tr></thead>
+              <thead><tr><th>Village</th>{unitCols.map((u) => <th class="right" title={unitName(u)}><UnitIcon u={u} size={16} /></th>)}</tr></thead>
               <tbody>
                 {pv.villages.map((v) => (
                   <tr>

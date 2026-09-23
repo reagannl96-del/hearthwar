@@ -4,6 +4,7 @@
 
 import type { JSX } from 'preact';
 import type { BuildingId, UnitId } from '../../engine/types';
+import type { VillageTheme } from '../../engine/data/themes';
 
 type IconName = 'wood' | 'clay' | 'iron' | 'pop' | 'storage' | 'time' | 'points' | 'loyalty' | 'coin' | 'merchant' | 'hide'
   | UnitId | `b_${BuildingId}`
@@ -36,6 +37,332 @@ const Ink = ({ children, w = 1 }: { children: preact.ComponentChildren; w?: numb
 );
 
 const horseHead = 'M6 22 7.6 14.4C5.2 12.6 5.3 8 8.4 5.8L8.9 2.4 11.2 5c4.4-.2 8.2 3 9.4 7.2l-1.9 2.4-3.4-1.6-1.9 2.4L13.6 22Z';
+
+// ---- troops, drawn for each kind of village ----
+// Goblin camps field rusty, green-ragged gear on wolves and boars; sorcerer towers
+// crystal blades on storm-touched steeds and owl familiars; druid groves flint and
+// living wood on stags, bears and hawks.
+
+type Pal = {
+  blade: string; bladeLt: string; bladeDk: string;
+  wood: string; woodLt: string; woodDk: string;
+  accent: string; accentLt: string;
+  trim: string; trimLt: string; trimDk: string;
+  gem: string; roof: string; shot: string;
+};
+
+const PAL: Record<VillageTheme, Pal> = {
+  classic: {
+    blade: STEEL, bladeLt: STEEL_LT, bladeDk: STEEL_DK, wood: WOOD, woodLt: WOOD_LT, woodDk: WOOD_DK,
+    accent: RED, accentLt: RED_LT, trim: GOLD, trimLt: GOLD_LT, trimDk: GOLD_DK, gem: BLUE_LT, roof: ROOF, shot: STONE,
+  },
+  goblin: {
+    blade: '#978d74', bladeLt: '#cbbf9c', bladeDk: '#5c5342', wood: '#7a5230', woodLt: '#a2723f', woodDk: '#4a2f1a',
+    accent: '#5f8a2e', accentLt: '#8fbc50', trim: '#b07a3a', trimLt: '#d9aa62', trimDk: '#6e4a1e', gem: '#9fe04a', roof: '#6a6452', shot: '#7a5230',
+  },
+  sorcerer: {
+    blade: '#b58cff', bladeLt: '#f1e6ff', bladeDk: '#6a3fd0', wood: '#4a3a6a', woodLt: '#7a64a0', woodDk: '#2a1d40',
+    accent: '#3f7ad8', accentLt: '#8fb8ff', trim: GOLD, trimLt: GOLD_LT, trimDk: '#5b3596', gem: '#8fe0ff', roof: '#5b3596', shot: '#c9a8ff',
+  },
+  druid: {
+    blade: '#d6cdb0', bladeLt: '#f5efdc', bladeDk: '#8f8468', wood: '#7a5a38', woodLt: '#a88156', woodDk: '#4e3820',
+    accent: '#4f7a2e', accentLt: '#8fbc50', trim: '#7ea64a', trimLt: '#c9f07a', trimDk: '#3f6a22', gem: '#e0a040', roof: '#4f7a2e', shot: '#8e9a80',
+  },
+};
+
+// mount heads, all facing right like the horse
+const wolfHead = 'M5 22 6.6 14C5 12 4.8 8.8 6.2 6.6L6 1.4 9.2 4.4 11.6 1.8 12.6 5.2C15 5.8 17 7.4 18.4 9.4L22.8 11.2 22.4 13.6 17.6 14.6 15 13.8 13.4 22Z';
+const boarHead = 'M4.6 22 5.4 14C3.6 11.6 4 7.4 6.6 5.4L6.4 2 9.4 4.2C13 3.6 17 5.6 19.4 8.4L22.2 9.6 22.6 14.2 19.6 14.6C18 16 15.6 16 14.4 15.2L13.4 22Z';
+const bearHead = 'M4.4 22 5.6 14.4C3.6 12 3.8 7.8 6.4 5.6 6 4 6.8 2.6 8.4 2.6 9.6 2.6 10.4 3.4 10.6 4.4 14.6 4 18 6.4 19.4 9.6L21.8 10.8C22.6 12.6 21.8 14.4 20 14.6L16.4 14.8 14 22Z';
+const hawkHead = 'M4 22 5.6 13.4C3.8 10.6 4.6 6 8.4 4.2 11.6 2.8 15.6 3.6 18 6.2L21.6 8.4C22.4 10.4 21.6 12.4 20 13.2L19.8 11.2 17.4 11.6C16.6 14.4 15 16.2 14 17L14.2 22Z';
+
+const Eye = ({ x, y }: { x: number; y: number }) => <circle cx={x} cy={y} r=".9" fill={O} />;
+const Bow = ({ c }: { c: string }) => <path d="M17.4 1.2c4.4 2.2 4.4 7.6 0 9.8" fill="none" stroke={c} stroke-width="1.6" />;
+const Bolt = () => <path d="M20.6.8 18.4 4.4h2l-2.4 4 4.2-5h-2.1l1.5-2.6Z" fill="#fde38a" stroke-width=".5" />;
+const Antlers = ({ c }: { c: string }) => (
+  <path d="M9 4.8 7.2.8M8 2.6 5.4 1.8M10.8 4.6 12.8.6M11.9 2.4 14.6 2" fill="none" stroke={c} stroke-width="1.4" />
+);
+const Sparkle = ({ x, y, c = '#fde38a' }: { x: number; y: number; c?: string }) => (
+  <path d={`M${x} ${y - 1.6}l.5 1.1 1.1.5-1.1.5-.5 1.1-.5-1.1-1.1-.5 1.1-.5Z`} fill={c} stroke-width=".4" />
+);
+const Leaf = ({ x, y, r = 0, c = '#8fbc50' }: { x: number; y: number; r?: number; c?: string }) => (
+  <path transform={`rotate(${r} ${x} ${y})`} d={`M${x} ${y}c1.2-1.6 3-2 4.4-1.4-.8 1.6-2.6 2.2-4.4 1.4Z`} fill={c} stroke-width=".6" />
+);
+
+function horseMount(t: VillageTheme, coat: string, P: Pal): JSX.Element {
+  return (
+    <>
+      <path d={horseHead} fill={coat} />
+      <path d="M8.2 12.4c3 .6 6.2.2 9.4-1.6" fill="none" stroke={P.accent} stroke-width="1.5" />
+      <Eye x={12.6} y={8.4} />
+      {t === 'sorcerer' && <Sparkle x={10.6} y={6.6} c={P.gem} />}
+    </>
+  );
+}
+
+type Art = (P: Pal, t: VillageTheme) => JSX.Element;
+
+const UNIT_ART: Partial<Record<UnitId, Art>> = {
+  spear: (P, t) => (
+    <Ink>
+      <path d="m3.2 21.8-1-1L16 7l1 1Z" fill={P.wood} />
+      {t === 'goblin' ? (
+        <path d="M15.2 5.8 17 4.8 17.4 3.6 18.8 3.6 21.8 2.2 20.4 5.2 20.4 6.6 19.2 7 18.2 8.8 16.6 9.4 14.6 7.4Z" fill={P.blade} />
+      ) : t === 'sorcerer' ? (
+        <path d="M14.8 7 18.4 2.2 22 1.8 21.6 5.6 16.8 9.2Z" fill={P.blade} />
+      ) : t === 'druid' ? (
+        <path d="M15 7.2C16 4.4 18.6 2.6 21.8 2.2 21.4 5.4 19.6 8 16.8 9Z" fill={P.blade} />
+      ) : (
+        <path d="M15.2 5.8 21.8 2.2 18.2 8.8 16.6 9.4 14.6 7.4Z" fill={P.blade} />
+      )}
+      <path d="m17 6.6 3-2.6" stroke={P.bladeLt} stroke-width="1" />
+      <path d="m13.2 8.2 2.6 2.6" stroke={P.accent} stroke-width="1.8" />
+      {t === 'druid' && <Leaf x={12.4} y={10.6} r={120} c={P.accentLt} />}
+      {t === 'sorcerer' && <Sparkle x={20.4} y={7.4} c={P.gem} />}
+    </Ink>
+  ),
+  sword: (P, t) => (
+    <Ink>
+      {t === 'goblin' ? (
+        <path d="M21.6 2.4 21.8 7.8 10.6 16.8 7.2 13.4 15.8 3.6C17.8 2.2 19.6 1.8 21.6 2.4Z" fill={P.blade} />
+      ) : (
+        <path d="M20.8 2.2 21.4 6 10.6 16.8 7.2 13.4 18 2.6Z" fill={P.blade} />
+      )}
+      <path d="M19.6 4.4 9.6 14.4" stroke={P.bladeLt} stroke-width="1" />
+      {t === 'sorcerer' && <path d="M17.4 7.4h.01M15 9.8h.01M12.6 12.2h.01" stroke={P.gem} stroke-width="1.6" />}
+      {t === 'goblin' && <path d="m19.4 6.4-1 1M16.6 9.2l-1 1" stroke={P.bladeDk} stroke-width="1" />}
+      <path d="m5 12.2 6.8 6.8-1.6 1.6-6.8-6.8Z" fill={P.trim} />
+      <path d="m7.6 17.4-3.4 3.4" stroke={P.woodDk} stroke-width="2.4" />
+      <circle cx="3.4" cy="21.6" r="1.6" fill={t === 'classic' ? P.trim : P.gem} />
+    </Ink>
+  ),
+  axe: (P, t) =>
+    t === 'sorcerer' ? (
+      // a warmage's staff, crowned with fire
+      <Ink>
+        <path d="m3.6 22.2-1.4-1.2L14.6 8.4 16 9.6Z" fill={P.wood} />
+        <path d="M17.6 1.4c-1.2 2 1.4 2.6.2 4.4 2-1 1.4-2.8 2.6-3.6.6 2.6 2 3.4 1 6.4-.8 2.4-3.2 3.6-5.6 3-2.6-.8-3.6-3.4-2.8-5.6.6-1.8 2.6-2.8 4.6-4.6Z" fill="#ff8a3a" />
+        <circle cx="17.4" cy="8.2" r="2" fill="#ffd27a" stroke-width=".6" />
+        <path d="m13.2 9.4 2 2" stroke={P.trim} stroke-width="1.6" />
+      </Ink>
+    ) : t === 'druid' ? (
+      // a wildling's knotted club
+      <Ink>
+        <path d="M4 22 2.4 20.6 12.8 10C12.2 6.6 14.4 2.8 18 2.4c3-.2 4.6 2.4 4 5.2-.6 3.2-3.8 5-7.2 4.2Z" fill={P.wood} />
+        <circle cx="17.6" cy="6" r="1" fill={P.woodDk} stroke-width=".5" />
+        <circle cx="19.6" cy="8.6" r=".8" fill={P.woodDk} stroke-width=".5" />
+        <path d="M15.4 4.6c.8-.8 1.8-1.2 2.8-1.2" fill="none" stroke={P.woodLt} stroke-width="1" />
+        <Leaf x={20.6} y={3} r={-30} c={P.accentLt} />
+      </Ink>
+    ) : (
+      <Ink>
+        <path d="m4 22-1.6-1.4L15 6.4l1.6 1.4Z" fill={P.wood} />
+        <path d="M12.6 5.4c1.8-3 5.8-4.4 9-2.8.4 3.6-1.4 7.6-5 9.4Z" fill={P.blade} />
+        <path d="M15.6 3.8c1.6-.8 3.6-1 5.2-.4" fill="none" stroke={P.bladeLt} stroke-width="1.1" />
+        {t === 'goblin' && <path d="m19.2 7.4 1.4.6M17.4 9.6l1.2 1" stroke={O} stroke-width="1" />}
+        {t === 'goblin' && <path d="m11.4 9.4 2.4 2.4" stroke={P.accent} stroke-width="1.8" />}
+      </Ink>
+    ),
+  archer: (P, t) => (
+    <Ink>
+      <path d="M6 2.2c9.6 3.6 9.6 16 0 19.6l-1.2-1.4c7.8-3.6 7.8-13.2 0-16.8Z" fill={P.wood} />
+      <path d="M5.4 3v18" stroke="#efe3c8" stroke-width=".8" />
+      <path d="M3 12h15.4" stroke={P.woodDk} stroke-width="1.4" />
+      <path d="M17.6 9.2 22 12l-4.4 2.8Z" fill={t === 'sorcerer' ? P.gem : P.blade} />
+      <path d="M2 10.2 4.2 12 2 13.8" fill="none" stroke={P.accent} stroke-width="1.3" />
+      {t === 'druid' && <Leaf x={10.4} y={4.2} r={40} c={P.accentLt} />}
+      {t === 'goblin' && <path d="M9.6 5.6 11.4 5M10.4 18.4l1.8.6" stroke={P.accent} stroke-width="1.4" />}
+      {t === 'sorcerer' && <Sparkle x={20.6} y={7} c={P.gem} />}
+    </Ink>
+  ),
+  scout: (P, t) =>
+    t === 'sorcerer' ? (
+      // an owl familiar
+      <Ink>
+        <path d="M6.2 6.4 5 1.8 9.2 4.4ZM17.8 6.4 19 1.8 14.8 4.4Z" fill="#46307a" />
+        <path d="M12 3C8 3 5.4 5.8 5.4 10c0 6 2.6 11 6.6 11s6.6-5 6.6-11c0-4.2-2.6-7-6.6-7Z" fill="#5b3596" />
+        <path d="M8.4 14c1 3.2 2.2 5 3.6 5s2.6-1.8 3.6-5c-2.4-1-4.8-1-7.2 0Z" fill="#b8a0e0" stroke-width=".6" />
+        <circle cx="9.4" cy="9.4" r="2.4" fill={P.trimLt} />
+        <circle cx="14.6" cy="9.4" r="2.4" fill={P.trimLt} />
+        <circle cx="9.4" cy="9.4" r="1" fill={O} />
+        <circle cx="14.6" cy="9.4" r="1" fill={O} />
+        <path d="M11 11.6h2L12 13.8Z" fill={P.trim} stroke-width=".5" />
+        <Sparkle x={20.4} y={12} c={P.gem} />
+      </Ink>
+    ) : t === 'druid' ? (
+      // a spirit hawk
+      <Ink>
+        <path d={hawkHead} fill="#8a5a32" />
+        <path d="M5.4 13.6c2.4 1.6 5.2 2.2 8.6 2L14.2 22H4Z" fill="#efe0c0" stroke-width=".7" />
+        <path d="M18 6.2 21.6 8.4c.8 2 0 4-1.6 4.8l-.2-2-2.4.4Z" fill={GOLD} />
+        <circle cx="14.6" cy="7.6" r="1.4" fill={GOLD_LT} stroke-width=".6" />
+        <circle cx="14.8" cy="7.6" r=".6" fill={O} stroke="none" />
+        <path d="M12.2 6.2c1.4-.8 3.2-.8 4.6 0" fill="none" stroke={O} stroke-width="1.1" />
+        <path d="M7 8.4c.8-2 2.4-3.2 4.2-3.4" fill="none" stroke="#b98452" stroke-width="1" />
+      </Ink>
+    ) : (
+      <Ink>
+        <path d="m2.6 18.2 3.8-3.8 3.2 3.2-3.8 3.8Z" fill={P.woodDk} />
+        <path d="m6 14.8 6.2-6.2 3.2 3.2-6.2 6.2Z" fill={P.trim} />
+        <path d="m11.6 9.2 5.6-5.6 3.2 3.2-5.6 5.6Z" fill={P.trimDk} />
+        <circle cx="19.6" cy="4.4" r="2.6" fill={t === 'goblin' ? P.gem : BLUE_LT} />
+        <path d="m7.4 14.2 4.8-4.8" stroke={P.trimLt} stroke-width="1" />
+      </Ink>
+    ),
+  light: (P, t) =>
+    t === 'goblin' ? (
+      <Ink>
+        <path d={wolfHead} fill="#7d7a70" />
+        <path d="M7.4 8c.4-1.6 1.4-2.6 2.8-3" fill="none" stroke="#a8a496" stroke-width="1" />
+        <path d="M8 13.2c3 .6 6 .2 9-1.4" fill="none" stroke={P.accent} stroke-width="1.5" />
+        <Eye x={13} y={8.4} />
+        <circle cx="22.4" cy="11.8" r=".8" fill={O} />
+        <path d="m17.6 14.2.4 1.4.8-1.6M19.6 14l.4 1.2.6-1.4" fill="#fff6e0" stroke-width=".4" />
+      </Ink>
+    ) : t === 'druid' ? (
+      <Ink>
+        <Antlers c={P.woodLt} />
+        <path d={horseHead} fill="#a8703e" />
+        <path d="M17.6 10.8c1.4-.2 2.4.2 3 1.4" fill="none" stroke="#efe0c0" stroke-width="1.4" />
+        <path d="M8.2 12.4c3 .6 6.2.2 9.4-1.6" fill="none" stroke={P.accent} stroke-width="1.5" />
+        <Eye x={12.6} y={8.4} />
+      </Ink>
+    ) : (
+      <Ink>
+        {horseMount(t, t === 'sorcerer' ? '#4a3a8a' : '#9a5f2e', P)}
+        {t === 'sorcerer' ? <Bolt /> : <path d="M9 2.4c-1.6 2.6-2 5.2-1.2 8" fill="none" stroke={WOOD_DK} stroke-width="1.4" />}
+        {t === 'classic' && <path d="M9 5.4c-1.8 1-2.8 2.6-3 4.6" fill="none" stroke="#c98a4e" stroke-width="1.1" />}
+      </Ink>
+    ),
+  marcher: (P, t) =>
+    t === 'goblin' ? (
+      <Ink>
+        <path d={wolfHead} fill="#5a5448" />
+        <path d="M8 13.2c3 .6 6 .2 9-1.4" fill="none" stroke={P.accentLt} stroke-width="1.5" />
+        <Eye x={13} y={8.4} />
+        <circle cx="22.4" cy="11.8" r=".8" fill={O} />
+        <path d="M15.6.4c4 1.6 4.4 5.8 1.4 8.4" fill="none" stroke={P.woodLt} stroke-width="1.6" />
+      </Ink>
+    ) : t === 'druid' ? (
+      <Ink>
+        <Antlers c={P.woodLt} />
+        <path d={horseHead} fill="#7e5230" />
+        <path d="M8.2 12.4c3 .6 6.2.2 9.4-1.6" fill="none" stroke={P.accentLt} stroke-width="1.5" />
+        <Eye x={12.6} y={8.4} />
+        <Bow c={P.woodLt} />
+      </Ink>
+    ) : (
+      <Ink>
+        {horseMount(t, t === 'sorcerer' ? '#35286a' : '#6e4424', { ...P, accent: t === 'sorcerer' ? P.accentLt : GREEN_LT })}
+        <Bow c={t === 'sorcerer' ? P.blade : WOOD_LT} />
+      </Ink>
+    ),
+  heavy: (P, t) =>
+    t === 'goblin' ? (
+      <Ink>
+        <path d={boarHead} fill="#6b4a34" />
+        <path d="M7 5.2 8.2 2.6M9.6 4.2l.8-2.6M12.2 4l.4-2.4" stroke={O} stroke-width="1.1" />
+        <path d="M8.6 6.4c2.8-1 6.2-.4 8.8 1.8l-1.6 3.2-6.8.6c-.9-1.8-1-3.8-.4-5.6Z" fill={P.trim} />
+        <ellipse cx="22" cy="11.9" rx="1" ry="2.2" fill="#c98a7a" stroke-width=".8" />
+        <path d="M19.6 14.2c.6 1.6.2 3-1 4 .2-1.4 0-2.6-.6-3.6Z" fill="#fff6e0" stroke-width=".7" />
+        <Eye x={14.4} y={9} />
+      </Ink>
+    ) : t === 'druid' ? (
+      <Ink>
+        <path d={bearHead} fill="#5e3f28" />
+        <circle cx="8.4" cy="4.6" r=".9" fill="#b98452" stroke-width=".5" />
+        <ellipse cx="19.8" cy="12.2" rx="2.4" ry="1.8" fill="#a7825a" stroke-width=".7" />
+        <circle cx="21.6" cy="11.4" r=".9" fill={O} />
+        <Eye x={14} y={8.6} />
+        <path d="M7.4 13.4c2.6 1 5.6 1 8.4 0" fill="none" stroke={P.accentLt} stroke-width="1.5" />
+        <Leaf x={7.6} y={13.2} r={200} c={P.accentLt} />
+      </Ink>
+    ) : (
+      <Ink>
+        <path d={horseHead} fill={t === 'sorcerer' ? '#e6e0f6' : '#e8e0d0'} />
+        <path d="M8.4 5.4 11.2 5c3.2 0 5.8 1.6 7.4 4l-2.6 2.2-7.6.4c-.9-2.2-.9-4.4 0-6.2Z" fill={P.blade} />
+        <path d="M9.6 6.4c2.4-.4 4.8.4 6.6 2" fill="none" stroke={P.bladeLt} stroke-width="1" />
+        <circle cx="12.8" cy="8.6" r=".9" fill={O} />
+        {t === 'sorcerer' ? (
+          <path d="M9.6 5.2 8.8.6 11 4.8Z" fill={P.gem} />
+        ) : (
+          <path d="M9.4 2.2c-2 .2-3.2 1.4-3.6 3.2 1.4-.8 2.6-1 3.8-.6Z" fill={RED} />
+        )}
+      </Ink>
+    ),
+  ram: (P, t) => (
+    <Ink>
+      <path d="M4 10 11 4.4 18 10Z" fill={P.roof} />
+      <path d="M4 10h14v3H4Z" fill={P.woodDk} />
+      <rect x="1.8" y="11" width="19" height="3.6" rx="1.6" fill={P.wood} />
+      {t === 'druid' ? (
+        <circle cx="21" cy="12.8" r="1.8" fill={P.woodLt} />
+      ) : (
+        <path d="M20.6 10.6 22.6 12.8 20.6 15Z" fill={t === 'sorcerer' ? P.blade : P.blade} />
+      )}
+      <path d="M3.4 12h14" stroke={P.woodLt} stroke-width=".9" />
+      {t === 'goblin' && <path d="m8 11-.6-1.6M12 11l-.6-1.6M8 14.6l-.6 1.4M12 14.6l-.6 1.4" stroke={P.bladeDk} stroke-width="1" />}
+      {t === 'sorcerer' && <Sparkle x={11} y={7.8} c={P.gem} />}
+      {t === 'druid' && <><Leaf x={6} y={7.6} r={-20} c={P.accentLt} /><Leaf x={13.6} y={6.4} r={10} c={P.accentLt} /></>}
+      <circle cx="6" cy="18" r="2.8" fill={P.woodLt} />
+      <circle cx="16" cy="18" r="2.8" fill={P.woodLt} />
+      <circle cx="6" cy="18" r=".7" fill={O} />
+      <circle cx="16" cy="18" r=".7" fill={O} />
+    </Ink>
+  ),
+  catapult: (P, t) => (
+    <Ink>
+      <path d="m7.4 15.4 1.6 1 10-13-1.6-1.2Z" fill={P.woodLt} />
+      {t === 'goblin' ? (
+        <path d="M16.2 2.2h4.6v3.8h-4.6Z" fill={P.shot} />
+      ) : (
+        <circle cx="18.6" cy="3.6" r="2.6" fill={P.shot} />
+      )}
+      {t === 'goblin' && <path d="M16.2 4.1h4.6" stroke={P.bladeDk} stroke-width=".8" />}
+      {t === 'sorcerer' && <circle cx="17.9" cy="2.9" r=".8" fill="#fff" stroke="none" />}
+      {t === 'druid' && <path d="M16.4 2.6c1.2-1.2 3-1.2 4.2 0" fill="none" stroke={P.accentLt} stroke-width="1.2" />}
+      <path d="M10 15.6 12.6 9h1.8l-1.6 6.6Z" fill={P.woodDk} />
+      <rect x="2" y="15" width="17" height="3" rx=".8" fill={P.wood} />
+      <circle cx="5" cy="19.6" r="2.2" fill={P.woodLt} />
+      <circle cx="16" cy="19.6" r="2.2" fill={P.woodLt} />
+    </Ink>
+  ),
+  noble: (P, t) => (
+    <Ink>
+      {t === 'druid' ? (
+        // an elder's crown of antler and leaf
+        <path d="M2.8 17.8 3.4 9 6 11.6 5.4 6.8 8.6 11 12 4.4l3.4 6.6 3.2-4.2-.6 4.8 2.6-2.6.6 8.8Z" fill={P.woodLt} />
+      ) : (
+        <path d="M2.8 17.8 4.6 7l4.3 5.1L12 5.2l3.1 6.9L19.4 7l1.8 10.8Z" fill={P.trim} />
+      )}
+      <path d="M2.4 17.4h19.2v3.6H2.4Z" fill={t === 'druid' ? P.trim : P.trimDk} />
+      <circle cx="12" cy="19.2" r="1.1" fill={t === 'classic' ? RED : P.gem} />
+      <circle cx="6.4" cy="19.2" r=".9" fill={t === 'classic' ? BLUE_LT : P.accentLt} />
+      <circle cx="17.6" cy="19.2" r=".9" fill={t === 'classic' ? BLUE_LT : P.accentLt} />
+      {t === 'druid' ? (
+        <><Leaf x={7} y={17.4} r={-60} c={P.trimLt} /><Leaf x={15.4} y={16.6} r={-120} c={P.trimLt} /></>
+      ) : t === 'sorcerer' ? (
+        <><Sparkle x={12} y={3.6} /><circle cx="4.6" cy="6.4" r="1.3" fill={P.gem} /><circle cx="19.4" cy="6.4" r="1.3" fill={P.gem} /></>
+      ) : (
+        <>
+          <circle cx="4.6" cy="6.4" r="1.3" fill={P.trimLt} />
+          <circle cx="12" cy="4.4" r="1.3" fill={t === 'goblin' ? '#f4efe0' : P.trimLt} />
+          <circle cx="19.4" cy="6.4" r="1.3" fill={P.trimLt} />
+        </>
+      )}
+    </Ink>
+  ),
+  militia: (P, t) => (
+    <Ink>
+      <path d="m3.4 21.8-1.2-1.2 10-10 1.2 1.2Z" fill={P.wood} />
+      <path d="M11.2 11.6 9 9.4l3.2-3.2 2.2 2.2Z" fill={P.bladeDk} />
+      <path d="M12.8 5.6 17.6.8M15.4 8.2l4.8-4.8M14.2 6.8l6.6-6.6" fill="none" stroke={P.blade} stroke-width="1.4" />
+      <path d="M12.8 5.6 17.6.8M15.4 8.2l4.8-4.8M14 7l6.8-6.8" fill="none" stroke={O} stroke-width=".4" />
+      {t === 'druid' && <Leaf x={7.4} y={15.6} r={-45} c={P.accentLt} />}
+      {t === 'goblin' && <path d="m6.4 16.4 2 2" stroke={P.accent} stroke-width="1.8" />}
+    </Ink>
+  ),
+};
 
 const paths: Record<string, () => JSX.Element> = {
   // ---- resources ----
@@ -145,97 +472,6 @@ const paths: Record<string, () => JSX.Element> = {
   ),
 
   // ---- units ----
-  spear: () => (
-    <Ink>
-      <path d="m3.2 21.8-1-1L16 7l1 1Z" fill={WOOD} />
-      <path d="M15.2 5.8 21.8 2.2 18.2 8.8 16.6 9.4 14.6 7.4Z" fill={STEEL} />
-      <path d="m17 6.6 3-2.6" stroke={STEEL_LT} stroke-width="1" />
-      <path d="m13.2 8.2 2.6 2.6" stroke={RED} stroke-width="1.8" />
-    </Ink>
-  ),
-  sword: () => (
-    <Ink>
-      <path d="M20.8 2.2 21.4 6 10.6 16.8 7.2 13.4 18 2.6Z" fill={STEEL} />
-      <path d="M19.6 4.4 9.6 14.4" stroke={STEEL_LT} stroke-width="1" />
-      <path d="m5 12.2 6.8 6.8-1.6 1.6-6.8-6.8Z" fill={GOLD} />
-      <path d="m7.6 17.4-3.4 3.4" stroke={WOOD_DK} stroke-width="2.4" />
-      <circle cx="3.4" cy="21.6" r="1.6" fill={GOLD} />
-    </Ink>
-  ),
-  axe: () => (
-    <Ink>
-      <path d="m4 22-1.6-1.4L15 6.4l1.6 1.4Z" fill={WOOD} />
-      <path d="M12.6 5.4c1.8-3 5.8-4.4 9-2.8.4 3.6-1.4 7.6-5 9.4Z" fill={STEEL} />
-      <path d="M15.6 3.8c1.6-.8 3.6-1 5.2-.4" fill="none" stroke={STEEL_LT} stroke-width="1.1" />
-    </Ink>
-  ),
-  archer: () => (
-    <Ink>
-      <path d="M6 2.2c9.6 3.6 9.6 16 0 19.6l-1.2-1.4c7.8-3.6 7.8-13.2 0-16.8Z" fill={WOOD} />
-      <path d="M5.4 3v18" stroke="#efe3c8" stroke-width=".8" />
-      <path d="M3 12h15.4" stroke={WOOD_DK} stroke-width="1.4" />
-      <path d="M17.6 9.2 22 12l-4.4 2.8Z" fill={STEEL} />
-      <path d="M2 10.2 4.2 12 2 13.8" fill="none" stroke={RED} stroke-width="1.3" />
-    </Ink>
-  ),
-  scout: () => (
-    <Ink>
-      <path d="m2.6 18.2 3.8-3.8 3.2 3.2-3.8 3.8Z" fill={WOOD_DK} />
-      <path d="m6 14.8 6.2-6.2 3.2 3.2-6.2 6.2Z" fill={GOLD} />
-      <path d="m11.6 9.2 5.6-5.6 3.2 3.2-5.6 5.6Z" fill={GOLD_DK} />
-      <circle cx="19.6" cy="4.4" r="2.6" fill={BLUE_LT} />
-      <path d="m7.4 14.2 4.8-4.8" stroke={GOLD_LT} stroke-width="1" />
-    </Ink>
-  ),
-  light: () => (
-    <Ink>
-      <path d={horseHead} fill="#9a5f2e" />
-      <path d="M9 5.4c-1.8 1-2.8 2.6-3 4.6" fill="none" stroke="#c98a4e" stroke-width="1.1" />
-      <path d="M8.2 12.4c3 .6 6.2.2 9.4-1.6" fill="none" stroke={RED} stroke-width="1.5" />
-      <circle cx="12.6" cy="8.4" r=".9" fill={O} />
-      <path d="M9 2.4c-1.6 2.6-2 5.2-1.2 8" fill="none" stroke={WOOD_DK} stroke-width="1.4" />
-    </Ink>
-  ),
-  marcher: () => (
-    <Ink>
-      <path d={horseHead} fill="#6e4424" />
-      <path d="M8.2 12.4c3 .6 6.2.2 9.4-1.6" fill="none" stroke={GREEN_LT} stroke-width="1.5" />
-      <circle cx="12.6" cy="8.4" r=".9" fill={O} />
-      <path d="M17.4 1.2c4.4 2.2 4.4 7.6 0 9.8" fill="none" stroke={WOOD_LT} stroke-width="1.6" />
-    </Ink>
-  ),
-  heavy: () => (
-    <Ink>
-      <path d={horseHead} fill="#e8e0d0" />
-      <path d="M8.4 5.4 11.2 5c3.2 0 5.8 1.6 7.4 4l-2.6 2.2-7.6.4c-.9-2.2-.9-4.4 0-6.2Z" fill={STEEL} />
-      <path d="M9.6 6.4c2.4-.4 4.8.4 6.6 2" fill="none" stroke={STEEL_LT} stroke-width="1" />
-      <circle cx="12.8" cy="8.6" r=".9" fill={O} />
-      <path d="M9.4 2.2c-2 .2-3.2 1.4-3.6 3.2 1.4-.8 2.6-1 3.8-.6Z" fill={RED} />
-    </Ink>
-  ),
-  ram: () => (
-    <Ink>
-      <path d="M4 10 11 4.4 18 10Z" fill={ROOF} />
-      <path d="M4 10h14v3H4Z" fill={WOOD_DK} />
-      <rect x="1.8" y="11" width="19" height="3.6" rx="1.6" fill={WOOD} />
-      <path d="M20.6 10.6 22.6 12.8 20.6 15Z" fill={STEEL} />
-      <path d="M3.4 12h14" stroke={WOOD_LT} stroke-width=".9" />
-      <circle cx="6" cy="18" r="2.8" fill={WOOD_LT} />
-      <circle cx="16" cy="18" r="2.8" fill={WOOD_LT} />
-      <circle cx="6" cy="18" r=".7" fill={O} />
-      <circle cx="16" cy="18" r=".7" fill={O} />
-    </Ink>
-  ),
-  catapult: () => (
-    <Ink>
-      <path d="m7.4 15.4 1.6 1 10-13-1.6-1.2Z" fill={WOOD_LT} />
-      <circle cx="18.6" cy="3.6" r="2.6" fill={STONE} />
-      <path d="M10 15.6 12.6 9h1.8l-1.6 6.6Z" fill={WOOD_DK} />
-      <rect x="2" y="15" width="17" height="3" rx=".8" fill={WOOD} />
-      <circle cx="5" cy="19.6" r="2.2" fill={WOOD_LT} />
-      <circle cx="16" cy="19.6" r="2.2" fill={WOOD_LT} />
-    </Ink>
-  ),
   paladin: () => (
     <Ink>
       <path d="M12 3.4C13 1.2 16 .4 19.2 1.4c-2 .8-3.4 2.2-4.2 4Z" fill={BLUE} />
@@ -279,26 +515,6 @@ const paths: Record<string, () => JSX.Element> = {
       <path d="M8.6 15.6c1.8 1.4 5 1.4 6.8 0-.6 2.2-2 3.2-3.4 3.2s-2.8-1-3.4-3.2Z" fill="#3a1f10" stroke-width=".7" />
       <path d="m10.2 16.2.5 1 .6-1M12.8 16.2l.5 1 .6-1" fill="#fff6e0" stroke-width=".4" />
       <path d="M8.2 6.4c1-1 2.4-1.6 3.8-1.6" fill="none" stroke="#b3d677" stroke-width="1.1" />
-    </Ink>
-  ),
-  noble: () => (
-    <Ink>
-      <path d="M2.8 17.8 4.6 7l4.3 5.1L12 5.2l3.1 6.9L19.4 7l1.8 10.8Z" fill={GOLD} />
-      <path d="M2.4 17.4h19.2v3.6H2.4Z" fill={GOLD_DK} />
-      <circle cx="12" cy="19.2" r="1.1" fill={RED} />
-      <circle cx="6.4" cy="19.2" r=".9" fill={BLUE_LT} />
-      <circle cx="17.6" cy="19.2" r=".9" fill={BLUE_LT} />
-      <circle cx="4.6" cy="6.4" r="1.3" fill={GOLD_LT} />
-      <circle cx="12" cy="4.4" r="1.3" fill={GOLD_LT} />
-      <circle cx="19.4" cy="6.4" r="1.3" fill={GOLD_LT} />
-    </Ink>
-  ),
-  militia: () => (
-    <Ink>
-      <path d="m3.4 21.8-1.2-1.2 10-10 1.2 1.2Z" fill={WOOD} />
-      <path d="M11.2 11.6 9 9.4l3.2-3.2 2.2 2.2Z" fill={STEEL_DK} />
-      <path d="M12.8 5.6 17.6.8M15.4 8.2l4.8-4.8M14.2 6.8l6.6-6.6" fill="none" stroke={STEEL} stroke-width="1.4" />
-      <path d="M12.8 5.6 17.6.8M15.4 8.2l4.8-4.8M14 7l6.8-6.8" fill="none" stroke={O} stroke-width=".4" />
     </Ink>
   ),
 
@@ -596,6 +812,14 @@ const paths: Record<string, () => JSX.Element> = {
   prev: () => <path d="M15 4 7 12l8 8 1.4-1.4L9.8 12l6.6-6.6Z" fill="currentColor" />,
   next: () => <path d="m9 4 8 8-8 8-1.4-1.4 6.6-6.6-6.6-6.6Z" fill="currentColor" />,
 };
+
+// every troop in each village's style: 'spear' is the classic, 'goblin_spear' the goblin one
+for (const [u, art] of Object.entries(UNIT_ART) as [UnitId, Art][]) {
+  for (const t of ['classic', 'goblin', 'sorcerer', 'druid'] as VillageTheme[]) paths[t === 'classic' ? u : `${t}_${u}`] = () => art(PAL[t], t);
+}
+
+/** The icon name for a troop as a village of this theme fields it (heroes look the same everywhere). */
+export const themedUnitIcon = (u: UnitId, t: VillageTheme = 'classic') => (t === 'classic' || !UNIT_ART[u] ? u : `${t}_${u}`);
 
 export function Icon({ name, size = 18, class: cls, title }: { name: IconName | string; size?: number; class?: string; title?: string }) {
   const p = paths[name];

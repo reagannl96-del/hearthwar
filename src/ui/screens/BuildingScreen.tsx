@@ -8,7 +8,7 @@ import {
 import type { BuildingId, RecruitBuilding, ResKey, UnitId } from '../../engine/types';
 import type { VillageView } from '../../engine/view';
 import { Icon } from '../art/icons';
-import { Btn, Cost, Countdown, Empty, NumInput, Progress, Section, UnitList } from '../components/common';
+import { Btn, Cost, Countdown, Empty, NumInput, Progress, Section, UnitList, UnitIcon, unitName } from '../components/common';
 import { fmt, fmtDur } from '../format';
 import { act, go, host, liveRes, now, view, village, warp } from '../store';
 import { MarketPanel } from './MarketScreen';
@@ -195,7 +195,7 @@ function RecruitQueue({ v, b }: { v: VillageView; b: RecruitBuilding }) {
             <li class="queue-item">
               <Icon name={j.unit} size={18} />
               <span class="grow">
-                {fmt(j.count - j.done)} {UNITS[j.unit].plural}
+                {fmt(j.count - j.done)} {unitName(j.unit, true)}
                 {i === 0 && <Progress from={j.start + j.done * j.per} to={j.start + (j.done + 1) * j.per} />}
               </span>
               <span class="muted small">next in <Countdown until={j.start + (j.done + 1) * j.per} /></span>
@@ -251,7 +251,7 @@ function RecruitPanel({ v, b }: { v: VillageView; b: RecruitBuilding }) {
                   return (
                     <tr class={av.ok ? '' : 'is-locked'}>
                       <td>
-                        <span class="uname"><Icon name={u} size={20} /> <b>{UNITS[u].name}</b></span>
+                        <span class="uname"><UnitIcon u={u} size={20} /> <b>{unitName(u)}</b></span>
                         <div class="muted small">{UNITS[u].description}</div>
                       </td>
                       <td><Cost cost={UNITS[u].cost} have={have} pop={UNITS[u].pop} time={per} compact /></td>
@@ -294,7 +294,7 @@ function SmithyPanel({ v }: { v: VillageView }) {
               <li class="queue-item">
                 <Icon name={j.unit} size={18} />
                 <span class="grow">
-                  {UNITS[j.unit].name} {j.level === 1 ? '(unlock)' : `→ level ${j.level}`}
+                  {unitName(j.unit)} {j.level === 1 ? '(unlock)' : `→ level ${j.level}`}
                   {i === 0 && <Progress from={j.start} to={j.end} />}
                 </span>
                 <Countdown until={j.end} />
@@ -316,12 +316,12 @@ function SmithyPanel({ v }: { v: VillageView }) {
                 const maxed = chk.reason === 'Fully researched.';
                 return (
                   <tr>
-                    <td><span class="uname"><Icon name={u} size={20} /> {UNITS[u].name}</span></td>
+                    <td><span class="uname"><UnitIcon u={u} size={20} /> {unitName(u)}</span></td>
                     <td class="num">{cur === 0 ? <span class="muted">locked</span> : `${cur} (${Math.round((techMultiplier(cur) - 1) * 100)}%)`}</td>
                     <td>{maxed ? <span class="muted">—</span> : chk.reason?.startsWith('Requires') ? <span class="muted small">{chk.reason}</span> : <Cost cost={chk.cost} have={have} time={chk.time} compact />}</td>
                     <td class="right">
                       {!maxed && !chk.reason?.startsWith('Requires') && (
-                        <Btn small disabled={!chk.ok} title={chk.reason} onClick={() => act({ type: 'research', vid: v.id, unit: u }, `${UNITS[u].name} research started.`)}>
+                        <Btn small disabled={!chk.ok} title={chk.reason} onClick={() => act({ type: 'research', vid: v.id, unit: u }, `${unitName(u)} research started.`)}>
                           {chk.level === 1 ? 'Research' : `Level ${chk.level}`}
                         </Btn>
                       )}
@@ -407,12 +407,12 @@ function StatuePanel({ v }: { v: VillageView }) {
         </p>
         {current && (
           <p class="hero-current">
-            <Icon name={current} size={22} /> <b>{UNITS[current].name}</b> {home ? 'guards this village.' : 'is in training.'}
+            <Icon name={current} size={22} /> <b>{unitName(current)}</b> {home ? 'guards this village.' : 'is in training.'}
           </p>
         )}
         {away && <p class="hero-current"><Icon name="attack" size={18} /> This village's hero is away from home.</p>}
         {sworn && !current && !away && (
-          <p class="hero-current"><Icon name={sworn} size={22} /> This statue is sworn to the <b>{UNITS[sworn].name}</b>. It can raise a new one, but never another kind of hero.</p>
+          <p class="hero-current"><Icon name={sworn} size={22} /> This statue is sworn to the <b>{unitName(sworn)}</b>. It can raise a new one, but never another kind of hero.</p>
         )}
         {!sworn && <p class="muted small">Choose carefully: the first hero trained here is the only kind this village will ever raise, and its look becomes the village's.</p>}
         <div class="hero-grid">
@@ -424,7 +424,7 @@ function StatuePanel({ v }: { v: VillageView }) {
             return (
               <article class={`hero-card hero-${u} ${mine ? 'is-mine' : ''} ${sworn && sworn !== u ? 'is-locked' : ''}`}>
                 <header>
-                  <span class="hero-portrait"><Icon name={u} size={44} /></span>
+                  <span class="hero-portrait"><UnitIcon u={u} size={44} /></span>
                   <div>
                     <h3>{d.name}</h3>
                     <span class="hero-vs">Strong against <b>{info.vsLabel}</b></span>
@@ -441,7 +441,7 @@ function StatuePanel({ v }: { v: VillageView }) {
                   {d.carry > 0 && <><dt>Carries</dt><dd class="num">{d.carry}</dd></>}
                 </dl>
                 {mine ? <span class="pill">Your hero</span> : sworn && sworn !== u ? (
-                  <span class="muted small">This village is sworn to the {UNITS[sworn].name}.</span>
+                  <span class="muted small">This village is sworn to the {unitName(sworn)}.</span>
                 ) : (
                   <>
                     <Cost cost={d.cost} have={have} pop={d.pop} time={h.recruitTime(v.id, u)} />
