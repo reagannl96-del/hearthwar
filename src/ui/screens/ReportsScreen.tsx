@@ -1,9 +1,9 @@
 import { useState } from 'preact/hooks';
-import { BUILDINGS } from '../../engine/data/buildings';
-import { ITEM_BY_ID } from '../../engine/data/units';
-import type { BattleData, Report, ResKey } from '../../engine/types';
+import { BUILDINGS, BUILDING_ORDER } from '../../engine/data/buildings';
+import { ARMY_ORDER, ITEM_BY_ID, UNITS } from '../../engine/data/units';
+import type { BattleData, Report, ResKey, SideInfo, UnitId, Units } from '../../engine/types';
 import { Icon } from '../art/icons';
-import { Btn, Empty, PlayerLink, Res, Section, UnitTable, VillageLink } from '../components/common';
+import { Btn, Empty, PlayerLink, Res, Section, VillageLink } from '../components/common';
 import { fmt, fmtAgo, fmtClock } from '../format';
 import { act, go, host, now, rallyTarget, view, warp } from '../store';
 
@@ -71,22 +71,99 @@ function ReportView({ r }: { r: Report }) {
         <span aria-hidden="true">›</span>
         <span>{r.title}</span>
       </div>
-      <div class="page-head">
-        <h1 class="report-title"><span class={`dot dot-${r.color}`} /> {r.title}</h1>
-        <div class="row gap">
-          <Btn small variant="ghost" disabled={idx <= 0} onClick={() => go({ name: 'reports', id: reports[idx - 1].id })}>Newer</Btn>
-          <Btn small variant="ghost" disabled={idx >= reports.length - 1} onClick={() => go({ name: 'reports', id: reports[idx + 1].id })}>Older</Btn>
-          <Btn small variant="quiet" onClick={() => { act({ type: 'deleteReport', id: r.id }); go({ name: 'reports' }); }}>Delete</Btn>
-        </div>
-      </div>
-      <p class="muted small">{fmtClock(r.t, now.value, warp.value)}</p>
-      {r.text && <Section><p>{r.text}</p></Section>}
-      {r.res && (
-        <Section title="Goods">
-          <span class="cost">{(['wood', 'clay', 'iron'] as ResKey[]).map((k) => <Res k={k} n={r.res![k]} />)}</span>
-        </Section>
-      )}
-      {r.battle && <Battle b={r.battle} kind={r.kind} />}
+      <article class={`rep-card rep-${r.color}`}>
+        <header class="rep-head">
+          <span class={`dot dot-${r.color}`} />
+          <div class="grow">
+            <h1 class="rep-title">{r.title}</h1>
+            <div class="rep-time">{fmtClock(r.t, now.value, warp.value)}</div>
+          </div>
+          <div class="row gap">
+            <Btn small variant="ghost" disabled={idx <= 0} onClick={() => go({ name: 'reports', id: reports[idx - 1].id })}>‹ Newer</Btn>
+            <Btn small variant="ghost" disabled={idx >= reports.length - 1} onClick={() => go({ name: 'reports', id: reports[idx + 1].id })}>Older ›</Btn>
+            <Btn small variant="quiet" onClick={() => { act({ type: 'deleteReport', id: r.id }); go({ name: 'reports' }); }}>Delete</Btn>
+          </div>
+        </header>
+        {r.text && <p class="rep-text">{r.text}</p>}
+        {r.res && (
+          <div class="rep-block">
+            <h2 class="rep-sub">Goods</h2>
+            <span class="cost">{(['wood', 'clay', 'iron'] as ResKey[]).map((k) => <Res k={k} n={r.res![k]} />)}</span>
+          </div>
+        )}
+        {r.battle && <Battle b={r.battle} kind={r.kind} />}
+      </article>
+    </div>
+  );
+}
+
+/** Units that can appear in this world, in Tribal Wars column order. */
+function columns(b: BattleData): UnitId[] {
+  const pv = view.value!;
+  const seen = (u: UnitId) => [b.attUnits, b.defUnits, b.scout?.unitsOutside].some((x) => (x?.[u] ?? 0) > 0);
+  return ARMY_ORDER.filter((u) => {
+    if ((u === 'archer' || u === 'marcher') && !pv.config.archers) return seen(u);
+    if (u === 'militia') return seen(u);
+    return true;
+  });
+}
+
+function minus(a: Units, b?: Units): Units {
+  const out: Units = { ...a };
+  for (const k in b) out[k as UnitId] = (out[k as UnitId] ?? 0) - (b[k as UnitId] ?? 0);
+  return out;
+}
+
+/** One side of the battle, laid out like a Tribal Wars report: who, from where, and a row per count. */
+function SideTable({ role, side, cols, rows, win }: {
+  role: 'Attacker' | 'Defender';
+  side: SideInfo;
+  cols: UnitId[];
+  rows: { label: string; units?: Units; tone?: 'loss' | 'alive' }[];
+  win: boolean;
+}) {
+  return (
+    <table class={`rep-side ${win ? 'is-win' : 'is-loss'}`}>
+      <tbody>
+        <tr class="rep-who">
+          <th scope="row">{role}:</th>
+          <td colSpan={cols.length}><PlayerLink id={side.playerId} name={side.playerName} /></td>
+        </tr>
+        <tr>
+          <th scope="row">{role === 'Attacker' ? 'Origin' : 'Destination'}:</th>
+          <td colSpan={cols.length}><VillageLink vid={side.vid} name={side.vname} x={side.x} y={side.y} /></td>
+        </tr>
+        <tr class="rep-icons">
+          <th />
+          {cols.map((u) => <td title={UNITS[u].name}><Icon name={u} size={20} /></td>)}
+        </tr>
+        {rows.map((r) => (
+          <tr class={`rep-count ${r.tone ?? ''}`}>
+            <th scope="row">{r.label}:</th>
+            {cols.map((u) => {
+              if (r.units === undefined) return <td class="num unknown">?</td>;
+              const n = r.units[u] ?? 0;
+              return <td class={`num ${n === 0 ? 'zero' : ''}`}>{fmt(n)}</td>;
+            })}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function LuckMeter({ luck }: { luck: number }) {
+  // luck runs from -25% to +25%; the bar fills from the middle
+  const pct = Math.max(-25, Math.min(25, luck * 100));
+  const w = (Math.abs(pct) / 25) * 50;
+  return (
+    <div class="luck">
+      <span class="luck-label">Luck</span>
+      <span class="luck-bar" role="img" aria-label={`Luck ${pct.toFixed(1)}%`}>
+        <span class={`luck-fill ${pct >= 0 ? 'is-good' : 'is-bad'}`} style={{ left: pct >= 0 ? '50%' : `${50 - w}%`, width: `${w}%` }} />
+        <span class="luck-mid" />
+      </span>
+      <b class={`num ${pct >= 0 ? 'good-text' : 'bad-text'}`}>{pct >= 0 ? '+' : ''}{pct.toFixed(1)}%</b>
     </div>
   );
 }
@@ -94,81 +171,122 @@ function ReportView({ r }: { r: Report }) {
 function Battle({ b, kind }: { b: BattleData; kind: Report['kind'] }) {
   const pv = view.value!;
   const mine = b.attacker.playerId === pv.me.id;
-  const survivors = { ...b.attUnits };
-  for (const k in b.attLost) survivors[k as keyof typeof survivors] = (survivors[k as keyof typeof survivors] ?? 0) - (b.attLost[k as keyof typeof b.attLost] ?? 0);
+  const cols = columns(b);
+  const attWon = b.winner === 'attacker';
+  const good = attWon === mine;
+  const lootSum = b.loot ? b.loot.wood + b.loot.clay + b.loot.iron : 0;
   return (
     <>
-      <Section>
-        <div class="battle-sides">
-          <div>
-            <div class="muted small">Attacker</div>
-            <PlayerLink id={b.attacker.playerId} name={b.attacker.playerName} />
-            <div><VillageLink vid={b.attacker.vid} name={b.attacker.vname} x={b.attacker.x} y={b.attacker.y} /></div>
-          </div>
-          <div class="battle-mid">
-            <div class={`outcome ${b.winner === 'attacker' ? (mine ? 'is-win' : 'is-loss') : mine ? 'is-loss' : 'is-win'}`}>
-              {b.winner === 'attacker' ? 'The attacker won' : 'The defender won'}
-            </div>
-            {b.luck !== 0 && <div class="small">Luck <b class={`num ${b.luck >= 0 ? 'good-text' : 'bad-text'}`}>{b.luck >= 0 ? '+' : ''}{(b.luck * 100).toFixed(1)}%</b></div>}
-            {b.morale < 1 && <div class="small">Morale <b class="num">{Math.round(b.morale * 100)}%</b></div>}
-            {b.paladinItem && <div class="small">Paladin carried the {ITEM_BY_ID[b.paladinItem]?.name}</div>}
-          </div>
-          <div class="right">
-            <div class="muted small">Defender</div>
-            <PlayerLink id={b.defender.playerId} name={b.defender.playerName} />
-            <div><VillageLink vid={b.defender.vid} name={b.defender.vname} x={b.defender.x} y={b.defender.y} /></div>
-          </div>
-        </div>
-      </Section>
-      <Section title="Attacking army">
-        <UnitTable rows={[{ label: 'Sent', units: b.attUnits }, { label: 'Lost', units: b.attLost, tone: 'loss' }]} />
-      </Section>
-      <Section title="Defending army">
-        {b.defUnits ? (
-          <UnitTable rows={[{ label: 'Present', units: b.defUnits }, { label: 'Lost', units: b.defLost, tone: 'loss' }]} />
-        ) : (
-          <p class="muted">None of your troops survived to see the defenders.</p>
-        )}
-        {b.militia && <p class="small muted">The village's militia fought alongside the defenders.</p>}
-      </Section>
-      {(b.loot || b.wall || b.building || b.loyalty) && (
-        <Section title="Aftermath">
-          <dl class="facts">
-            {b.loot && (
+      <div class={`rep-verdict ${good ? 'is-good' : 'is-bad'}`}>
+        <Icon name={attWon ? 'attack' : 'shield'} size={22} />
+        <span>{attWon ? 'The attacker has won' : 'The defender has won'}</span>
+      </div>
+
+      <div class="rep-factors">
+        <LuckMeter luck={b.luck} />
+        <div class="factor"><span>Morale</span><b class="num">{Math.round(b.morale * 100)}%</b></div>
+        {b.wall && <div class="factor"><Icon name="b_wall" size={16} /><span>Wall</span><b class="num">{b.wall.before}{b.wall.before !== b.wall.after && <> → {b.wall.after}</>}</b></div>}
+        {b.nightOwl && <div class="factor"><span>Night bonus</span><b class="good-text">×2 defense</b></div>}
+        {b.militia && <div class="factor"><Icon name="militia" size={16} /><span>Militia fought</span></div>}
+        {b.paladinItem && <div class="factor"><Icon name="paladin" size={16} /><span>{ITEM_BY_ID[b.paladinItem]?.name}</span></div>}
+      </div>
+
+      <div class="rep-block">
+        <SideTable
+          role="Attacker" side={b.attacker} cols={cols} win={attWon}
+          rows={[
+            { label: 'Quantity', units: b.attUnits },
+            { label: 'Losses', units: b.attLost, tone: 'loss' },
+            { label: 'Survivors', units: minus(b.attUnits, b.attLost), tone: 'alive' },
+          ]}
+        />
+      </div>
+
+      <div class="rep-block">
+        <SideTable
+          role="Defender" side={b.defender} cols={cols} win={!attWon}
+          rows={[
+            { label: 'Quantity', units: b.defUnits },
+            { label: 'Losses', units: b.defLost, tone: 'loss' },
+          ]}
+        />
+        {!b.defUnits && <p class="muted small rep-note">None of your troops survived to see the defenders.</p>}
+      </div>
+
+      {b.scout && (
+        <div class="rep-block">
+          <h2 class="rep-sub">Espionage</h2>
+          <dl class="rep-facts">
+            {b.scout.res && (
               <>
-                <dt>Plunder</dt>
+                <dt>Resources scouted</dt>
+                <dd class="cost">{(['wood', 'clay', 'iron'] as ResKey[]).map((k) => <Res k={k} n={b.scout!.res![k]} />)}</dd>
+              </>
+            )}
+            {b.scout.buildings && (
+              <>
+                <dt>Buildings</dt>
                 <dd>
-                  <span class="cost">{(['wood', 'clay', 'iron'] as ResKey[]).map((k) => <Res k={k} n={b.loot![k]} />)}</span>{' '}
-                  <span class="muted small num">{fmt(b.loot.wood + b.loot.clay + b.loot.iron)}/{fmt(b.capacity ?? 0)}</span>
+                  <div class="rep-buildings">
+                    {BUILDING_ORDER.filter((id) => (b.scout!.buildings![id] ?? 0) > 0).map((id) => (
+                      <span class="rep-bld" title={BUILDINGS[id].name}><Icon name={`b_${id}`} size={18} /><span>{BUILDINGS[id].name}</span><b class="num">{b.scout!.buildings![id]}</b></span>
+                    ))}
+                  </div>
                 </dd>
               </>
             )}
-            {b.wall && <><dt>Wall</dt><dd class="num">{b.wall.before === b.wall.after ? `level ${b.wall.after}` : `damaged from ${b.wall.before} to ${b.wall.after}`}</dd></>}
-            {b.building && <><dt>Catapults</dt><dd>{BUILDINGS[b.building.id].name} {b.building.before === b.building.after ? `held at level ${b.building.after}` : `damaged from ${b.building.before} to ${b.building.after}`}</dd></>}
-            {b.loyalty && <><dt>Loyalty</dt><dd class="num">{b.conquered ? `fell to 0 — the village was conquered!` : `dropped from ${b.loyalty.before} to ${b.loyalty.after}`}</dd></>}
           </dl>
-        </Section>
-      )}
-      {b.scout && (
-        <Section title="Scouting">
-          {b.scout.res && (
-            <p>Resources: <span class="cost">{(['wood', 'clay', 'iron'] as ResKey[]).map((k) => <Res k={k} n={b.scout!.res![k]} />)}</span></p>
+          {b.scout.unitsOutside && (
+            <table class="rep-side rep-outside">
+              <tbody>
+                <tr class="rep-icons"><th /> {cols.map((u) => <td title={UNITS[u].name}><Icon name={u} size={20} /></td>)}</tr>
+                <tr class="rep-count"><th scope="row">Outside:</th>{cols.map((u) => { const n = b.scout!.unitsOutside![u] ?? 0; return <td class={`num ${n === 0 ? 'zero' : ''}`}>{fmt(n)}</td>; })}</tr>
+              </tbody>
+            </table>
           )}
-          {b.scout.buildings && (
-            <div class="scout-buildings">
-              {Object.entries(b.scout.buildings).filter(([, l]) => (l ?? 0) > 0).map(([id, l]) => (
-                <span class="chip"><Icon name={`b_${id}`} size={14} /> {BUILDINGS[id as keyof typeof BUILDINGS].name} {l}</span>
-              ))}
-            </div>
-          )}
-          {b.scout.unitsOutside && <UnitTable rows={[{ label: 'Outside', units: b.scout.unitsOutside }]} />}
           {!b.scout.buildings && <p class="muted small">Send more scouts to also see buildings and troops outside.</p>}
-        </Section>
+        </div>
       )}
+
+      {(b.loot || b.building || b.loyalty) && (
+        <div class="rep-block">
+          <h2 class="rep-sub">Aftermath</h2>
+          <dl class="rep-facts">
+            {b.loot && (
+              <>
+                <dt>Haul</dt>
+                <dd>
+                  <span class="cost">{(['wood', 'clay', 'iron'] as ResKey[]).map((k) => <Res k={k} n={b.loot![k]} />)}</span>
+                  <span class="haul">
+                    <span class="haul-bar"><span style={{ width: `${Math.min(100, (lootSum / Math.max(1, b.capacity ?? lootSum)) * 100)}%` }} /></span>
+                    <span class="muted small num">{fmt(lootSum)} / {fmt(b.capacity ?? 0)}</span>
+                  </span>
+                </dd>
+              </>
+            )}
+            {b.building && (
+              <>
+                <dt>Catapults</dt>
+                <dd><Icon name={`b_${b.building.id}`} size={16} /> {BUILDINGS[b.building.id].name} {b.building.before === b.building.after ? `held at level ${b.building.after}` : <>damaged from <b class="num">{b.building.before}</b> to <b class="num">{b.building.after}</b></>}</dd>
+              </>
+            )}
+            {b.loyalty && (
+              <>
+                <dt>Loyalty</dt>
+                <dd>
+                  <span class="loyal-bar"><span style={{ width: `${Math.max(0, b.loyalty.after)}%` }} /></span>
+                  {b.conquered ? <b class="good-text">fell to 0. The village was conquered!</b> : <>dropped from <b class="num">{Math.round(b.loyalty.before)}</b> to <b class="num">{Math.round(b.loyalty.after)}</b></>}
+                </dd>
+              </>
+            )}
+          </dl>
+        </div>
+      )}
+
       {kind === 'attack' && mine && (
-        <div class="row gap">
-          <Btn onClick={() => { rallyTarget.value = { x: b.defender.x, y: b.defender.y, kind: 'attack', units: b.attUnits as Record<string, number> }; go({ name: 'building', id: 'rally', tab: 'send' }); }}>Attack again with the same troops</Btn>
-          <Btn variant="ghost" onClick={() => go({ name: 'map', focus: b.defender.vid })}>Show on map</Btn>
+        <div class="row gap rep-actions">
+          <Btn onClick={() => { rallyTarget.value = { x: b.defender.x, y: b.defender.y, kind: 'attack', units: b.attUnits as Record<string, number> }; go({ name: 'building', id: 'rally', tab: 'send' }); }}><Icon name="attack" size={16} /> Attack again with the same troops</Btn>
+          <Btn variant="ghost" onClick={() => go({ name: 'map', focus: b.defender.vid })}><Icon name="map" size={16} /> Show on map</Btn>
         </div>
       )}
     </>
