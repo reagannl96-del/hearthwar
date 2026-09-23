@@ -59,5 +59,9 @@ for (let d = 1; d <= days; d++) {
     `${d.toString().padStart(3)} | ${avg('hours').toFixed(1).padStart(12)} | ${avg('attacks').toFixed(0).padStart(10)}, ${max('attacks').toFixed(0).padStart(6)} | ${avg('perHour').toFixed(1).padStart(16)} | ${avg('loot').toFixed(0).padStart(14)} | ${avg('points').toFixed(0).padStart(8)}, ${max('points').toFixed(0).padStart(7)} | ${avg('army').toFixed(0).padStart(14)} | ${avg('villages').toFixed(1).padStart(6)}, ${max('villages').toFixed(0).padStart(4)}`,
   );
   prev = new Map(ais().map((p) => [p.id, snap(p)]));
+  const today = w.news.filter((n) => n.t > start);
+  const count = (re: RegExp) => today.filter((n) => re.test(n.text)).length;
+  const inTribe = ais().filter((p) => p.tribeId != null).length;
+  console.log(`      tribes: ${Object.keys(w.tribes).length}, AI rulers in a tribe: ${inTribe}/${ais().length}, today: ${count(/founded the tribe/)} founded, ${count(/joined the tribe/)} joined, ${count(/left the tribe/)} left`);
 }
 console.log(`\n(simulated in ${((Date.now() - started) / 1000).toFixed(1)} s)`);

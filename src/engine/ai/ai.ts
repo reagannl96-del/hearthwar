@@ -12,8 +12,9 @@ import { nextRandom } from '../rng';
 import { villagesNear } from '../spatial';
 import { exchangeQuote } from '../market';
 import { commandsTo } from '../cmdindex';
-import { acceptInvite, declineInvite, hasRight, invitePlayer, invitesFor, relation, setDiplomacy, tribeOf, tribePoints } from '../tribes';
-import type { BattleData, BuildingId, Command, Player, Res, UnitId, Units, Village, VillageRole, World } from '../types';
+import { acceptInvite, createTribe, declineInvite, hasRight, invitePlayer, invitesFor, leaveTribe, relation, setDiplomacy, tribeOf, tribePoints } from '../tribes';
+import { tribeName } from '../data/names';
+import type { BattleData, BuildingId, Command, Player, Res, Tribe, UnitId, Units, Village, VillageRole, World } from '../types';
 import { RES_KEYS } from '../types';
 import { farmMax, popFree, queuedLevel, recruitQueueEnd, storageOf, unitAvailable, updateVillage } from '../village';
 import { aiThinkInterval } from '../world';
@@ -764,19 +765,75 @@ export function aiOnBattle(w: World, c: Command, target: Village, data: BattleDa
  * other tribes' diplomacy: a pact from an equal is returned, a declaration of war
  * is returned in kind.
  */
+/**
+ * How much a tribe is worth to this ruler: its strength next to theirs, and how
+ * many of its members live close enough to help (a tribe on the other side of the
+ * realm is little use when the axes arrive).
+ */
+function tribeAppeal(w: World, p: Player, t: Tribe): number {
+  const home = w.villages[p.villages[0]];
+  const strength = Math.min(5, tribePoints(w, t) / Math.max(1, p.points));
+  let near = 0;
+  for (const m of t.members) {
+    if (m === p.id) continue;
+    const o = w.players[m];
+    const ov = o && !o.eliminated ? w.villages[o.villages[0]] : undefined;
+    if (home && ov && distance(home.x, home.y, ov.x, ov.y) <= 30) near++;
+  }
+  return strength + near * 0.6;
+}
+
+const DAY_MS = 86_400_000;
+
+/**
+ * A ruler's life in the tribes, as people play it: take a good invitation, move
+ * on to a clearly better tribe nearby after a while, walk out of a tribe that has
+ * dwindled to nothing or whose members all live far away, and, left on their own
+ * long enough, found a tribe and start recruiting. Nothing is forced; each step is
+ * taken only when it pays.
+ */
 function tribeLife(w: World, p: Player): void {
   if (nextRandom(w) > 0.12) return;
+  const ai = p.ai!;
   const myPts = p.points;
+  const t0 = tribeOf(w, p.id);
+  if (t0) { ai.tribeSince ??= w.now; ai.tribelessSince = undefined; } else { ai.tribelessSince ??= w.now; ai.tribeSince = undefined; }
+  const settled = t0 ? w.now - ai.tribeSince! : 0;
   // invitations waiting for us
-  if (p.tribeId == null) {
-    for (const inv of invitesFor(w, p.id)) {
-      const theirs = tribePoints(w, inv.tribe);
-      if (theirs >= myPts * 0.6 || nextRandom(w) < 0.25) {
-        acceptInvite(w, p.id, inv.tribe.id);
-        return;
+  for (const inv of invitesFor(w, p.id)) {
+    const appeal = tribeAppeal(w, p, inv.tribe);
+    if (!t0) {
+      if (appeal >= 0.6 || nextRandom(w) < 0.25) {
+        if (acceptInvite(w, p.id, inv.tribe.id).ok) { ai.tribeSince = w.now; return; }
       }
       if (nextRandom(w) < 0.3) declineInvite(w, p.id, inv.tribe.id);
+    } else if (settled > DAY_MS && appeal > tribeAppeal(w, p, t0) * 1.8 + 0.5 && !(t0.founderId === p.id && t0.members.length > 1)) {
+      // a much better offer close by: say goodbye and go
+      leaveTribe(w, p.id);
+      if (acceptInvite(w, p.id, inv.tribe.id).ok) { ai.tribeSince = w.now; return; }
+    } else if (nextRandom(w) < 0.2) declineInvite(w, p.id, inv.tribe.id);
+  }
+  // a tribe that no longer makes sense: alone in it for days, or every tribe mate lives far away
+  if (t0 && settled > 2 * DAY_MS) {
+    const mates = t0.members.filter((m) => m !== p.id && !w.players[m]?.eliminated);
+    const lonely = mates.length === 0;
+    const scattered = mates.length > 0 && tribeAppeal(w, p, t0) < Math.min(5, tribePoints(w, t0) / Math.max(1, myPts)) + 0.3;
+    if ((lonely && nextRandom(w) < 0.15) || (scattered && t0.founderId !== p.id && nextRandom(w) < 0.06)) {
+      leaveTribe(w, p.id);
+      ai.tribelessSince = w.now;
+      return;
     }
+  }
+  // on our own for a good while and doing well: found a tribe and gather the neighbours
+  if (!t0 && w.now - (ai.tribelessSince ?? w.now) > DAY_MS && myPts >= 1500) {
+    const chance = ai.personality === 'warlord' || ai.personality === 'expander' ? 0.08 : 0.03;
+    if (nextRandom(w) < chance) {
+      for (let tries = 0; tries < 4; tries++) {
+        const tn = tribeName(w);
+        if (createTribe(w, p.id, tn.name, tn.tag).ok) { ai.tribeSince = w.now; break; }
+      }
+    }
+    return;
   }
   const t = tribeOf(w, p.id);
   if (!t || !hasRight(t, p.id, 'invite')) return;

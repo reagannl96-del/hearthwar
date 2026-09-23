@@ -253,6 +253,9 @@ export interface AIState {
   raidBudget?: number;
   /** when the last noble train set out */
   lastConquest?: number;
+  /** when this ruler joined (or founded) its current tribe, or last found itself without one */
+  tribeSince?: number;
+  tribelessSince?: number;
 }
 
 /** Offensive (all attack troops), defensive (all defence, a few light cavalry to farm), mixed, or a random assortment. */
