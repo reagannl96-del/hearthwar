@@ -1320,3 +1320,45 @@ button.realm-row:hover { background: var(--surface-2); border-color: var(--line)
 
 /* the hero's signature ability, headlined on its statue card */
 .hero-ability { display: inline-block; margin: 1px 0 2px; padding: 1px 8px; border-radius: 999px; background: var(--leather); color: var(--brass-hi); font-size: 0.72rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; }
+
+/* ---------- phones: building tables become one card per row ---------- */
+@media (max-width: 640px) {
+  .recruit-table, .build-table, .recruit-table tbody, .build-table tbody { display: block; width: 100%; }
+  .recruit-table thead, .build-table thead { display: none; }
+  .recruit-table tr, .build-table tr {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; align-items: center;
+    padding: 10px 2px; border-bottom: 1px solid var(--line);
+  }
+  .recruit-table td, .build-table td { display: block; padding: 0; border: 0; min-width: 0; background: none; }
+  .recruit-table td:first-child { grid-column: 1 / -1; min-width: 0; }
+  .recruit-table td:nth-child(2) { grid-column: 1 / -1; }
+  .recruit-table td:nth-child(3) { text-align: left; }
+  .recruit-table td:nth-child(3)::before { content: 'At home '; color: var(--muted); font-size: 0.8rem; font-weight: 600; }
+  .recruit-table td:nth-child(4) { justify-self: end; }
+  .build-table td:first-child { grid-column: 1 / -1; }
+  .build-table td:last-child { justify-self: end; }
+  .recruit-table .cost.is-compact, .build-table .cost.is-compact { flex-wrap: wrap; }
+  .recruit-foot { flex-wrap: wrap; justify-content: flex-end; }
+}
+
+/* ---------- phones: the "More" tab and its sheet; building-table cards without zebra blocks ---------- */
+.nav-more-sheet { position: fixed; inset: 0; z-index: 60; background: rgba(20, 10, 2, 0.45); display: flex; align-items: flex-end; }
+.nav-more-panel {
+  width: 100%; padding: 10px 10px calc(70px + env(safe-area-inset-bottom)); display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+  background: linear-gradient(var(--parch-hi), var(--parch-2)); border-top: 2px solid var(--brass-dark); border-radius: 12px 12px 0 0; box-shadow: var(--shadow);
+}
+.nav-more-item {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px 6px; min-height: 64px;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--parch-hi); color: var(--ink); font: 700 0.8rem var(--font-body); cursor: pointer;
+}
+.nav-more-item.is-active { border-color: var(--brass-dark); background: #f7e7b8; }
+.nav-more-item.is-unread { box-shadow: 0 0 0 2px #4aa3ff inset; }
+.nav-more-item .badge { position: absolute; top: 4px; right: 6px; }
+@media (max-width: 640px) {
+  .recruit-table tbody tr td, .build-table tbody tr td { background: transparent !important; }
+  .recruit-table tbody tr:nth-child(even), .build-table tbody tr:nth-child(even) { background: rgba(120, 90, 40, 0.06); }
+}
+
+/* the hero card header: name, then the signature ability pill, then what the hero is best at, each on its own line */
+.hero-card header > div { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; }
+.hero-card .hero-ability { margin: 0; }

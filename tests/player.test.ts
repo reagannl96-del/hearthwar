@@ -57,14 +57,12 @@ describe('combat math', () => {
       resolveBattle({ ...base, att: { axe: 500, [hero]: 1 }, defStacks: [{ units: { spear: 2000 }, tech: {} }] }).attStrength;
     // a sorcerer boosts an attack on infantry, a paladin does not
     expect(vsInf('sorcerer')).toBeGreaterThan(vsInf('paladin') * 1.1);
-    // a defending druid halves the rams' damage to the wall
-    const rams = (def: Record<string, number>) =>
-      resolveBattle({ ...base, att: { axe: 3000, ram: 60 }, defStacks: [{ units: def, tech: {} }], wall: 15 }).wallAfter;
-    expect(rams({ druid: 1 })).toBeGreaterThan(rams({ paladin: 1 }));
-    // a goblin doubles its side's scouts
-    const scouts = (att: Record<string, number>) => resolveBattle({ ...base, att, defStacks: [{ units: { scout: 10 }, tech: {} }] }).scoutsSurvived;
-    expect(scouts({ scout: 8 })).toBe(0);
-    expect(scouts({ scout: 8, goblin: 1 })).toBeGreaterThan(0);
+    // a defending druid's thorn hedge makes the wall count higher; an attacking goblin chief slips over it
+    const defense = (def: Record<string, number>, att: Record<string, number> = { axe: 800 }) => resolveBattle({
+      att, attTech: {}, attItem: null, defStacks: [{ units: def, tech: {} }], defItems: [], wall: 6, luck: 0, morale: 1,
+    });
+    expect(defense({ spear: 300, druid: 1 }).defStrength).toBeGreaterThan(defense({ spear: 300, paladin: 1 }).defStrength);
+    expect(defense({ spear: 300 }, { axe: 800, goblin: 1 }).battleWall).toBe(2);
   });
   it('loot splits evenly and respects capacity', () => {
     expect(computeLoot({ wood: 1000, clay: 1000, iron: 1000 }, 300)).toEqual({ wood: 100, clay: 100, iron: 100 });
@@ -168,7 +166,8 @@ describe('a human player', () => {
     advance(w, w.now + 2 * HOUR);
     updateVillage(w, v, w.now);
     expect(v.units.paladin).toBe(1);
-    advance(w, w.now + 5 * HOUR);
+    // legendary items are rare: a search every few hours finds one only half the time
+    for (let i = 0; i < 30 && p.paladin!.items.length === 0; i++) advance(w, w.now + 3 * HOUR);
     expect(p.paladin!.items.length).toBeGreaterThan(0);
 
     // --- nobles & conquest ---

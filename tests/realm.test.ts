@@ -208,8 +208,8 @@ describe('heroes, rebalanced', () => {
     Object.assign(v.buildings, { statue: 1 });
     v.res = { wood: 9999, clay: 9999, iron: 9999 };
     expect(applyAction(w, p.id, { type: 'recruit', vid: v.id, unit: 'goblin', count: 1 }).ok).toBe(true);
-    // a few item searches later
-    for (let i = 0; i < 4; i++) {
+    // enough searches that some of them turn something up
+    for (let i = 0; i < 40 && (p.heroGear?.goblin?.items.length ?? 0) < 4; i++) {
       w.events = w.events.filter((e) => e.type !== 'item');
       pushEvent(w, 'item', w.now + 1, p.id);
       advance(w, w.now + 2);
@@ -255,16 +255,14 @@ describe('hero abilities', () => {
     const { resolveBattle } = await import('../src/engine/combat');
     return resolveBattle({ att, attTech: {}, attItem: null, defStacks: [{ units: def, tech: {} }], defItems: [], wall, luck: 0, morale: 1 });
   };
-  it('thornwall, sneak in, trap pits and dread each change the fight, and say so', async () => {
+  it('thornwall, sneak in and dread each change the fight, and say so', async () => {
     const base = await fight({ axe: 1000 }, { spear: 500 });
     const thorn = await fight({ axe: 1000 }, { spear: 500, druid: 1 });
     expect(thorn.effects).toContain('thornwall');
     expect(thorn.defStrength).toBeGreaterThan(base.defStrength * 1.15);
     const sneak = await fight({ axe: 1000, goblin: 1 }, { spear: 500 });
     expect(sneak.effects).toContain('sneak');
-    expect(sneak.battleWall).toBe(2);
-    const traps = await fight({ light: 500 }, { spear: 500, goblin: 1 });
-    expect(traps.effects).toContain('traps');
+    expect(sneak.battleWall).toBe(1);
     const dread = await fight({ axe: 1000, necromancer: 1 }, { spear: 500 });
     expect(dread.effects).toContain('dread-att');
     expect(dread.defStrength).toBeLessThan(base.defStrength * 0.9);

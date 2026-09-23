@@ -155,7 +155,13 @@ export function migrateWorld(w: World): void {
 
 export const barbInterval = (w: World) => Math.max(15_000, Math.round((2 * HOUR) / w.config.speed));
 export const sampleInterval = (w: World) => Math.max(30_000, Math.round((5 * HOUR) / w.config.speed));
-export const itemInterval = (w: World) => Math.max(60_000, Math.round((24 * HOUR) / w.config.speed));
+/**
+ * How often a player's heroes search for a legendary item: every 3 hours on a normal
+ * realm (slower realms search less often, never more than every 2 days), and a search
+ * turns something up only half the time, so an item is a rare find, about one every 6 hours.
+ */
+export const itemInterval = (w: { config: { speed: number } }) => Math.min(48 * HOUR, Math.max(2 * HOUR, Math.round((450 * HOUR) / w.config.speed)));
+export const ITEM_FIND_CHANCE = 0.5;
 
 function newPlayer(w: World, name: string, kind: 'human' | 'ai', color: string): Player {
   const p: Player = {

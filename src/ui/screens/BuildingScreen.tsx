@@ -1,3 +1,4 @@
+import { ITEM_FIND_CHANCE, itemInterval } from '../../engine/world';
 import { themeOfHero } from '../../engine/data/themes';
 import { useState } from 'preact/hooks';
 import { BUILDINGS, BUILDING_ORDER } from '../../engine/data/buildings';
@@ -438,7 +439,7 @@ function StatuePanel({ v }: { v: VillageView }) {
                   <div>
                     <h3>{d.name}</h3>
                     <span class="hero-ability">{info.ability}</span>
-                    <span class="hero-vs">Strong against <b>{info.vsLabel}</b></span>
+                    <span class="hero-vs">Best at <b>{info.vsLabel}</b></span>
                   </div>
                 </header>
                 <p class="small">{d.description}</p>
@@ -491,7 +492,7 @@ function HeroItems({ kind }: { kind: UnitId | null }) {
   return (
     <Section title={`${heroName}'s legendary items`}>
       <p class="muted small">
-        Your {heroName.toLowerCase()}s search for legendary items, one roughly every <span class="num">{fmtDur((24 * 3600_000) / pv.config.speed / warp.value)}</span>.
+        Your {heroName.toLowerCase()}s search for legendary items, and find one about every <span class="num">{fmtDur(itemInterval(pv) / ITEM_FIND_CHANCE / warp.value)}</span>: a rare prize.
         The equipped item goes into battle with every {heroName.toLowerCase()} of yours, boosting the troops it fights beside.
         {!gear && ` Train a ${heroName.toLowerCase()} to start finding them.`}
       </p>

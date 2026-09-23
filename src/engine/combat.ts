@@ -44,7 +44,7 @@ export interface CombatResult {
   effects?: HeroEffect[];
 }
 
-export type HeroEffect = 'barrier' | 'thornwall' | 'sneak' | 'dread-att' | 'dread-def' | 'snare' | 'ward' | 'traps';
+export type HeroEffect = 'barrier' | 'thornwall' | 'sneak' | 'dread-att' | 'dread-def' | 'ward';
 
 const CLS_INDEX: Record<UnitClass, 0 | 1 | 2> = { inf: 0, cav: 1, arc: 2 };
 
@@ -92,8 +92,8 @@ export function resolveBattle(input: CombatInput): CombatResult {
   // --- scouts fight scouts ---
   const scoutsSent = att.scout ?? 0;
   const defScouts = defStacks.reduce((s, st) => s + (st.units.scout ?? 0), 0);
-  const scoutMultA = (attItem?.special === 'scout' ? 2 : 1) * (attHeroes.includes('goblin') ? 2 : 1);
-  const scoutMultD = (defItems.some((i) => i.special === 'scout') ? 2 : 1) * (defHeroes.includes('goblin') ? 2 : 1);
+  const scoutMultA = attItem?.special === 'scout' ? 2 : 1;
+  const scoutMultD = defItems.some((i) => i.special === 'scout') ? 2 : 1;
   let scoutLost = 0;
   if (scoutsSent > 0) {
     const pa = scoutsSent * scoutMultA;
@@ -154,19 +154,15 @@ export function resolveBattle(input: CombatInput): CombatResult {
   const effects: HeroEffect[] = [];
   // a defending necromancer fills the attacking infantry with dread
   if (defHeroes.includes('necromancer') && A[0] > 0) { A[0] *= 1 - HERO_POWERS.dread; effects.push('dread-def'); }
-  // a defending goblin chief has dug trap pits for the horses
-  if (defHeroes.includes('goblin') && A[1] > 0) { A[1] *= 1 - HERO_POWERS.traps; effects.push('traps'); }
   const Atot = A[0] + A[1] + A[2];
 
-  // a defending druid snares siege engines
-  const siegeMult = defHeroes.includes('druid') ? 0.5 : 1;
-  const ramMult = (attItem?.special === 'ramx2' ? 2 : 1) * siegeMult;
+  const siegeMult = 1;
+  const ramMult = attItem?.special === 'ramx2' ? 2 : 1;
   const ramsSent = main.ram ?? 0;
   const ramPowerSent = ramsSent * ramMult * techMultiplier(attTech.ram);
   let battleWall = Math.max(0, input.wall - Math.floor(ramDemolish(ramPowerSent, input.wall) / 2));
   // an attacking goblin chief's army slips over part of the wall
   if (attHeroes.includes('goblin') && battleWall > 0) { battleWall = Math.max(0, battleWall - HERO_POWERS.sneak); effects.push('sneak'); }
-  if (siegeMult < 1 && (ramsSent > 0 || (main.catapult ?? 0) > 0)) effects.push('snare');
 
   let D = 0;
   if (Atot > 0) {

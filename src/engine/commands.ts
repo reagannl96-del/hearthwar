@@ -599,7 +599,7 @@ function resolveAttack(w: World, c: Command, hooks: ArrivalHooks): void {
   let loot: Res | undefined;
   let capacity = 0;
   if (result.winner === 'attacker' && !result.pureScout) {
-    const lootBonus = (attItem?.special === 'loot' ? 1.2 : 1) * ((survivors.goblin ?? 0) > 0 ? 1.25 : 1);
+    const lootBonus = (attItem?.special === 'loot' ? 1.2 : 1) * ((survivors.goblin ?? 0) > 0 ? 1 + HERO_POWERS.plunder : 1);
     capacity = Math.floor(unitsCarry(survivors) * lootBonus);
     const hidden = target.ownerId !== null ? hideCap(target.buildings.hiding) : 0;
     const avail = res(

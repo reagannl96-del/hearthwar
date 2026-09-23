@@ -37,8 +37,8 @@ function swing(hero: UnitId | null, side: 'att' | 'def', att: Units, def: Units,
   let s = side === 'att' ? defLost - attLost : attLost - defLost;
   // abilities worth resources
   const won = (side === 'att') === (r.winner === 'attacker');
-  // 25% more loot, on a haul worth up to 20k (a strong village's storage)
-  if (hero === 'goblin' && side === 'att' && won) s += 0.25 * Math.min(20000, unitsCarry(r.attSurvivors));
+  // the plunder bonus, on a haul worth up to 20k (a strong village's storage)
+  if (hero === 'goblin' && side === 'att' && won) s += HERO_POWERS.plunder * Math.min(20000, unitsCarry(r.attSurvivors));
   if (hero === 'necromancer' && won) {
     const fallen = side === 'att' ? r.defLost[0] ?? {} : r.attLost;
     const foot = (['spear', 'sword', 'axe', 'archer'] as UnitId[]).reduce((n, k) => n + (fallen[k] ?? 0), 0);

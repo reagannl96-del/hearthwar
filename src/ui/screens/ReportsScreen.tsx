@@ -239,10 +239,8 @@ function LuckMeter({ luck }: { luck: number }) {
 const EFFECTS: Record<string, { hero: string; text: string }> = {
   barrier: { hero: 'sorcerer', text: 'Arcane barrier: every defender fought 10% harder' },
   ward: { hero: 'star', text: 'A warding item strengthened the defense' },
-  thornwall: { hero: 'druid', text: 'Thornwall: the wall counted 3 levels higher' },
-  snare: { hero: 'druid', text: 'Roots snared the siege engines (half power)' },
-  sneak: { hero: 'goblin', text: 'Sneak in: goblins slipped over 3 wall levels' },
-  traps: { hero: 'goblin', text: 'Trap pits: the attacking cavalry fought 10% weaker' },
+  thornwall: { hero: 'druid', text: 'Thornwall: the wall counted 4 levels higher' },
+  sneak: { hero: 'goblin', text: 'Sneak in: goblins slipped over 4 wall levels' },
   'dread-att': { hero: 'necromancer', text: 'Dread: the defending infantry faltered' },
   'dread-def': { hero: 'necromancer', text: 'Dread: the attacking infantry faltered' },
 };

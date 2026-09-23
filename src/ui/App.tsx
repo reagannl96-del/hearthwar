@@ -248,9 +248,30 @@ function Nav() {
     window.addEventListener('hw-nav-reset', reset);
     return () => window.removeEventListener('hw-nav-reset', reset);
   }, []);
+  // phones: the first few tabs sit in the bar, the rest wait behind "More"
+  const narrow = useNarrow();
+  const [more, setMore] = useState(false);
+  const shown = narrow ? sorted.slice(0, 4) : sorted;
+  const tucked = narrow ? sorted.slice(4) : [];
+  const tuckedActive = tucked.some((x) => x.key === activeKey);
+  const tuckedGlow = tucked.some((x) => x.glow);
+  const tuckedBadge = tucked.reduce((n, x) => n + (x.badge ?? 0), 0);
   return (
     <nav class={`nav ${dragging ? 'is-sorting' : ''}`} aria-label="Main">
-      {sorted.map((it) => (
+      {narrow && more && (
+        <div class="nav-more-sheet" role="menu" onClick={() => setMore(false)}>
+          <div class="nav-more-panel" onClick={(e) => e.stopPropagation()}>
+            {tucked.map((it) => (
+              <button type="button" role="menuitem" class={`nav-more-item ${activeKey === it.key ? 'is-active' : ''} ${it.glow ? 'is-unread' : ''}`} onClick={() => { setMore(false); go(it.r); }}>
+                <Icon name={it.icon} size={20} />
+                <span>{it.label}</span>
+                {it.badge ? <span class="badge">{it.badge}</span> : null}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {shown.map((it) => (
         <button
           key={it.key}
           type="button"
@@ -269,8 +290,28 @@ function Nav() {
           {it.badge ? <span class="badge">{it.badge}</span> : null}
         </button>
       ))}
+      {narrow && (
+        <button type="button" class={`nav-item ${tuckedActive || more ? 'is-active' : ''} ${tuckedGlow ? 'is-unread' : ''}`} aria-haspopup="menu" aria-expanded={more} onClick={() => setMore(!more)}>
+          <Icon name="overview" size={18} />
+          <span class="nav-label">More</span>
+          {tuckedBadge > 0 && <span class="badge">{tuckedBadge}</span>}
+        </button>
+      )}
     </nav>
   );
+}
+
+/** Whether the screen is phone-narrow (the tab bar sits at the bottom there). */
+function useNarrow(): boolean {
+  const q = '(max-width: 760px)';
+  const [narrow, setNarrow] = useState(() => typeof matchMedia !== 'undefined' && matchMedia(q).matches);
+  useEffect(() => {
+    const m = matchMedia(q);
+    const on = () => setNarrow(m.matches);
+    m.addEventListener('change', on);
+    return () => m.removeEventListener('change', on);
+  }, []);
+  return narrow;
 }
 
 function Toasts() {

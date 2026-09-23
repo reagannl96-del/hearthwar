@@ -16,7 +16,7 @@ import { nextRandom, pick } from './rng';
 import type { Command, GameEvent, Player, UnitId, Village, World } from './types';
 import { RES_KEYS } from './types';
 import { refreshPoints, storageOf, updateVillage } from './village';
-import { BARB_BUILDINGS, aiThinkInterval, barbInterval, itemInterval, realmGrowth, sampleInterval } from './world';
+import { BARB_BUILDINGS, ITEM_FIND_CHANCE, aiThinkInterval, barbInterval, itemInterval, realmGrowth, sampleInterval } from './world';
 
 const hooks: ArrivalHooks = {
   onConquest(w, v, oldOwner, newOwner) {
@@ -144,6 +144,7 @@ function paladinItem(w: World, e: GameEvent): void {
   const p = w.players[e.a];
   if (!p) return;
   pushEvent(w, 'item', w.now + itemInterval(w), p.id);
+  if (nextRandom(w) >= ITEM_FIND_CHANCE) return;
   const searching = HEROES.filter((h) => gearOf(p, h) && hasHero(w, p.id, h))
     .map((h) => ({ h, gear: gearOf(p, h)!, missing: itemsFor(h, w.config.archers).filter((i) => !gearOf(p, h)!.items.includes(i.id)) }))
     .filter((x) => x.missing.length > 0);

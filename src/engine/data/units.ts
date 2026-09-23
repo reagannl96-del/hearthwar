@@ -92,7 +92,7 @@ export const UNITS: Record<UnitId, UnitDef> = {
   },
   paladin: {
     id: 'paladin', name: 'Paladin', plural: 'Paladin',
-    description: 'Your champion. Strong, fast, and carries a legendary weapon.',
+    description: 'Your champion. His touch gets the fallen back on their feet, and his charge breaks cavalry.',
     cost: r(20, 20, 40), pop: 10, attack: 150, def: [250, 400, 150], speed: 10, carry: 100, time: 21600,
     cls: 'cav', building: 'statue', req: { statue: 1 }, research: false, smithy: 0,
   },
@@ -104,13 +104,13 @@ export const UNITS: Record<UnitId, UnitDef> = {
   },
   druid: {
     id: 'druid', name: 'Druid', plural: 'Druids',
-    description: 'A hero of the statue. Thorn and root stop archers and snare siege engines at the gate; the old paths of the forest carry his allies swiftly.',
+    description: 'A hero of the statue. Thorns climb the walls he guards, and the old paths of the forest carry his allies swiftly.',
     cost: r(60, 40, 20), pop: 10, attack: 100, def: [300, 250, 300], speed: 12, carry: 50, time: 21600,
     cls: 'inf', building: 'statue', req: { statue: 1 }, research: false, smithy: 0,
   },
   goblin: {
     id: 'goblin', name: 'Goblin Chief', plural: 'Goblin Chiefs',
-    description: 'A hero of the statue. Quick, greedy and sly: sniffs out spies and fills every sack.',
+    description: 'A hero of the statue. Quick, greedy and sly: over the wall and away with every sack he can carry.',
     cost: r(30, 30, 30), pop: 10, attack: 120, def: [120, 120, 80], speed: 8, carry: 300, time: 21600,
     cls: 'inf', building: 'statue', req: { statue: 1 }, research: false, smithy: 0,
   },
@@ -162,11 +162,11 @@ export const HERO_POWERS = {
   /** a defending sorcerer's barrier */
   barrier: 0.1,
   /** a defending druid's thorn hedge counts as this many extra wall levels */
-  thornwall: 3,
+  thornwall: 4,
   /** an attacking goblin chief's army slips over this many wall levels */
-  sneak: 3,
-  /** a defending goblin chief's trap pits slow the attacking cavalry by this much */
-  traps: 0.1,
+  sneak: 4,
+  /** the goblin chief's army carries this much more loot */
+  plunder: 0.4,
   /** the necromancer's dread weakens the enemy's infantry by this much */
   dread: 0.14,
   /** the necromancer raises this share of the enemy's fallen foot soldiers */
@@ -178,23 +178,23 @@ export const HERO_VS_BONUS = 0.25;
 export const HERO_INFO: Record<string, HeroInfo> = {
   paladin: {
     vs: 'cav', vsBonus: 0.15, vsLabel: 'Cavalry', ability: 'Lay on Hands',
-    perks: ['+15% strength against cavalry', 'Lay on Hands: after every battle he fights, 8% of his side\'s fallen troops are healed and fight on', 'Carries your legendary items into battle'],
+    perks: ['Lay on Hands: after every battle he fights, 8% of his side\'s fallen troops are healed and fight on', 'Knight\'s charge: +15% strength against cavalry'],
   },
   sorcerer: {
     vs: 'inf', vsBonus: 0.2, vsAttackOnly: true, vsLabel: 'Infantry', ability: 'Arcane Barrier',
-    perks: ['Arcane fire: +20% strength against infantry when he attacks', 'Arcane barrier: while he defends, every defender in the village fights 10% harder'],
+    perks: ['Arcane barrier: while he defends, every defender in the village fights 10% harder', 'Arcane fire: +20% strength against infantry when he attacks'],
   },
   druid: {
-    vs: 'arc', vsLabel: 'Archers', ability: 'Thornwall',
-    perks: ['+25% strength against archers', 'Thornwall: defending, a hedge of thorns makes the wall count 3 levels higher', 'Defending: enemy rams and catapults work at half power', 'Support he marches with arrives 25% faster'],
+    vsLabel: 'Holding the wall', ability: 'Thornwall',
+    perks: ['Thornwall: defending, a hedge of thorns makes the wall count 4 levels higher', 'Swift paths: support he marches with arrives 25% faster'],
   },
   goblin: {
-    vsLabel: 'Walls and cavalry', ability: 'Sneak In',
-    perks: ['Sneak in: attacking, his goblins slip over 3 levels of the enemy wall', 'Trap pits: defending, attacking cavalry fights 10% weaker', 'Scouts fight twice as hard, in attack and defense', 'The army carries 25% more loot', 'The fastest hero on the road'],
+    vsLabel: 'Raiding', ability: 'Sneak In',
+    perks: ['Sneak in: attacking, his goblins slip over 4 levels of the enemy wall', 'Plunder: the army he leads carries 40% more loot'],
   },
   necromancer: {
     vsLabel: 'Infantry and the fallen', ability: 'Dread',
-    perks: ['Dread: enemy infantry fights 14% weaker against him, in attack and defense', 'Raise the dead: when his side wins, one in ten enemy foot soldiers who fell rise as skeleton spearmen in his army (farm space permitting)'],
+    perks: ['Dread: enemy infantry fights 14% weaker against him, in attack and defense', 'Raise the dead: when his side wins, one in ten enemy foot soldiers who fell rise as skeleton spearmen in his army'],
   },
 };
 
