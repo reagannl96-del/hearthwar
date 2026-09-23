@@ -110,6 +110,10 @@ const THEMES: Record<Theme, Record<number, number>> = {
     [C.tile]: 0x7a4a2a, [C.tileDark]: 0x5c3520, [C.tileWarm]: 0x8f5a2e, [C.thatch]: 0x8a7a3a, [C.thatchDark]: 0x665a2a,
     [C.plaster]: 0xb9a67c, [C.plasterWarm]: 0xa89468, [C.timber]: 0x3e2a18, [C.timberLight]: 0x5e4428,
     [C.stone]: 0x7d7566, [C.stoneDark]: 0x5c554a, [C.stoneLight]: 0x9c9483, [C.red]: 0x6f9a2a, [C.slate]: 0x4a4036,
+    // the ground turns to swamp
+    [C.grass]: 0x5b6838, [C.grassLight]: 0x677640, [C.grassDark]: 0x46522e, [C.grassRust]: 0x6a5a34,
+    [C.dirt]: 0x6e5a3c, [C.dirtDark]: 0x55462f, [C.water]: 0x24403c,
+    0x97a24e: 0x6a7440, 0x7f8d43: 0x56603a, 0x8b984a: 0x626b3d,
   },
 };
 

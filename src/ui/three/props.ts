@@ -293,6 +293,12 @@ export function horse(color: number = C.horse): THREE.Group {
 }
 
 /** A tiny villager. Animated by the renderer. */
+const DRUID_ROBES = [0x6b5a44, 0x55503c, 0x7a6a4e, 0x4d4436, 0x6a5e46];
+const DRUID_COWLS = [0x2e2a22, 0x3a2f24, 0x262b22, 0x3b3328];
+const SORCERER_CLOAKS = [0x3c2470, 0x1f2f6e, 0x5b3596, 0x2a1d4a, 0x46307a];
+/** hands out a little variety between otherwise identical villagers */
+let figureCount = 0;
+
 export function person(tunic: number): THREE.Group {
   const g = new THREE.Group();
   const theme = getTheme();
@@ -309,18 +315,55 @@ export function person(tunic: number): THREE.Group {
     }
     g.add(blob(0.04, 0xf2d64b, -0.08, 1.12, 0.21), blob(0.04, 0xf2d64b, 0.08, 1.12, 0.21));
   } else if (theme === 'druid') {
-    // hooded folk in long robes of leaf and bark
+    // druid folk: undyed robes, a rope belt and a deep dark cowl over a shadowed face
+    const k = figureCount++;
+    const robe = DRUID_ROBES[k % DRUID_ROBES.length];
+    const cowl = DRUID_COWLS[(k >> 1) % DRUID_COWLS.length];
     g.add(box(0.3, 0.32, 0.2, C.dark, 0, 0, 0));
-    g.add(cyl(0.22, 0.34, 0.95, tunic, 7, 0, 0.1));
-    g.add(blob(0.19, C.skin, 0, 1.22, 0.03));
-    g.add(cone(0.25, 0.48, 0x4f6a2c, 7, 0, 1.12));
+    g.add(cyl(0.22, 0.36, 0.95, robe, 7, 0, 0.1));
+    g.add(cyl(0.23, 0.23, 0.07, 0xc9a86a, 7, 0, 0.62)); // rope belt
+    g.add(cyl(0.3, 0.26, 0.2, cowl, 7, 0, 0.98)); // mantle over the shoulders
+    g.add(blob(0.25, cowl, 0, 1.24, -0.02, 1, 1.15, 1)); // the cowl
+    g.add(blob(0.13, 0x2a2018, 0, 1.2, 0.13, 1, 1.1, 0.5)); // face in shadow
+    g.add(blob(0.1, C.skin, 0, 1.17, 0.17, 1, 1, 0.5));
+    if (k % 3 === 0) g.add(box(0.22, 0.26, 0.1, 0x6e4a2a, -0.26, 0.4, 0.04)); // satchel
+    if (k % 3 === 1) {
+      g.add(cyl(0.035, 0.04, 1.7, 0x5a3f28, 5, 0.34, 0, 0.08));
+      const gem = mesh(new THREE.IcosahedronGeometry(0.08, 0), 0x9fe07a, { emissive: 0x3a7a1a });
+      gem.position.set(0.34, 1.75, 0.08);
+      g.add(gem);
+    }
   } else if (theme === 'sorcerer') {
-    // robed apprentices under little pointed hats
+    // robed apprentices in pointed hats and cloaks worked with stars, moons and sparks
+    const k = figureCount++;
+    const cloak = SORCERER_CLOAKS[k % SORCERER_CLOAKS.length];
     g.add(box(0.3, 0.32, 0.2, C.dark, 0, 0, 0));
     g.add(cyl(0.22, 0.34, 0.95, tunic, 7, 0, 0.1));
     g.add(blob(0.2, C.skin, 0, 1.25, 0));
-    g.add(cyl(0.3, 0.3, 0.04, 0x3c2470, 8, 0, 1.38));
-    g.add(cone(0.17, 0.5, 0x5b3596, 8, 0, 1.4));
+    g.add(cyl(0.3, 0.3, 0.04, cloak, 8, 0, 1.38));
+    g.add(cone(0.17, 0.5, cloak, 8, 0, 1.4));
+    // the cloak, flaring out behind
+    const cape = box(0.58, 1.05, 0.05, cloak, 0, 0.05, -0.27);
+    cape.rotation.x = 0.12;
+    g.add(cape);
+    const pattern = k % 3;
+    const dots: [number, number][] = [[-0.16, 0.85], [0.14, 0.7], [-0.05, 0.5], [0.18, 0.3], [-0.18, 0.22], [0.02, 0.95]];
+    for (const [x, y] of dots) {
+      if (pattern === 0) {
+        const star = mesh(new THREE.OctahedronGeometry(0.055, 0), 0xf3d36a, { emissive: 0x7a5a10 });
+        star.scale.set(1, 1, 0.3);
+        star.position.set(x, y + 0.05, -0.31 - y * 0.12);
+        g.add(star);
+      } else if (pattern === 1) {
+        const moon = mesh(new THREE.TorusGeometry(0.055, 0.018, 3, 8, Math.PI * 1.3), 0xdfe6ef, { emissive: 0x404a5a });
+        moon.position.set(x, y + 0.05, -0.31 - y * 0.12);
+        g.add(moon);
+      } else {
+        const spark = blob(0.035, 0xb58cff, x, y + 0.05, -0.31 - y * 0.12);
+        g.add(spark);
+      }
+    }
+    g.add(box(0.6, 0.05, 0.06, pattern === 1 ? 0xdfe6ef : 0xf3d36a, 0, 0.05, -0.28)); // hem
   } else {
     const body = cyl(0.2, 0.28, 0.75, tunic, 6, 0, 0.3);
     const head = blob(0.2, C.skin, 0, 1.25, 0);

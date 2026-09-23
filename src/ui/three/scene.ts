@@ -145,6 +145,12 @@ export function buildTerrain(seed = 7): THREE.Mesh {
       const n = noise(cx + 40, cz - 13, 22);
       c = n > 0.74 ? C.grassRust : n > 0.56 ? C.grassLight : n < 0.3 ? C.grassDark : C.grass;
     }
+    // goblin camps sit in a swamp: dark pools and mud flats between the tussocks
+    if (getTheme() === 'goblin' && !onRoad(cx, cz) && getSeason() !== 'winter') {
+      const bog = noise(cx * 1.7 + 11, cz * 1.7 - 5, 9);
+      if (rr > WALL_R + 5 && bog > 0.74) c = C.water;
+      else if (bog > 0.7) c = C.dirtDark;
+    }
     col.set(seasonal(c));
     const v = 0.97 + r() * 0.05;
     for (let k = 0; k < 3; k++) {
@@ -245,7 +251,49 @@ export function buildScenery(seed = 11): THREE.Group {
     else if (it.kind === 'barrel') g.add(barrel(it.x, it.z));
     else g.add(crate(it.x, it.z));
   }
+  if (getTheme() === 'goblin') addSwamp(g, r);
   return bake(g);
+}
+
+/** Reeds, cattails and drifting mist for a goblin swamp, kept off the paths and away from buildings. */
+function addSwamp(g: THREE.Group, r: () => number): void {
+  const reed = (x: number, z: number, y: number) => {
+    const clump = new THREE.Group();
+    const n = 4 + Math.floor(r() * 4);
+    for (let i = 0; i < n; i++) {
+      const h = 1 + r() * 1.2;
+      const blade = box(0.06, h, 0.06, 0x6f7a3a, (r() - 0.5) * 0.9, 0, (r() - 0.5) * 0.9);
+      blade.rotation.z = (r() - 0.5) * 0.35;
+      clump.add(blade);
+      if (r() < 0.45) clump.add(cyl(0.08, 0.08, 0.35, 0x5a3a22, 5, blade.position.x, h - 0.1, blade.position.z));
+    }
+    clump.position.set(x, y, z);
+    g.add(clump);
+  };
+  // outside the walls
+  let placed = 0;
+  for (let tries = 0; tries < 900 && placed < 70; tries++) {
+    const a = r() * Math.PI * 2, d = WALL_R + 6 + r() * 70;
+    const x = Math.cos(a) * d, z = Math.sin(a) * d;
+    if (!freeForTree(x, z)) continue;
+    reed(x, z, heightAt(x, z));
+    placed++;
+  }
+  // inside, only around the camp's totems (the spots the trees used to hold)
+  for (const [x, z] of [[-34, 2], [-24, -24], [28, -18], [32, 14], [10, -31], [-5, 31]]) {
+    for (let i = 0; i < 2; i++) reed(x + (r() - 0.5) * 3, z + (r() - 0.5) * 3, 0);
+  }
+  // low mist banks hanging over the bog
+  const mistMat = new THREE.MeshBasicMaterial({ color: 0xcfd8c4, transparent: true, opacity: 0.16, depthWrite: false });
+  for (let i = 0; i < 14; i++) {
+    const a = r() * Math.PI * 2, d = WALL_R + 10 + r() * 60;
+    const m = new THREE.Mesh(new THREE.CircleGeometry(6 + r() * 6, 12), mistMat);
+    m.rotation.x = -Math.PI / 2;
+    const x = Math.cos(a) * d, z = Math.sin(a) * d;
+    m.position.set(x, heightAt(x, z) + 1.2 + r() * 0.8, z);
+    m.userData.dynamic = true;
+    g.add(m);
+  }
 }
 
 /**
