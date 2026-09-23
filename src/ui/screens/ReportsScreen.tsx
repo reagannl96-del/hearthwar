@@ -235,6 +235,18 @@ function LuckMeter({ luck }: { luck: number }) {
   );
 }
 
+/** Hero abilities as the report tells them. */
+const EFFECTS: Record<string, { hero: string; text: string }> = {
+  barrier: { hero: 'sorcerer', text: 'Arcane barrier: every defender fought 10% harder' },
+  ward: { hero: 'star', text: 'A warding item strengthened the defense' },
+  thornwall: { hero: 'druid', text: 'Thornwall: the wall counted 3 levels higher' },
+  snare: { hero: 'druid', text: 'Roots snared the siege engines (half power)' },
+  sneak: { hero: 'goblin', text: 'Sneak in: goblins slipped over 3 wall levels' },
+  traps: { hero: 'goblin', text: 'Trap pits: the attacking cavalry fought 10% weaker' },
+  'dread-att': { hero: 'necromancer', text: 'Dread: the defending infantry faltered' },
+  'dread-def': { hero: 'necromancer', text: 'Dread: the attacking infantry faltered' },
+};
+
 function Battle({ b, kind, shared }: { b: BattleData; kind: Report['kind']; shared?: boolean }) {
   const pv = view.value!;
   const myTribe = pv.me.tribeId;
@@ -259,6 +271,8 @@ function Battle({ b, kind, shared }: { b: BattleData; kind: Report['kind']; shar
         {b.nightOwl && <div class="factor"><span>Night bonus</span><b class="good-text">×2 defense</b></div>}
         {b.militia && <div class="factor"><Icon name="militia" size={16} /><span>Militia fought</span></div>}
         {b.risen && <div class="factor"><Icon name="necromancer" size={16} /><span>{b.risen.n} of the fallen rose again for the {b.risen.side}</span></div>}
+        {b.healed && <div class="factor"><Icon name="paladin" size={16} /><span>Lay on Hands: {b.healed.n} of the {b.healed.side}'s fallen got back up</span></div>}
+        {(b.effects ?? []).map((e) => EFFECTS[e] && <div class="factor"><Icon name={EFFECTS[e].hero} size={16} /><span>{EFFECTS[e].text}</span></div>)}
         {b.paladinItem && ITEM_BY_ID[b.paladinItem] && <div class="factor"><Icon name={itemHero(ITEM_BY_ID[b.paladinItem])} size={16} /><span>{ITEM_BY_ID[b.paladinItem].name}</span></div>}
       </div>
 

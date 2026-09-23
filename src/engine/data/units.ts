@@ -145,18 +145,57 @@ export const isHero = (u: UnitId) => HEROES.includes(u);
 export interface HeroInfo {
   /** the kind of troops this hero is strong against (+25% strength, scaled by how much of the enemy is that kind) */
   vs?: UnitClass;
+  /** how much stronger (defaults to HERO_VS_BONUS) */
+  vsBonus?: number;
+  /** that strength only counts when the hero attacks */
+  vsAttackOnly?: boolean;
   vsLabel: string;
+  /** the hero's signature ability, in a few words */
+  ability: string;
   perks: string[];
 }
+
+/** What each hero's abilities do in battle (tuned with scripts/herobench.ts). */
+export const HERO_POWERS = {
+  /** the paladin heals this share of his side's fallen after a battle */
+  layOnHands: 0.08,
+  /** a defending sorcerer's barrier */
+  barrier: 0.1,
+  /** a defending druid's thorn hedge counts as this many extra wall levels */
+  thornwall: 3,
+  /** an attacking goblin chief's army slips over this many wall levels */
+  sneak: 3,
+  /** a defending goblin chief's trap pits slow the attacking cavalry by this much */
+  traps: 0.1,
+  /** the necromancer's dread weakens the enemy's infantry by this much */
+  dread: 0.14,
+  /** the necromancer raises this share of the enemy's fallen foot soldiers */
+  raise: 0.1,
+};
 
 export const HERO_VS_BONUS = 0.25;
 
 export const HERO_INFO: Record<string, HeroInfo> = {
-  paladin: { vs: 'cav', vsLabel: 'Cavalry', perks: ['+25% strength against cavalry', 'Carries your legendary items into battle'] },
-  sorcerer: { vs: 'inf', vsLabel: 'Infantry', perks: ['+25% strength against infantry', 'Arcane barrier: while he defends, every defender in the village fights 10% harder'] },
-  druid: { vs: 'arc', vsLabel: 'Archers', perks: ['+25% strength against archers', 'Defending: enemy rams and catapults work at half power', 'Support he marches with arrives 25% faster'] },
-  necromancer: { vsLabel: 'the fallen', perks: ['Raise the dead: when his side wins, one in ten enemy foot soldiers who fell rise as skeleton spearmen in his army (farm space permitting)', 'Wins in attack or in defense both count'] },
-  goblin: { vsLabel: 'Scouts', perks: ['Scouts fight twice as hard, in attack and defense', 'The army carries 25% more loot', 'The fastest hero on the road'] },
+  paladin: {
+    vs: 'cav', vsBonus: 0.15, vsLabel: 'Cavalry', ability: 'Lay on Hands',
+    perks: ['+15% strength against cavalry', 'Lay on Hands: after every battle he fights, 8% of his side\'s fallen troops are healed and fight on', 'Carries your legendary items into battle'],
+  },
+  sorcerer: {
+    vs: 'inf', vsBonus: 0.2, vsAttackOnly: true, vsLabel: 'Infantry', ability: 'Arcane Barrier',
+    perks: ['Arcane fire: +20% strength against infantry when he attacks', 'Arcane barrier: while he defends, every defender in the village fights 10% harder'],
+  },
+  druid: {
+    vs: 'arc', vsLabel: 'Archers', ability: 'Thornwall',
+    perks: ['+25% strength against archers', 'Thornwall: defending, a hedge of thorns makes the wall count 3 levels higher', 'Defending: enemy rams and catapults work at half power', 'Support he marches with arrives 25% faster'],
+  },
+  goblin: {
+    vsLabel: 'Walls and cavalry', ability: 'Sneak In',
+    perks: ['Sneak in: attacking, his goblins slip over 3 levels of the enemy wall', 'Trap pits: defending, attacking cavalry fights 10% weaker', 'Scouts fight twice as hard, in attack and defense', 'The army carries 25% more loot', 'The fastest hero on the road'],
+  },
+  necromancer: {
+    vsLabel: 'Infantry and the fallen', ability: 'Dread',
+    perks: ['Dread: enemy infantry fights 14% weaker against him, in attack and defense', 'Raise the dead: when his side wins, one in ten enemy foot soldiers who fell rise as skeleton spearmen in his army (farm space permitting)'],
+  },
 };
 
 export const ARMY_ORDER: UnitId[] = [...UNIT_ORDER, 'militia'];

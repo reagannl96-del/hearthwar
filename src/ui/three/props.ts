@@ -675,6 +675,7 @@ function footSoldier(kind: TroopModel): THREE.Group {
       g.add(cyl(0.035, 0.035, 1.9, 0x3b2a1c, 5, 0.36, 0, 0.1));
       const orb = mesh(new THREE.IcosahedronGeometry(0.16, 1), 0xc9a6ff, { emissive: 0x7a4ad0 });
       orb.position.set(0.36, 1.98, 0.1);
+      orb.userData.pulse = true;
       g.add(orb);
       break;
     case 'druid': {
@@ -687,6 +688,10 @@ function footSoldier(kind: TroopModel): THREE.Group {
       g.add(staff);
       g.add(blob(0.2, C.leafGreen, 0.42, 2.05, 0.1, 1.2, 0.8, 1));
       g.add(blob(0.12, C.leafGold, 0.3, 2.15, 0.2));
+      const seed = mesh(new THREE.IcosahedronGeometry(0.09, 0), 0xc9f07a, { emissive: 0x5a9a1a });
+      seed.position.set(0.36, 2.35, 0.1);
+      seed.userData.pulse = true;
+      g.add(seed);
       break;
     }
     case 'necromancer': {
@@ -701,6 +706,7 @@ function footSoldier(kind: TroopModel): THREE.Group {
       g.add(blob(0.13, BONE, 0.36, 2.06, 0.1, 1, 1.05, 1));
       const flame = mesh(new THREE.IcosahedronGeometry(0.12, 0), 0x5cff9a, { emissive: 0x1f9a4a });
       flame.position.set(0.36, 2.3, 0.1);
+      flame.userData.pulse = true;
       g.add(flame);
       break;
     }
@@ -954,6 +960,10 @@ function paladinRider(): THREE.Group {
   g.add(cyl(0.04, 0.04, 2.8, 0xf1ece2, 6, 0.34, 1.5, 0.1));
   g.add(cyl(0.06, 0.06, 0.08, GOLD_TRIM, 6, 0.34, 2.2, 0.1));
   g.add(cone(0.08, 0.34, STEEL, 5, 0.34, 4.3, 0.1));
+  const glint = mesh(new THREE.OctahedronGeometry(0.1, 0), 0xfff0b0, { emissive: 0xc08a1a });
+  glint.position.set(0.34, 4.5, 0.1);
+  glint.userData.pulse = true;
+  g.add(glint);
   g.add(box(0.03, 0.3, 0.5, ROYAL, 0.34, 3.9, -0.16));
   g.add(box(0.035, 0.05, 0.5, GOLD_TRIM, 0.34, 4.18, -0.16));
   for (const c of g.children) c.castShadow = true;

@@ -249,3 +249,44 @@ describe('review fixes', () => {
     expect(w.endsAt).toBeUndefined();
   });
 });
+
+describe('hero abilities', () => {
+  const fight = async (att: Record<string, number>, def: Record<string, number>, wall = 5) => {
+    const { resolveBattle } = await import('../src/engine/combat');
+    return resolveBattle({ att, attTech: {}, attItem: null, defStacks: [{ units: def, tech: {} }], defItems: [], wall, luck: 0, morale: 1 });
+  };
+  it('thornwall, sneak in, trap pits and dread each change the fight, and say so', async () => {
+    const base = await fight({ axe: 1000 }, { spear: 500 });
+    const thorn = await fight({ axe: 1000 }, { spear: 500, druid: 1 });
+    expect(thorn.effects).toContain('thornwall');
+    expect(thorn.defStrength).toBeGreaterThan(base.defStrength * 1.15);
+    const sneak = await fight({ axe: 1000, goblin: 1 }, { spear: 500 });
+    expect(sneak.effects).toContain('sneak');
+    expect(sneak.battleWall).toBe(2);
+    const traps = await fight({ light: 500 }, { spear: 500, goblin: 1 });
+    expect(traps.effects).toContain('traps');
+    const dread = await fight({ axe: 1000, necromancer: 1 }, { spear: 500 });
+    expect(dread.effects).toContain('dread-att');
+    expect(dread.defStrength).toBeLessThan(base.defStrength * 0.9);
+  });
+
+  it('lay on hands: a paladin gets some of his fallen back on their feet', () => {
+    const w = createWorld({ worldName: 'T', playerName: 'P', villageName: 'H', seed: 71, config: { ...defaultConfig(), difficulty: 'peaceful', aiCount: 2, size: 60 } });
+    const p = w.players[w.humanId];
+    const v = w.villages[p.villages[0]];
+    Object.assign(v.buildings, { farm: 30, rally: 1 });
+    v.units = { axe: 1000, paladin: 1 };
+    const target = Object.values(w.villages).filter((b) => b.ownerId === null).sort((a, b) => Math.hypot(a.x - v.x, a.y - v.y) - Math.hypot(b.x - v.x, b.y - v.y))[0];
+    target.units = { spear: 400 };
+    target.buildings.wall = 3;
+    expect(applyAction(w, p.id, { type: 'send', vid: v.id, target: target.id, kind: 'attack', units: { axe: 1000, paladin: 1 } }).ok).toBe(true);
+    const out = Object.values(w.commands).find((c) => c.ownerId === p.id)!;
+    advance(w, out.arrive + 1);
+    const rep = p.reports.find((r) => r.battle?.healed);
+    expect(rep?.battle?.healed?.side).toBe('attacker');
+    const lost = rep!.battle!.attLost.axe ?? 0;
+    expect(rep!.battle!.healed!.n).toBe(Math.floor(lost * 0.08));
+    const back = Object.values(w.commands).find((c) => c.ownerId === p.id && c.kind === 'return')!;
+    expect(back.units.axe).toBe(1000 - lost + Math.floor(lost * 0.08));
+  });
+});

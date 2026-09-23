@@ -189,6 +189,10 @@ export interface BattleData {
   militia?: boolean;
   /** a necromancer raised some of the fallen as skeleton spearmen for his side */
   risen?: { side: 'attacker' | 'defender'; n: number };
+  /** a paladin laid hands on his side's fallen: how many rose healed */
+  healed?: { side: 'attacker' | 'defender'; n: number };
+  /** hero abilities that shaped the battle (barrier, thornwall, sneak, dread, snare, ward) */
+  effects?: string[];
   nightOwl?: boolean;
 }
 

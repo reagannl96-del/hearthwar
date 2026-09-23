@@ -4,7 +4,7 @@ import { bumpDaily } from './awards';
 import { themeOfHero, unitNameAt } from './data/themes';
 import { computeLoot, resolveBattle, type DefStackInput } from './combat';
 import { BUILDINGS, BUILDING_ORDER } from './data/buildings';
-import { HEROES, ITEM_BY_ID, MERCHANT_CARRY, MERCHANT_SPEED, UNITS, type ItemDef } from './data/units';
+import { HEROES, HERO_POWERS, ITEM_BY_ID, MERCHANT_CARRY, MERCHANT_SPEED, UNITS, isHero, type ItemDef } from './data/units';
 import { pushEvent } from './events';
 import { addCommand, commandsFrom, commandsOf, removeCommand } from './cmdindex';
 import {
@@ -536,11 +536,43 @@ function resolveAttack(w: World, c: Command, hooks: ArrivalHooks): void {
 
   const survivors = result.attSurvivors;
 
+  // a paladin lays hands on his side's fallen: a share of them get back up (heroes and noblemen excepted)
+  let healed: BattleData['healed'];
+  if (!result.pureScout) {
+    const heal = (lost: Units): Units => {
+      const back: Units = {};
+      for (const k in lost) {
+        const u = k as UnitId;
+        if (isHero(u) || u === 'noble' || u === 'scout') continue;
+        const n = Math.floor((lost[u] ?? 0) * HERO_POWERS.layOnHands);
+        if (n > 0) back[u] = n;
+      }
+      return back;
+    };
+    if ((c.units.paladin ?? 0) > 0 && (survivors.paladin ?? 0) > 0) {
+      const back = heal(result.attLost);
+      if (hasUnits(back)) {
+        addUnits(survivors, back);
+        if (home && home.ownerId === c.ownerId) home.outPop += unitsPop(back);
+        healed = { side: 'attacker', n: unitsCount(back) };
+      }
+    } else {
+      stacks.forEach((st, i) => {
+        if (healed || (st.units.paladin ?? 0) <= 0) return;
+        const back = heal(result.defLost[i] ?? {});
+        if (!hasUnits(back)) return;
+        addUnits(st.units, back);
+        if (!st.home) { const sh = w.villages[st.fromVid]; if (sh && sh.ownerId === st.ownerId) sh.outPop += unitsPop(back); }
+        healed = { side: 'defender', n: unitsCount(back) };
+      });
+    }
+  }
+
   // a necromancer on the winning side raises one in ten fallen enemy foot soldiers as skeleton spearmen
   let risen: BattleData['risen'];
   if (!result.pureScout) {
     const fallen = (u: Units) => RAISABLE.reduce((n, k) => n + (u[k] ?? 0), 0);
-    const share = (lantern: boolean) => (lantern ? 0.2 : 0.1);
+    const share = (lantern: boolean) => HERO_POWERS.raise * (lantern ? 2 : 1);
     if (result.winner === 'attacker' && (survivors.necromancer ?? 0) > 0 && home && home.ownerId === c.ownerId) {
       const n = Math.min(Math.floor(fallen(defLostTotal) * share(attItem?.special === 'raise')), Math.max(0, popFree(home)));
       if (n > 0) {
@@ -635,6 +667,8 @@ function resolveAttack(w: World, c: Command, hooks: ArrivalHooks): void {
     paladinItem: attItem?.id,
     militia: (defUnitsHome.militia ?? 0) > 0,
     risen,
+    healed,
+    effects: result.effects,
   };
   if (home) data.attacker = { ...sideInfo(w, home, c.ownerId) };
 

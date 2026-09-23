@@ -428,6 +428,7 @@ function StatuePanel({ v }: { v: VillageView }) {
                   <span class="hero-portrait"><UnitIcon u={u} size={44} /></span>
                   <div>
                     <h3>{d.name}</h3>
+                    <span class="hero-ability">{info.ability}</span>
                     <span class="hero-vs">Strong against <b>{info.vsLabel}</b></span>
                   </div>
                 </header>

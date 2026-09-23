@@ -8,6 +8,7 @@ import type { BuildingId, Buildings, Units } from '../../engine/types';
 import { buildModel, visualTier } from './buildings';
 import { C, bake, box, disposeTree, mat, rng, setSeason, setTheme, type Season, type Theme } from './kit';
 import { isRider, militiaman, person, plot, scaffold, troop, type TroopModel } from './props';
+import { heroAura, type Aura, type AuraHero } from './heroAura';
 import { FOOT_LOOPS, PEOPLE_LOOPS, RIDE_LOOPS } from './paths';
 import { wallGuardPosts } from './scene';
 import { LAYOUT, OUTSIDE, WALL_R, buildScenery, buildTerrain, buildWall, buildingScale, heightAt } from './scene';
@@ -96,6 +97,11 @@ export class VillageRenderer {
   private guards: THREE.Group | null = null;
   private guardKey = '';
   private units: Units = {};
+  /** what the hero at home does to the village (pillar of light, brambles, gold, souls, runes) */
+  private aura: Aura | null = null;
+  private auraKey = '';
+  /** glowing parts of the heroes' own gear (orbs, flames, leaves) that pulse as they walk */
+  private pulses: { o: THREE.Object3D; ph: number }[] = [];
   /** the sorcerer's arcane barrier: a faint dome over the village while he is at home */
   private barrier: THREE.Mesh | null = null;
   private barrierTime: { value: number } = { value: 0 };
@@ -219,6 +225,7 @@ export class VillageRenderer {
     this.updatePeople(points);
     this.lastBuildings = { ...b };
     this.updateGuards();
+    this.updateAura();
     this.updateLabels(b, constructing);
     this.updateBuilders(constructing);
   }
@@ -288,6 +295,7 @@ export class VillageRenderer {
   }
 
   dispose(): void {
+    this.aura?.dispose();
     this.barrier?.traverse((o) => { if (o instanceof THREE.Mesh) (o.material as THREE.Material).dispose(); });
     this.disposed = true;
     cancelAnimationFrame(this.raf);
@@ -447,6 +455,7 @@ export class VillageRenderer {
   setTroops(units: Units): void {
     this.units = units;
     this.updateGuards();
+    this.updateAura();
     this.updateBarrier();
     const want: TroopModel[] = [];
     for (const k of TROOP_KINDS) {
@@ -462,12 +471,14 @@ export class VillageRenderer {
       disposeTree(t.g);
     }
     this.troops = [];
+    this.pulses = [];
     const foot: THREE.Vector3[][] = FOOT_LOOPS.map((p) => p.map(([x, z]) => new THREE.Vector3(x, Math.hypot(x, z) > WALL_R ? heightAt(x, z) : 0, z)));
     const ride: THREE.Vector3[][] = RIDE_LOOPS.map((p) => p.map(([x, z]) => new THREE.Vector3(x, Math.hypot(x, z) > WALL_R ? heightAt(x, z) : 0, z)));
     want.forEach((kind, i) => {
       const r = rng(i * 131 + kind.length * 7);
       const g = troop(kind);
       g.scale.setScalar(1.3);
+      g.traverse((o) => { if (o.userData.pulse) this.pulses.push({ o, ph: this.pulses.length * 1.3 }); });
       const pool = isRider(kind) ? ride : foot;
       const path = pool[i % pool.length];
       const len = pathLength(path);
@@ -527,6 +538,25 @@ export class VillageRenderer {
     dome.add(ring);
     this.barrier = dome;
     this.scene.add(dome);
+  }
+
+  /** The hero at home leaves his mark on the village. */
+  private updateAura(): void {
+    const hero = (['paladin', 'sorcerer', 'druid', 'goblin', 'necromancer'] as AuraHero[]).find((h) => (this.units[h] ?? 0) > 0) ?? null;
+    const wall = this.lastBuildings?.wall ?? 0;
+    const tier = wall <= 0 ? 0 : wall < 5 ? 1 : wall < 10 ? 2 : wall < 15 ? 3 : 4;
+    const key = hero ? `${hero}:${hero === 'druid' ? tier : ''}` : '';
+    if (key === this.auraKey) return;
+    this.auraKey = key;
+    if (this.aura) {
+      this.scene.remove(this.aura.group);
+      this.aura.dispose();
+      this.aura = null;
+    }
+    if (!hero) return;
+    this.aura = heroAura(hero, wall);
+    this.aura.group.traverse((o) => { o.userData.dynamic = true; });
+    this.scene.add(this.aura.group);
   }
 
   /** Archers and spearmen keeping watch from the wall, once it is big enough to stand on. */
@@ -890,6 +920,8 @@ export class VillageRenderer {
     this.stepMarches(dt, t);
     this.stepMilitia(dt, t);
     this.barrierTime.value = t;
+    this.aura?.step(dt, t);
+    for (const p of this.pulses) p.o.scale.setScalar(1 + 0.3 * Math.sin(t * 3.5 + p.ph));
     for (const m of this.motes) {
       const d = m.userData.mote as { x: number; y: number; z: number; phase: number; speed: number };
       const p = t * d.speed + d.phase;

@@ -1,6 +1,6 @@
 // Pure battle math. Used by the engine and by the in-game battle simulator.
 
-import { HEROES, HERO_INFO, HERO_VS_BONUS, UNITS, type ItemDef, type UnitClass } from './data/units';
+import { HEROES, HERO_INFO, HERO_POWERS, HERO_VS_BONUS, UNITS, type ItemDef, type UnitClass } from './data/units';
 import { techMultiplier, wallBase, wallMultiplier } from './formulas';
 import type { Res, UnitId, Units } from './types';
 import { RES_KEYS } from './types';
@@ -40,7 +40,11 @@ export interface CombatResult {
   scoutsSurvived: number;
   scoutsSent: number;
   pureScout: boolean;
+  /** hero abilities that shaped this battle */
+  effects?: HeroEffect[];
 }
+
+export type HeroEffect = 'barrier' | 'thornwall' | 'sneak' | 'dread-att' | 'dread-def' | 'snare' | 'ward' | 'traps';
 
 const CLS_INDEX: Record<UnitClass, 0 | 1 | 2> = { inf: 0, cav: 1, arc: 2 };
 
@@ -144,9 +148,14 @@ export function resolveBattle(input: CombatInput): CombatResult {
   let attHeroMult = 1;
   for (const h of attHeroes) {
     const vs = HERO_INFO[h]?.vs;
-    if (vs && defPopTot > 0) attHeroMult += HERO_VS_BONUS * (defPop[CLS_INDEX[vs]] / defPopTot);
+    if (vs && defPopTot > 0) attHeroMult += (HERO_INFO[h].vsBonus ?? HERO_VS_BONUS) * (defPop[CLS_INDEX[vs]] / defPopTot);
   }
   for (let i = 0; i < 3; i++) A[i] *= attHeroMult;
+  const effects: HeroEffect[] = [];
+  // a defending necromancer fills the attacking infantry with dread
+  if (defHeroes.includes('necromancer') && A[0] > 0) { A[0] *= 1 - HERO_POWERS.dread; effects.push('dread-def'); }
+  // a defending goblin chief has dug trap pits for the horses
+  if (defHeroes.includes('goblin') && A[1] > 0) { A[1] *= 1 - HERO_POWERS.traps; effects.push('traps'); }
   const Atot = A[0] + A[1] + A[2];
 
   // a defending druid snares siege engines
@@ -154,7 +163,10 @@ export function resolveBattle(input: CombatInput): CombatResult {
   const ramMult = (attItem?.special === 'ramx2' ? 2 : 1) * siegeMult;
   const ramsSent = main.ram ?? 0;
   const ramPowerSent = ramsSent * ramMult * techMultiplier(attTech.ram);
-  const battleWall = Math.max(0, input.wall - Math.floor(ramDemolish(ramPowerSent, input.wall) / 2));
+  let battleWall = Math.max(0, input.wall - Math.floor(ramDemolish(ramPowerSent, input.wall) / 2));
+  // an attacking goblin chief's army slips over part of the wall
+  if (attHeroes.includes('goblin') && battleWall > 0) { battleWall = Math.max(0, battleWall - HERO_POWERS.sneak); effects.push('sneak'); }
+  if (siegeMult < 1 && (ramsSent > 0 || (main.catapult ?? 0) > 0)) effects.push('snare');
 
   let D = 0;
   if (Atot > 0) {
@@ -173,14 +185,28 @@ export function resolveBattle(input: CombatInput): CombatResult {
   }
   let defHeroMult = 1;
   for (const h of defHeroes) {
-    const vs = HERO_INFO[h]?.vs;
-    if (vs && Atot > 0) defHeroMult += HERO_VS_BONUS * (A[CLS_INDEX[vs]] / Atot);
+    const info = HERO_INFO[h];
+    if (info?.vs && !info.vsAttackOnly && Atot > 0) defHeroMult += (info.vsBonus ?? HERO_VS_BONUS) * (A[CLS_INDEX[info.vs]] / Atot);
   }
   D *= defHeroMult;
+  // an attacking necromancer's dread weakens the defending infantry
+  if (attHeroes.includes('necromancer')) {
+    let infDef = 0, allDef = 0;
+    for (const st of defStacks) for (const k in st.units) {
+      const u = k as UnitId;
+      const n = (st.units[u] ?? 0) * Math.max(1, UNITS[u].pop);
+      allDef += n;
+      if (UNITS[u].cls === 'inf') infDef += n;
+    }
+    if (infDef > 0) { D *= 1 - HERO_POWERS.dread * (infDef / allDef); effects.push('dread-att'); }
+  }
   // a defending sorcerer raises an arcane barrier, and warding items add to it
-  if (defHeroes.includes('sorcerer')) D *= 1.1;
-  if (defItems.some((i) => i.special === 'ward')) D *= 1.1;
-  D = D * wallMultiplier(battleWall) + wallBase(battleWall);
+  if (defHeroes.includes('sorcerer')) { D *= 1 + HERO_POWERS.barrier; effects.push('barrier'); }
+  if (defItems.some((i) => i.special === 'ward')) { D *= 1.1; effects.push('ward'); }
+  // a defending druid grows a thorn hedge along the wall
+  const defWall = battleWall + (defHeroes.includes('druid') ? HERO_POWERS.thornwall : 0);
+  if (defWall > battleWall) effects.push('thornwall');
+  D = D * wallMultiplier(defWall) + wallBase(defWall);
 
   let winner: 'attacker' | 'defender';
   let attRatio: number, defRatio: number;
@@ -255,6 +281,7 @@ export function resolveBattle(input: CombatInput): CombatResult {
     scoutsSurvived: winner === 'attacker' ? scoutsSent - scoutLost : 0,
     scoutsSent,
     pureScout: false,
+    effects: effects.length ? effects : undefined,
   };
 }
 

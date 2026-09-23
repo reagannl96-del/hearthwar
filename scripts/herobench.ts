@@ -10,7 +10,8 @@
 // are added at their resource worth, so the heroes can be compared on one scale.
 
 import { resolveBattle } from '../src/engine/combat';
-import { HEROES, UNITS } from '../src/engine/data/units';
+import { HEROES, HERO_POWERS, UNITS } from '../src/engine/data/units';
+import { unitsCarry } from '../src/engine/formulas';
 import type { UnitId, Units } from '../src/engine/types';
 
 const worth = (u: Units) => Object.entries(u).reduce((s, [k, n]) => {
@@ -36,20 +37,20 @@ function swing(hero: UnitId | null, side: 'att' | 'def', att: Units, def: Units,
   let s = side === 'att' ? defLost - attLost : attLost - defLost;
   // abilities worth resources
   const won = (side === 'att') === (r.winner === 'attacker');
-  if (hero === 'goblin' && side === 'att' && won) s += 0.25 * worth(r.attSurvivors) * 0.05; // 25% more loot on a typical haul
+  // 25% more loot, on a haul worth up to 20k (a strong village's storage)
+  if (hero === 'goblin' && side === 'att' && won) s += 0.25 * Math.min(20000, unitsCarry(r.attSurvivors));
   if (hero === 'necromancer' && won) {
     const fallen = side === 'att' ? r.defLost[0] ?? {} : r.attLost;
     const foot = (['spear', 'sword', 'axe', 'archer'] as UnitId[]).reduce((n, k) => n + (fallen[k] ?? 0), 0);
-    s += Math.floor(foot * 0.1) * worth({ spear: 1 });
+    s += Math.floor(foot * HERO_POWERS.raise) * worth({ spear: 1 });
   }
-  if (hero === 'paladin' && HEALS) {
+  if (hero === 'paladin' && ((side === 'att' && (r.attSurvivors.paladin ?? 0) > 0) || (side === 'def' && r.winner === 'defender'))) {
     const own = side === 'att' ? r.attLost : r.defLost[0] ?? {};
-    s += worth(own) * 0.1;
+    s += worth(own) * HERO_POWERS.layOnHands;
   }
   return s;
 }
 
-const HEALS = process.argv.includes('--heal');
 const pad = (x: string | number, n: number) => String(x).padStart(n);
 console.log(`Resource swing per battle, relative to the same battle with no hero (thousands)\n`);
 const heroes: (UnitId | null)[] = [...HEROES];

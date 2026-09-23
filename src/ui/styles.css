@@ -1317,3 +1317,6 @@ button.realm-row:hover { background: var(--surface-2); border-color: var(--line)
 .send-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.92rem; }
 .send-row .num-input input { width: 70px; }
 .send-row .max-link { min-width: 44px; text-align: left; }
+
+/* the hero's signature ability, headlined on its statue card */
+.hero-ability { display: inline-block; margin: 1px 0 2px; padding: 1px 8px; border-radius: 999px; background: var(--leather); color: var(--brass-hi); font-size: 0.72rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; }
