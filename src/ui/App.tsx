@@ -1,4 +1,5 @@
-import { useEffect } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
+import { navOrder, saveNavOrder } from './navOrder';
 import { Icon } from './art/icons';
 import { Clock } from './components/common';
 import { coords, continent, fmt, fmtDur } from './format';
@@ -223,10 +224,39 @@ function Nav() {
     { r: { name: 'settings' }, icon: 'settings', label: 'Settings', key: 'settings' },
   ];
   const activeKey = r.name === 'building' && r.id === 'rally' ? 'rally' : r.name === 'building' ? 'village' : r.name;
+  // the tabs can be dragged into whatever order the player likes; the order is kept in this browser
+  const [order, setOrder] = useState<string[]>(navOrder);
+  const [dragging, setDragging] = useState<string | null>(null);
+  const [over, setOver] = useState<string | null>(null);
+  const rank = (k: string) => { const i = order.indexOf(k); return i < 0 ? 100 + items.findIndex((x) => x.key === k) : i; };
+  const sorted = [...items].sort((a, b) => rank(a.key) - rank(b.key));
+  const drop = (target: string) => {
+    if (!dragging || dragging === target) return;
+    const keys = sorted.map((x) => x.key).filter((k) => k !== dragging);
+    keys.splice(keys.indexOf(target), 0, dragging);
+    setOrder(keys);
+    saveNavOrder(keys);
+  };
+  useEffect(() => {
+    const reset = () => setOrder([]);
+    window.addEventListener('hw-nav-reset', reset);
+    return () => window.removeEventListener('hw-nav-reset', reset);
+  }, []);
   return (
-    <nav class="nav" aria-label="Main">
-      {items.map((it) => (
-        <button type="button" class={`nav-item ${activeKey === it.key ? 'is-active' : ''} ${it.key === 'rally' && it.badge ? 'is-alert' : ''} ${it.glow ? 'is-unread' : ''}`} title={it.glow ? 'Unread posts in your tribe forum' : undefined} onClick={() => go(it.r)}>
+    <nav class={`nav ${dragging ? 'is-sorting' : ''}`} aria-label="Main">
+      {sorted.map((it) => (
+        <button
+          type="button"
+          draggable
+          onDragStart={(e) => { setDragging(it.key); e.dataTransfer?.setData('text/plain', it.key); if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'; }}
+          onDragOver={(e) => { if (dragging) { e.preventDefault(); if (over !== it.key) setOver(it.key); } }}
+          onDragLeave={() => { if (over === it.key) setOver(null); }}
+          onDrop={(e) => { e.preventDefault(); drop(it.key); setOver(null); setDragging(null); }}
+          onDragEnd={() => { setDragging(null); setOver(null); }}
+          class={`nav-item ${activeKey === it.key ? 'is-active' : ''} ${it.key === 'rally' && it.badge ? 'is-alert' : ''} ${it.glow ? 'is-unread' : ''} ${dragging === it.key ? 'is-dragging' : ''} ${over === it.key && dragging !== it.key ? 'is-drop' : ''}`}
+          title={it.glow ? 'Unread posts in your tribe forum' : 'Drag to reorder the tabs'}
+          onClick={() => go(it.r)}
+        >
           <Icon name={it.icon} size={18} />
           <span class="nav-label">{it.label}</span>
           {it.badge ? <span class="badge">{it.badge}</span> : null}

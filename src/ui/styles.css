@@ -1284,3 +1284,9 @@ button.realm-row:hover { background: var(--surface-2); border-color: var(--line)
   .realm-clock { flex-direction: column; align-items: stretch; gap: 6px; }
   .realm-tiles { grid-template-columns: 1fr; }
 }
+
+/* ---------- draggable tabs ---------- */
+.nav-item[draggable='true'] { cursor: pointer; }
+.nav.is-sorting .nav-item { cursor: grabbing; }
+.nav-item.is-dragging { opacity: 0.45; }
+.nav-item.is-drop { box-shadow: -3px 0 0 var(--brass-hi) inset, 0 0 0 1px var(--brass) inset; }

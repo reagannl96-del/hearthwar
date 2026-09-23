@@ -1,4 +1,5 @@
 import { useState } from 'preact/hooks';
+import { resetNavOrder } from '../navOrder';
 import { SPEED_PRESETS } from '../../engine/world';
 import { Btn, Modal, Section } from '../components/common';
 import { fmtDur } from '../format';
@@ -71,7 +72,7 @@ export function SettingsScreen() {
         </Section>
         )}
         <Section title="Village scene">
-          <p class="muted small">Villages in the snowy north of the map wear winter; everywhere else it is autumn.</p>
+          <p class="muted small">Villages in the snowy north of the map wear winter, and those in the volcanic west stand on ash and lava; everywhere else it is autumn.</p>
           <div class="row gap wrap">
             {(['auto', 'fall', 'winter'] as const).map((s) => (
               <Btn small variant={p.season === s ? 'primary' : 'ghost'} onClick={() => setPrefs({ season: s })}>
@@ -86,6 +87,10 @@ export function SettingsScreen() {
               </Btn>
             ))}
           </div>
+        </Section>
+        <Section title="Tabs">
+          <p class="muted small">Drag the tabs along the top into whatever order you like. The order is kept in this browser.</p>
+          <Btn small variant="ghost" onClick={() => { resetNavOrder(); toast('The tabs are back in their usual order.', 'good'); }}>Reset tab order</Btn>
         </Section>
         <Section title="Sound & alerts">
           <label class="toggle"><input type="checkbox" checked={p.sound} onChange={(e) => setPrefs({ sound: e.currentTarget.checked })} /> Sound effects</label>

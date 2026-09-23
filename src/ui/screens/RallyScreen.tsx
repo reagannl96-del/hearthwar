@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { BUILDINGS, BUILDING_ORDER } from '../../engine/data/buildings';
-import { UNITS, UNIT_ORDER } from '../../engine/data/units';
+import { UNITS, UNIT_ORDER, HEROES } from '../../engine/data/units';
 import { SCAVENGE_TIERS, distance, hasUnits, unitsCarry } from '../../engine/formulas';
 import type { BuildingId, UnitId, Units } from '../../engine/types';
 import type { CommandView, VillageView } from '../../engine/view';
@@ -12,6 +12,14 @@ import { act, go, host, now, rallyTarget, view, village, warp } from '../store';
 import { Simulator } from './Simulator';
 
 type Tab = 'send' | 'train' | 'troops' | 'commands' | 'farm' | 'scavenge' | 'sim';
+
+/** The send form's columns, as Tribal Wars lays them out. */
+const SEND_GROUPS: { label: string; units: UnitId[] }[] = [
+  { label: 'Infantry', units: ['spear', 'sword', 'axe', 'archer'] },
+  { label: 'Cavalry', units: ['scout', 'light', 'marcher', 'heavy'] },
+  { label: 'Siege', units: ['ram', 'catapult'] },
+  { label: 'Heroes & nobles', units: [...HEROES, 'noble'] },
+];
 
 export function RallyScreen({ tab }: { tab?: string }) {
   const [t, setT] = useState<Tab>((tab as Tab) || 'send');
@@ -87,13 +95,23 @@ function SendTroops({ v }: { v: VillageView }) {
     <div class="grid-send">
       <Section title="Troops">
         {available.length === 0 ? <Empty>No troops at home.</Empty> : (
-          <div class="unit-inputs">
-            {available.map((u) => (
-              <label class="unit-input">
-                <span class="uname"><UnitIcon u={u} size={20} /> {unitName(u)}</span>
-                <NumInput id={`send-${u}`} value={units[u] ?? ''} max={v.units[u] ?? 0} onInput={(n) => setUnits({ ...units, [u]: n === '' ? 0 : n })} />
-              </label>
-            ))}
+          <div class="send-groups">
+            {SEND_GROUPS.map((g) => {
+              const list = g.units.filter((u) => available.includes(u));
+              if (list.length === 0) return null;
+              return (
+                <fieldset class="send-group">
+                  <legend>{g.label}</legend>
+                  {list.map((u) => (
+                    <label class="send-row" title={unitName(u)}>
+                      <UnitIcon u={u} size={22} />
+                      <span class="send-name">{unitName(u)}</span>
+                      <NumInput id={`send-${u}`} value={units[u] ?? ''} max={v.units[u] ?? 0} onInput={(n) => setUnits({ ...units, [u]: n === '' ? 0 : n })} />
+                    </label>
+                  ))}
+                </fieldset>
+              );
+            })}
           </div>
         )}
         <div class="row gap wrap">
