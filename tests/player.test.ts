@@ -189,6 +189,8 @@ describe('a human player', () => {
         advance(w, w.now + 10 * MINUTE);
         continue;
       }
+      target.units = {}; // AI rulers roam this map too; keep this barb undefended for the noble check
+      if (i === 0) { target.loyalty = 30; target.loyaltyAt = w.now; } // one noble should finish it
       act({ type: 'send', vid: v.id, target: target.id, kind: 'attack', units: { noble: 1, axe: 20 } });
       advance(w, w.now + 30 * MINUTE);
       conquered = target.ownerId === p.id;
@@ -396,6 +398,38 @@ describe('a human player', () => {
       for (const c of Object.values(w.commands)) if (c.kind === 'attack' && c.toVid === v.id && (c.units.noble ?? 0) > 0) trains++;
     }
     expect(trains).toBeGreaterThan(0);
+  });
+
+  it('AI villages have roles: defensive villages hold the line, offensive ones go to war', () => {
+    const w = createWorld({
+      worldName: 'T', playerName: 'P', villageName: 'Home', seed: 9,
+      config: { ...defaultConfig(), difficulty: 'hard', aiCount: 6, size: 50 },
+    });
+    removeEvents(w, (e) => e.type === 'barb');
+    const p = w.players[w.humanId];
+    p.protectedUntil = 0;
+    w.villages[p.villages[0]].units = { spear: 5 };
+    w.villages[p.villages[0]].res = { wood: 150000, clay: 150000, iron: 150000 };
+    const ais = Object.values(w.players).filter((x) => x.kind === 'ai');
+    const defense = new Set<number>(), offense = new Set<number>();
+    ais.forEach((ai, i) => {
+      ai.ai!.hostile = true;
+      ai.ai!.aggression = 1;
+      for (const vid of ai.villages) {
+        const av = w.villages[vid];
+        av.buildings.rally = 1;
+        av.units = { axe: 3000, light: 1000, spear: 2000, scout: 50 };
+        ai.ai!.roles = { ...(ai.ai!.roles ?? {}), [vid]: { kind: i % 2 ? 'defense' : 'offense' } };
+        (i % 2 ? defense : offense).add(vid);
+      }
+    });
+    const launched = new Set<number>();
+    for (let i = 0; i < 60; i++) {
+      advance(w, w.now + 60_000);
+      for (const c of Object.values(w.commands)) if (c.kind === 'attack' && c.tag === 'war') launched.add(c.fromVid);
+    }
+    expect([...launched].filter((v) => defense.has(v))).toEqual([]);
+    expect([...launched].some((v) => offense.has(v))).toBe(true);
   });
 
   it('a statue stays sworn to the first hero trained there, even after it dies', () => {

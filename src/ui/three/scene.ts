@@ -93,11 +93,12 @@ export function heightAt(x: number, z: number): number {
   if (md2 < 26) h += (1 - md2 / 26) ** 2 * 11;
   const md3 = Math.hypot(x + 14, z + 80);
   if (md3 < 22) h += (1 - md3 / 22) ** 2 * 9;
-  // flatten around outer workplaces
-  for (const id of ['timber', 'claypit', 'farm'] as BuildingId[]) {
+  // a level plateau under the outer workplaces, big enough for their largest size, easing into the hills
+  for (const [id, flat, ease] of [['timber', 17, 8], ['claypit', 16, 8], ['farm', 24, 10], ['ironmine', 16, 7]] as [BuildingId, number, number][]) {
     const [bx, bz] = LAYOUT[id];
     const d = Math.hypot(x - bx, z - bz);
-    if (d < 16) h *= d / 16;
+    if (d < flat) h = 0;
+    else if (d < flat + ease) h *= (d - flat) / ease;
   }
   const sd = Math.abs(x - streamX(z));
   if (sd < 5) h = Math.min(h, -0.6 + sd * 0.12);

@@ -13,7 +13,7 @@ import { villagesNear } from '../spatial';
 import { exchangeQuote } from '../market';
 import { commandsTo } from '../cmdindex';
 import { acceptInvite, declineInvite, hasRight, invitePlayer, invitesFor, relation, setDiplomacy, tribeOf, tribePoints } from '../tribes';
-import type { BattleData, BuildingId, Command, Player, Res, UnitId, Units, Village, World } from '../types';
+import type { BattleData, BuildingId, Command, Player, Res, UnitId, Units, Village, VillageRole, World } from '../types';
 import { RES_KEYS } from '../types';
 import { farmMax, popFree, queuedLevel, recruitQueueEnd, storageOf, unitAvailable, updateVillage } from '../village';
 import { aiThinkInterval } from '../world';
@@ -76,6 +76,58 @@ const ARMY: Record<P, Partial<Record<UnitId, number>>> = {
 const TROOP_SHARE: Record<P, number> = { warlord: 0.65, farmer: 0.5, turtle: 0.55, expander: 0.45 };
 
 const OFFENSIVE: UnitId[] = ['axe', 'light', 'marcher', 'heavy', 'ram', 'catapult'];
+
+/** Troop recipes by village role. Mixed villages use the ruler's own blend. */
+const ROLE_ARMY: Record<'offense' | 'defense', Partial<Record<UnitId, number>>> = {
+  offense: { axe: 0.55, light: 0.3, marcher: 0.05, scout: 0.02, ram: 0.06, catapult: 0.02 },
+  defense: { spear: 0.45, sword: 0.3, archer: 0.1, heavy: 0.07, light: 0.05, scout: 0.03 },
+};
+
+/** How likely each personality is to set a new village up for attack, defence, a mix or at random. */
+const ROLE_ODDS: Record<P, [number, number, number, number]> = {
+  warlord: [0.6, 0.15, 0.15, 0.1],
+  farmer: [0.3, 0.2, 0.35, 0.15],
+  turtle: [0.15, 0.6, 0.15, 0.1],
+  expander: [0.35, 0.25, 0.25, 0.15],
+};
+
+/** The role of one of this ruler's villages, decided the first time we look at it and kept for good. */
+export function villageRole(w: World, p: Player, v: Village): VillageRole {
+  const ai = p.ai!;
+  ai.roles ??= {};
+  let role = ai.roles[v.id];
+  if (!role) {
+    const odds = ROLE_ODDS[ai.personality];
+    let x = nextRandom(w);
+    const kinds: VillageRole['kind'][] = ['offense', 'defense', 'mixed', 'random'];
+    let kind: VillageRole['kind'] = 'mixed';
+    for (let i = 0; i < 4; i++) { if (x < odds[i]) { kind = kinds[i]; break; } x -= odds[i]; }
+    role = { kind };
+    if (kind === 'random') {
+      // a random assortment: a handful of unit types in random amounts
+      const pool: UnitId[] = ['spear', 'sword', 'axe', 'archer', 'light', 'marcher', 'heavy', 'ram'];
+      const weights: Partial<Record<UnitId, number>> = { scout: 0.03 };
+      let total = 0;
+      for (const u of pool) if (nextRandom(w) < 0.55) { const wt = 0.05 + nextRandom(w); weights[u] = wt; total += wt; }
+      if (total === 0) { weights.spear = 0.5; weights.axe = 0.5; total = 1; }
+      for (const u of pool) if (weights[u]) weights[u] = (weights[u]! / total) * 0.97;
+      role.weights = weights;
+    }
+    ai.roles[v.id] = role;
+  }
+  return role;
+}
+
+function roleWeights(p: Player, role: VillageRole): Partial<Record<UnitId, number>> {
+  if (role.kind === 'offense' || role.kind === 'defense') return ROLE_ARMY[role.kind];
+  if (role.kind === 'random' && role.weights) return role.weights;
+  return ARMY[p.ai!.personality];
+}
+
+/** Can this village go to war? Defensive villages hold the line and only farm. */
+function warVillage(w: World, p: Player, v: Village): boolean {
+  return villageRole(w, p, v).kind !== 'defense';
+}
 const RAIDERS: UnitId[] = ['light', 'marcher', 'axe', 'spear', 'heavy'];
 
 // ---------- main entry ----------
@@ -247,7 +299,7 @@ function recruit(w: World, p: Player, v: Village): void {
   const horizon = aiThinkInterval(w) * 3;
   const army = armyCount(v);
   const armyPop = Object.entries(army).reduce((s, [k, n]) => s + (n ?? 0) * UNITS[k as UnitId].pop, 0) + 1;
-  const weights = ARMY[pers];
+  const weights = roleWeights(p, villageRole(w, p, v));
   const options = (Object.keys(weights) as UnitId[])
     .filter((u) => unitAvailable(w, v, u).ok)
     .map((u) => ({ u, deficit: weights[u]! - ((army[u] ?? 0) * UNITS[u].pop) / armyPop }))
@@ -326,7 +378,7 @@ function conquestDrive(w: World, p: Player): void {
       const escort: Units = { noble: 1 };
       const wall = intel?.wall ?? 0; // unknown walls are assumed 0 until a report says otherwise
       const need = wall > 0 ? 25 + wall * 25 : 15;
-      for (const u of ['axe', 'light', 'heavy', 'spear', 'sword'] as UnitId[]) {
+      for (const u of ['axe', 'light', 'heavy', 'marcher'] as UnitId[]) {
         const have = home.units[u] ?? 0;
         if (have <= 0) continue;
         const take = Math.min(have, Math.ceil(need / Math.max(1, UNITS[u].attack / 40)));
@@ -522,6 +574,7 @@ function war(w: World, p: Player): void {
       strike(w, p, v, target, army);
       continue;
     }
+    if (!warVillage(w, p, v)) continue;
     if (attackValue(army) < minArmy) continue;
     if (nextRandom(w) > ai.aggression + 0.15) continue;
     // never march out with the enemy at the gates
@@ -529,7 +582,7 @@ function war(w: World, p: Player): void {
     const target = pickWarTarget(w, p, v);
     if (!target) continue;
     // every so often a ruler acts on impulse: a blind full or partial attack
-    if (nextRandom(w) < 0.1 * (0.5 + ai.aggression)) {
+    if (nextRandom(w) < 0.015 * (0.5 + ai.aggression)) {
       const share = nextRandom(w) < 0.5 ? 1 : 0.4 + nextRandom(w) * 0.3;
       const send: Units = {};
       for (const k in army) {

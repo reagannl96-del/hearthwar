@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { BUILDINGS } from '../src/engine/data/buildings';
 import type { BuildingId } from '../src/engine/types';
 import { buildModel, visualTier } from '../src/ui/three/buildings';
-import { LAYOUT, OUTSIDE, WALL_R, buildingScale, sceneryPlan } from '../src/ui/three/scene';
+import { LAYOUT, OUTSIDE, WALL_R, buildingScale, heightAt, sceneryPlan } from '../src/ui/three/scene';
 import { WALK_PATHS } from '../src/ui/three/paths';
 import { setTheme } from '../src/ui/three/kit';
 
@@ -148,6 +148,33 @@ describe('village layout', () => {
       }
     }
     expect(bad).toEqual([]);
+  });
+
+  it('the ground never swallows fields or buildings outside the walls', () => {
+    const bad = new Set<string>();
+    for (const id of OUTSIDE) {
+      for (const l of tierLevels(id)) {
+        const obj = buildModel(id, l, 0).obj;
+        const [x, z, ry] = LAYOUT[id];
+        const base = heightAt(x, z);
+        obj.position.set(x, base, z);
+        obj.rotation.y = ry;
+        obj.scale.setScalar(buildingScale(id));
+        obj.updateMatrixWorld(true);
+        const v = new THREE.Vector3();
+        obj.traverse((o) => {
+          const m = o as THREE.Mesh;
+          if (!m.isMesh) return;
+          const pos = m.geometry.getAttribute('position');
+          for (let i = 0; i < pos.count; i++) {
+            v.fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld);
+            // the tops of low things (crops, fences, logs) must stay above the ground
+            if (v.y - base > 0.2 && v.y - base < 1.2 && heightAt(v.x, v.z) > v.y - 0.05) bad.add(`${id} level ${l} is buried near ${v.x.toFixed(0)},${v.z.toFixed(0)}`);
+          }
+        });
+      }
+    }
+    expect([...bad].slice(0, 5)).toEqual([]);
   });
 
   it('no tree, rock or prop stands inside a building', () => {

@@ -748,7 +748,7 @@ export class VillageRenderer {
       p.g.rotation.y = Math.atan2(dir.x, dir.z);
     }
     if (this.guards) for (const gd of this.guards.children) gd.rotation.y += Math.sin(t * 0.6 + (gd.userData.guard as number) * 1.7) * 0.004;
-    for (const b of this.builders.values()) b.arms.forEach((a, i) => { a.rotation.x = -0.9 + Math.sin(t * 9 + i * 1.7) * 0.9; });
+    for (const b of this.builders.values()) b.arms.forEach((a, i) => { a.rotation.x = 0.9 + Math.sin(t * 9 + i * 1.7) * 0.9; });
     this.stepMarches(dt, t);
     this.stepLeaves(dt, t);
     // smoke puffs

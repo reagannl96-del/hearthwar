@@ -234,6 +234,15 @@ export interface AIState {
   plans?: Record<number, { target: number; since: number; scoutCmd: number }>;
   /** target village -> until when it is left alone (scouted and not worth it, or too strong) */
   avoid?: Record<number, number>;
+  /** what each village is built for, as a Tribal Wars player would set it up */
+  roles?: Record<number, VillageRole>;
+}
+
+/** Offensive (all attack troops), defensive (all defence, a few light cavalry to farm), mixed, or a random assortment. */
+export interface VillageRole {
+  kind: 'offense' | 'defense' | 'mixed' | 'random';
+  /** the random assortment's recipe */
+  weights?: Partial<Record<UnitId, number>>;
 }
 
 export interface PlayerStats {
