@@ -190,6 +190,11 @@ function handle(c: Client, m: ClientMsg) {
     tick();
     const result = applyAction(world, c.pid, m.action);
     send(c, { t: 'result', id: m.id, result });
+    if (m.action.type === 'restart' && result.ok) {
+      invalidateSpatial();
+      sendPublic(c);
+      void saveWorld();
+    }
     sendPrivate(c);
     return;
   }

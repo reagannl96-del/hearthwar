@@ -255,4 +255,30 @@ describe('a human player', () => {
     expect(p.eliminated).toBe(true);
     expect(p.villages.length).toBe(0);
   });
+
+  it('restarts: old village turns barbarian as-is, a new one is founded', () => {
+    const w = peacefulWorld();
+    const { p, v } = human(w);
+    v.buildings.barracks = 3;
+    v.buildings.rally = 1;
+    v.units = { spear: 40, axe: 12, noble: 1 };
+    const barb = nearestBarb(w, v.x, v.y);
+    expect(applyAction(w, p.id, { type: 'send', vid: v.id, target: barb.id, kind: 'attack', units: { spear: 10 } }).ok).toBe(true);
+    const r = applyAction(w, p.id, { type: 'restart', village: 'Fresh Start' });
+    expect(r.ok).toBe(true);
+    expect(v.ownerId).toBeNull();
+    expect(v.name).toBe('Barbarian village');
+    expect(v.buildings.barracks).toBe(3);
+    expect(v.units).toEqual({ spear: 30, axe: 12 });
+    expect(Object.values(w.commands).some((c) => c.ownerId === p.id)).toBe(false);
+    expect(p.villages.length).toBe(1);
+    const nv = w.villages[p.villages[0]];
+    expect(nv.id).toBe(r.data);
+    expect(nv.name).toBe('Fresh Start');
+    expect(p.protectedUntil).toBeGreaterThan(w.now);
+    // the world keeps running without trouble
+    advance(w, w.now + 2 * HOUR);
+    expect(v.ownerId).toBeNull();
+    expect(buildView(w, p.id).villages.length).toBe(1);
+  });
 });

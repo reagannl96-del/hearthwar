@@ -64,6 +64,11 @@ export class RemoteHost extends HostBase {
   }
 
   act(a: Action): ActionResult {
+    if (a.type === 'restart') {
+      // the new village's spot is picked by the server; nothing to predict here
+      this.conn.send({ t: 'act', id: this.seqNo++, action: a });
+      return { ok: true };
+    }
     // check it against what we know first, for instant feedback; the server decides for real
     const local = applyAction(this.world, this.pid, a);
     if (!local.ok) return local;

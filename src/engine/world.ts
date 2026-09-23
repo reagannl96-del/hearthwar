@@ -6,7 +6,9 @@ import { HOUR, res, villagePoints } from './formulas';
 import { fractalNoise, nextRandom, pick, randInt, shuffle } from './rng';
 import { invalidateSpatial } from './spatial';
 import type { AIState, BonusType, BuildingId, Player, PlayerStats, Village, World, WorldConfig } from './types';
-import { createVillage } from './village';
+import { commandsOf, removeCommand } from './cmdindex';
+import { addReport, news, withdrawSupport } from './commands';
+import { createVillage, updateVillage } from './village';
 
 export const WORLD_VERSION = 1;
 
@@ -308,19 +310,16 @@ export function respawnHuman(w: World, villageName: string, pid = w.humanId): Vi
 }
 
 /**
- * Bring a new human ruler into a running world: a fresh village somewhere with
- * elbow room, a few barbarian villages to raid, and beginner protection.
+ * Pick a spot for a brand-new village: anywhere on the map, on open ground with
+ * elbow room, and never right on top of another human ruler. If the realm is
+ * crowded, the rules relax.
  */
-export function spawnPlayer(w: World, name: string, villageNameText: string): Player | null {
+function freshSpot(w: World): [number, number] | null {
   const size = w.config.size;
-  const taken = new Set(Object.values(w.players).map((p) => p.color));
-  const color = PLAYER_COLORS.find((col) => !taken.has(col)) ?? pick(w, PLAYER_COLORS);
   const clear = (x: number, y: number, r: number) => {
     for (const v of Object.values(w.villages)) if (Math.abs(v.x - x) <= r && Math.abs(v.y - y) <= r) return false;
     return true;
   };
-  // Anywhere on the map, but on open ground with elbow room, and never right on
-  // top of another human ruler. If the realm is crowded, the rules relax.
   const humanVillages = Object.values(w.villages).filter((v) => v.ownerId !== null && w.players[v.ownerId]?.kind === 'human');
   const rules: [number, number][] = [[3, 10], [2, 7], [1, 4], [1, 0]];
   for (const [room, gap] of rules) {
@@ -330,31 +329,108 @@ export function spawnPlayer(w: World, name: string, villageNameText: string): Pl
       if (ter !== '.' && ter !== 'f') continue;
       if (!clear(x, y, room)) continue;
       if (gap > 0 && humanVillages.some((v) => Math.hypot(v.x - x, v.y - y) < gap)) continue;
-      const p = newPlayer(w, name.slice(0, 24) || 'Wanderer', 'human', color);
-      const v = createVillage(w, x, y, villageNameText.slice(0, 32) || `${p.name}'s hold`, p.id);
-      v.res = res(600, 600, 600);
-      p.villages.push(v.id);
-      p.points = v.points;
-      p.protectedUntil = w.now + Math.round((w.config.protectionHours * HOUR) / w.config.speed);
-      // a handful of barbarian villages to raid
-      let made = 0;
-      for (let k = 0; k < 80 && made < 5; k++) {
-        const bx = x + randInt(w, -6, 6), by = y + randInt(w, -6, 6);
-        const bt = terrainAt(w, bx, by);
-        if ((bt !== '.' && bt !== 'f') || !clear(bx, by, 0) || Math.hypot(bx - x, by - y) < 2) continue;
-        const b = createVillage(w, bx, by, 'Barbarian village', null);
-        b.buildings.timber = randInt(w, 1, 5); b.buildings.claypit = randInt(w, 1, 5); b.buildings.ironmine = randInt(w, 1, 4);
-        b.buildings.warehouse = randInt(w, 2, 5); b.buildings.main = randInt(w, 1, 3);
-        b.points = villagePoints(b.buildings);
-        made++;
-      }
-      pushEvent(w, 'item', w.now + itemInterval(w), p.id);
-      invalidateSpatial();
-      w.mapRev++;
-      return p;
+      return [x, y];
     }
   }
   return null;
+}
+
+/** Found a starting village for `p` at a fresh spot, with a few barbarian villages to raid nearby. */
+function settle(w: World, p: Player, villageNameText: string): Village | null {
+  const spot = freshSpot(w);
+  if (!spot) return null;
+  const [x, y] = spot;
+  const v = createVillage(w, x, y, villageNameText.slice(0, 32) || `${p.name}'s hold`, p.id);
+  v.res = res(600, 600, 600);
+  p.villages.push(v.id);
+  p.points = v.points;
+  p.eliminated = false;
+  p.protectedUntil = w.now + Math.round((w.config.protectionHours * HOUR) / w.config.speed);
+  let made = 0;
+  for (let k = 0; k < 80 && made < 5; k++) {
+    const bx = x + randInt(w, -6, 6), by = y + randInt(w, -6, 6);
+    const bt = terrainAt(w, bx, by);
+    if ((bt !== '.' && bt !== 'f') || Math.hypot(bx - x, by - y) < 2) continue;
+    if (Object.values(w.villages).some((o) => o.x === bx && o.y === by)) continue;
+    const b = createVillage(w, bx, by, 'Barbarian village', null);
+    b.buildings.timber = randInt(w, 1, 5); b.buildings.claypit = randInt(w, 1, 5); b.buildings.ironmine = randInt(w, 1, 4);
+    b.buildings.warehouse = randInt(w, 2, 5); b.buildings.main = randInt(w, 1, 3);
+    b.points = villagePoints(b.buildings);
+    made++;
+  }
+  invalidateSpatial();
+  w.mapRev++;
+  return v;
+}
+
+/**
+ * Bring a new human ruler into a running world: a fresh village somewhere with
+ * elbow room, a few barbarian villages to raid, and beginner protection.
+ */
+export function spawnPlayer(w: World, name: string, villageNameText: string): Player | null {
+  if (!freshSpot(w)) return null;
+  const taken = new Set(Object.values(w.players).map((p) => p.color));
+  const color = PLAYER_COLORS.find((col) => !taken.has(col)) ?? pick(w, PLAYER_COLORS);
+  const p = newPlayer(w, name.slice(0, 24) || 'Wanderer', 'human', color);
+  settle(w, p, villageNameText);
+  pushEvent(w, 'item', w.now + itemInterval(w), p.id);
+  return p;
+}
+
+/**
+ * Start over. Every village the ruler owns is abandoned exactly as it stands:
+ * its buildings and the troops at home stay behind as barbarians. Armies and
+ * merchants on the road, and troops stationed or scavenging elsewhere, are lost
+ * with the old realm; other rulers' support is sent home. The ruler then gets a
+ * fresh village somewhere new, with beginner protection.
+ */
+export function restartPlayer(w: World, pid: number, villageNameText: string): Village | null {
+  const p = w.players[pid];
+  if (!p || p.kind !== 'human') return null;
+  for (const c of commandsOf(w, pid)) removeCommand(w, c);
+  for (const id in w.villages) {
+    const host = w.villages[id];
+    if (host.support.some((s) => s.ownerId === pid)) host.support = host.support.filter((s) => s.ownerId !== pid);
+  }
+  for (const vid of p.villages) {
+    const v = w.villages[vid];
+    if (!v) continue;
+    updateVillage(w, v, w.now);
+    for (const st of [...v.support]) withdrawSupport(w, st.ownerId, v.id, st.fromVid);
+    v.ownerId = null;
+    v.name = 'Barbarian village';
+    v.buildQueue = [];
+    for (const rb in v.recruit) v.recruit[rb as keyof typeof v.recruit] = [];
+    v.research = [];
+    v.scavenge = [null, null, null, null];
+    v.outPop = 0;
+    v.merchantsOut = 0;
+    v.loyalty = 100;
+    v.loyaltyAt = w.now;
+    v.militiaUntil = undefined;
+    v.grownAt = w.now;
+    delete v.units.noble;
+    delete v.units.paladin;
+    delete v.units.militia;
+  }
+  news(w, `${p.name} abandoned their lands to the barbarians and set out to start anew.`, 'player');
+  p.villages = [];
+  p.points = 0;
+  p.coins = 0;
+  p.paladin = null;
+  p.questsClaimed = [];
+  p.intel = {};
+  p.history = [];
+  p.stats = emptyStats();
+  const v = settle(w, p, villageNameText);
+  if (v) {
+    addReport(w, pid, {
+      kind: 'info', color: 'blue', vid: v.id,
+      title: `A new beginning at ${v.name} (${v.x}|${v.y})`,
+      text: 'Your old villages now stand empty of rulers, held only by the troops you left behind.',
+    });
+  }
+  return v;
 }
 
 export const BARB_BUILDINGS: BuildingId[] = ['main', 'timber', 'claypit', 'ironmine', 'farm', 'warehouse', 'timber', 'claypit', 'ironmine', 'warehouse', 'wall', 'hiding'];

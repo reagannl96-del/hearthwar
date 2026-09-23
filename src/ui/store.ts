@@ -119,7 +119,21 @@ export function act(a: Action, success?: string): boolean {
   return true;
 }
 
+/** Abandon every village to the barbarians and start again somewhere new. */
+export function restartRealm(villageName: string): boolean {
+  quietLossUntil = Date.now() + 20_000;
+  if (!act({ type: 'restart', village: villageName })) {
+    quietLossUntil = 0;
+    return false;
+  }
+  toast('You set out to found a new village. Good luck, ruler.', 'good');
+  go({ name: 'village' });
+  return true;
+}
+
 // ---------- live updates & notifications ----------
+
+let quietLossUntil = 0;
 
 let timer: ReturnType<typeof setInterval> | null = null;
 let unsub: (() => void) | null = null;
@@ -161,6 +175,7 @@ function diff(prev: PlayerView | null, next: PlayerView) {
   }
   // lost villages
   for (const v of prev.villages) {
+    if (Date.now() < quietLossUntil) break;
     if (!next.villages.some((x) => x.id === v.id)) toast(`${v.name} has been conquered!`, 'bad');
   }
   if (!next.villages.some((x) => x.id === vid.value) && next.villages[0]) vid.value = next.villages[0].id;

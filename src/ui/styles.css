@@ -976,3 +976,6 @@ input.tiny { width: 56px; padding: 2px 4px; }
 .google-btn { display: inline-flex; align-items: center; gap: 10px; padding: 9px 16px; border-radius: 4px; border: 1px solid #9c7a45; background: #fff; color: #3c4043; font-weight: 700; cursor: pointer; box-shadow: 0 2px 0 #9c7a45; }
 .google-btn:hover { background: #f8f8f8; }
 .solo-head { margin-top: 6px; }
+
+.restart-warn ul { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; line-height: 1.45; }
+.restart-warn input { width: 100%; }

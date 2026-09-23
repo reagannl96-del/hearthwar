@@ -17,6 +17,7 @@ import {
 } from './village';
 import { claimQuest } from './quests';
 import { exchangeQuote } from './market';
+import { restartPlayer } from './world';
 
 export type Action =
   | { type: 'build'; vid: number; building: BuildingId }
@@ -42,7 +43,8 @@ export type Action =
   | { type: 'claimQuest'; quest: string; vid?: number }
   | { type: 'readReport'; id: number | 'all' }
   | { type: 'deleteReport'; id: number | 'all' | 'read' }
-  | { type: 'note'; vid: number; text: string };
+  | { type: 'note'; vid: number; text: string }
+  | { type: 'restart'; village: string };
 
 const fail = (error: string): ActionResult => ({ ok: false, error });
 
@@ -436,6 +438,11 @@ export function applyAction(w: World, pid: number, a: Action): ActionResult {
     case 'deleteReport': {
       p.reports = p.reports.filter((r) => !(a.id === 'all' || (a.id === 'read' && r.read) || r.id === a.id));
       return { ok: true };
+    }
+    case 'restart': {
+      if (p.kind !== 'human') return fail('Only rulers can start over.');
+      const v = restartPlayer(w, pid, String(a.village ?? ''));
+      return v ? { ok: true, data: v.id } : fail('There is no room left in the realm.');
     }
     case 'note': {
       const text = a.text.slice(0, 500);

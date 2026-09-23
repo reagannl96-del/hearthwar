@@ -1,8 +1,8 @@
 import { useState } from 'preact/hooks';
 import { SPEED_PRESETS } from '../../engine/world';
-import { Btn, Section } from '../components/common';
+import { Btn, Modal, Section } from '../components/common';
 import { fmtDur } from '../format';
-import { host, paused, prefs, setPaused, setPrefs, setWarp, stopHost, toast, view, warp } from '../store';
+import { host, paused, prefs, restartRealm, setPaused, setPrefs, setWarp, stopHost, toast, view, warp } from '../store';
 
 export function SettingsScreen() {
   const h = host.value!;
@@ -13,6 +13,7 @@ export function SettingsScreen() {
   const [unitSpeed, setUnitSpeed] = useState(pv.config.unitSpeed);
   const [offline, setOffline] = useState(h.offline);
   const [confirmLeave, setConfirmLeave] = useState(false);
+  const [restarting, setRestarting] = useState(false);
 
   const exportSave = async () => {
     const text = h.exportSave();
@@ -123,6 +124,12 @@ export function SettingsScreen() {
             ) : <Btn variant="quiet" onClick={() => setConfirmLeave(true)}>Switch realm…</Btn>}
           </div>
         </Section>
+        <Section title="Start over">
+          <p class="muted">Walk away from your realm and found a new village somewhere else on the map. Everything you leave behind becomes barbarian.</p>
+          <div class="row gap wrap">
+            <Btn variant="danger" onClick={() => setRestarting(true)}>Restart village…</Btn>
+          </div>
+        </Section>
         <Section title="Keyboard">
           <dl class="facts">
             <dt><kbd>A</kbd> / <kbd>D</kbd></dt><dd>Previous / next village</dd>
@@ -144,6 +151,41 @@ export function SettingsScreen() {
           </dl>
         </Section>
       </div>
+      {restarting && <RestartModal onClose={() => setRestarting(false)} />}
     </div>
+  );
+}
+
+function RestartModal({ onClose }: { onClose: () => void }) {
+  const pv = view.value!;
+  const [name, setName] = useState('');
+  const [typed, setTyped] = useState('');
+  const troops = pv.villages.reduce((n, v) => n + Object.values(v.units).reduce((a, b) => a + (b ?? 0), 0), 0);
+  const count = pv.villages.length;
+  const ok = typed.trim().toLowerCase() === 'restart';
+  return (
+    <Modal title="Abandon your realm?" onClose={onClose}>
+      <div class="stack restart-warn">
+        <p class="bad-text"><strong>This cannot be undone.</strong></p>
+        <ul>
+          <li>{count === 1 ? <>Your village becomes a <strong>barbarian village</strong></> : <>Your {count} villages become <strong>barbarian villages</strong></>}, exactly as they stand: every building and the {troops.toLocaleString()} troops at home stay behind to defend them. Anyone (including you) can raid or conquer them.</li>
+          <li>Armies on the march, troops supporting or scavenging elsewhere, merchants on the road, and anything in the build or recruit queues are lost.</li>
+          <li>Your points, crowns, quests and paladin reset. Your reports and notes are kept.</li>
+          <li>You get a fresh village somewhere new on the map, with beginner protection.</li>
+        </ul>
+        <label class="field">
+          <span>Name of your new village</span>
+          <input type="text" maxLength={32} value={name} placeholder="New Hope" onInput={(e) => setName((e.target as HTMLInputElement).value)} />
+        </label>
+        <label class="field">
+          <span>Type <strong>restart</strong> to confirm</span>
+          <input type="text" value={typed} autoComplete="off" onInput={(e) => setTyped((e.target as HTMLInputElement).value)} />
+        </label>
+        <div class="row gap wrap">
+          <Btn variant="danger" disabled={!ok} onClick={() => { if (restartRealm(name.trim() || 'New Hope')) onClose(); }}>Abandon and start over</Btn>
+          <Btn variant="ghost" onClick={onClose}>Keep my realm</Btn>
+        </div>
+      </div>
+    </Modal>
   );
 }
