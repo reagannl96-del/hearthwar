@@ -21,6 +21,8 @@ interface Props {
   /** armies leaving and coming home, and the game clock */
   marches?: MarchInfo[];
   now?: number;
+  /** the militia has been called up */
+  militia?: boolean;
   onToggleNight?: () => void;
 }
 
@@ -68,6 +70,10 @@ export function Village3D(p: Props) {
   useEffect(() => {
     if (p.marches && p.now !== undefined) r.current?.setMarches(p.marches, p.now);
   }, [p.marches, p.now]);
+
+  useEffect(() => {
+    r.current?.setMilitia(!!p.militia);
+  }, [p.militia, p.theme, p.winter]);
 
   useEffect(() => {
     r.current?.setNight(p.night);

@@ -1,7 +1,7 @@
 // Scenery and small props, all built from primitives.
 
 import * as THREE from 'three';
-import { C, blob, box, cone, cyl, darker, getSeason, mesh } from './kit';
+import { C, blob, box, cone, cyl, darker, getSeason, getTheme, mesh } from './kit';
 
 const AUTUMN = [C.leafOrange, C.leafRed, C.leafYellow, C.leafGold, C.leafOrange, C.leafGreen];
 
@@ -295,11 +295,61 @@ export function horse(color: number = C.horse): THREE.Group {
 /** A tiny villager. Animated by the renderer. */
 export function person(tunic: number): THREE.Group {
   const g = new THREE.Group();
-  const body = cyl(0.2, 0.28, 0.75, tunic, 6, 0, 0.3);
-  const head = blob(0.2, C.skin, 0, 1.25, 0);
-  const legs = box(0.3, 0.32, 0.2, C.dark, 0, 0, 0);
-  g.add(legs, body, head);
+  const theme = getTheme();
+  if (theme === 'goblin') {
+    // a little goblin: short and stooped, green-skinned, all ears
+    const skin = 0x7fa843;
+    g.add(box(0.28, 0.28, 0.2, C.dark, 0, 0, 0));
+    g.add(cyl(0.2, 0.27, 0.62, tunic, 6, 0, 0.26));
+    g.add(blob(0.23, skin, 0, 1.08, 0.04, 1, 0.9, 1));
+    for (const s of [-1, 1]) {
+      const ear = cone(0.07, 0.34, skin, 4, s * 0.28, 1.1, 0);
+      ear.rotation.z = -s * 1.25;
+      g.add(ear);
+    }
+    g.add(blob(0.04, 0xf2d64b, -0.08, 1.12, 0.21), blob(0.04, 0xf2d64b, 0.08, 1.12, 0.21));
+  } else if (theme === 'druid') {
+    // hooded folk in long robes of leaf and bark
+    g.add(box(0.3, 0.32, 0.2, C.dark, 0, 0, 0));
+    g.add(cyl(0.22, 0.34, 0.95, tunic, 7, 0, 0.1));
+    g.add(blob(0.19, C.skin, 0, 1.22, 0.03));
+    g.add(cone(0.25, 0.48, 0x4f6a2c, 7, 0, 1.12));
+  } else if (theme === 'sorcerer') {
+    // robed apprentices under little pointed hats
+    g.add(box(0.3, 0.32, 0.2, C.dark, 0, 0, 0));
+    g.add(cyl(0.22, 0.34, 0.95, tunic, 7, 0, 0.1));
+    g.add(blob(0.2, C.skin, 0, 1.25, 0));
+    g.add(cyl(0.3, 0.3, 0.04, 0x3c2470, 8, 0, 1.38));
+    g.add(cone(0.17, 0.5, 0x5b3596, 8, 0, 1.4));
+  } else {
+    const body = cyl(0.2, 0.28, 0.75, tunic, 6, 0, 0.3);
+    const head = blob(0.2, C.skin, 0, 1.25, 0);
+    const legs = box(0.3, 0.32, 0.2, C.dark, 0, 0, 0);
+    g.add(legs, body, head);
+  }
   for (const c of g.children) c.castShadow = true;
+  return g;
+}
+
+/** A farmer called up as militia: arms raised, often waving a pitchfork. */
+export function militiaman(tunic: number, pitchfork: boolean): THREE.Group {
+  const g = person(tunic);
+  for (const s of [-1, 1]) {
+    const arm = box(0.1, 0.55, 0.1, tunic, s * 0.24, 1.0, 0);
+    arm.rotation.z = -s * 0.35;
+    g.add(arm);
+  }
+  if (pitchfork) {
+    g.add(cyl(0.035, 0.035, 2.1, 0x7a5230, 5, 0.34, 0.6, 0.05));
+    g.add(box(0.36, 0.05, 0.05, 0x6a7782, 0.34, 2.7, 0.05));
+    for (const x of [-0.14, 0, 0.14]) g.add(box(0.04, 0.3, 0.04, 0x6a7782, 0.34 + x, 2.72, 0.05));
+  } else {
+    // a torch
+    g.add(cyl(0.05, 0.05, 0.9, 0x5a3a22, 5, -0.36, 1.2, 0.05));
+    const flame = mesh(new THREE.IcosahedronGeometry(0.14, 0), 0xffb347, { emissive: 0xff7a1a });
+    flame.position.set(-0.36, 2.15, 0.05);
+    g.add(flame);
+  }
   return g;
 }
 

@@ -44,6 +44,7 @@ export function VillageScreen() {
               ...pv.commands.filter((c) => c.fromVid === v.id && c.kind === 'return').map((c) => ({ id: c.id, kind: 'home' as const, units: c.units ?? {}, at: c.arrive })),
             ]}
             now={now.value}
+            militia={!!v.militiaUntil && v.militiaUntil > now.value}
             theme={v.hero === 'sorcerer' || v.hero === 'druid' || v.hero === 'goblin' ? v.hero : 'classic'}
             onToggleNight={() => setPrefs({ sceneTime: night ? 'day' : 'night' })}
           />

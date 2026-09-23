@@ -7,7 +7,7 @@ import { BUILDINGS } from '../../engine/data/buildings';
 import type { BuildingId, Buildings, Units } from '../../engine/types';
 import { buildModel, visualTier } from './buildings';
 import { C, bake, box, disposeTree, mat, rng, setSeason, setTheme, type Season, type Theme } from './kit';
-import { isRider, person, plot, scaffold, troop, type TroopModel } from './props';
+import { isRider, militiaman, person, plot, scaffold, troop, type TroopModel } from './props';
 import { FOOT_LOOPS, PEOPLE_LOOPS, RIDE_LOOPS } from './paths';
 import { wallGuardPosts } from './scene';
 import { LAYOUT, OUTSIDE, WALL_R, buildScenery, buildTerrain, buildWall, buildingScale, heightAt } from './scene';
@@ -88,6 +88,8 @@ export class VillageRenderer {
   private marches: { members: THREE.Group[]; path: THREE.Vector3[]; t: number; len: number; fadeIn: number; fadeOut: number }[] = [];
   private marchSeen = new Set<number>();
   private builders = new Map<BuildingId, { g: THREE.Group; arms: THREE.Object3D[] }>();
+  private militia: { g: THREE.Group; from: THREE.Vector3; to: THREE.Vector3; delay: number; t: number; face: number }[] = [];
+  private militiaOn = false;
 
   constructor(private container: HTMLElement, private opts: VillageRendererOpts = {}) {
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
@@ -540,6 +542,54 @@ export class VillageRenderer {
     });
   }
 
+  // ---------- militia ----------
+
+  /** Called-up farmers pour out of the farm and line the wall, pitchforks raised. */
+  setMilitia(on: boolean): void {
+    if (on === this.militiaOn) return;
+    this.militiaOn = on;
+    for (const m of this.militia) { this.scene.remove(m.g); disposeTree(m.g); }
+    this.militia = [];
+    if (!on) return;
+    const [fx, fz] = LAYOUT.farm;
+    const toward = Math.atan2(fz, fx);
+    const n = 20;
+    for (let i = 0; i < n; i++) {
+      const g = militiaman(TUNICS[i % TUNICS.length], i % 4 !== 3);
+      g.scale.setScalar(1.3);
+      // spread along the stretch of wall facing the farm, just outside it
+      const a = toward + ((i / (n - 1)) - 0.5) * 1.5;
+      const R = WALL_R + 3.4;
+      const tx = Math.cos(a) * R, tz = Math.sin(a) * R;
+      const sx = fx + (Math.sin(i * 7.3) * 3), sz = fz + (Math.cos(i * 5.1) * 3);
+      const from = new THREE.Vector3(sx, heightAt(sx, sz), sz);
+      const to = new THREE.Vector3(tx, heightAt(tx, tz), tz);
+      g.position.copy(from);
+      g.visible = false;
+      this.scene.add(g);
+      this.militia.push({ g, from, to, delay: i * 0.25, t: 0, face: Math.atan2(Math.cos(a), Math.sin(a)) });
+    }
+  }
+
+  private stepMilitia(dt: number, t: number): void {
+    for (const m of this.militia) {
+      m.t += dt;
+      const k = Math.min(1, Math.max(0, (m.t - m.delay) / 9));
+      m.g.visible = m.t > m.delay;
+      if (k < 1) {
+        // running out of the farm towards the wall
+        m.g.position.lerpVectors(m.from, m.to, k);
+        m.g.position.y = m.from.y + (m.to.y - m.from.y) * k + Math.abs(Math.sin(t * 11 + m.delay * 3)) * 0.25;
+        m.g.rotation.y = Math.atan2(m.to.x - m.from.x, m.to.z - m.from.z);
+      } else {
+        // at the wall: facing out, shaking their pitchforks
+        m.g.position.copy(m.to);
+        m.g.position.y += Math.abs(Math.sin(t * 5 + m.delay * 7)) * 0.12;
+        m.g.rotation.y = m.face + Math.sin(t * 2 + m.delay) * 0.15;
+      }
+    }
+  }
+
   // ---------- builders at work ----------
 
   /** A couple of villagers hammer away at every building being upgraded. */
@@ -750,6 +800,7 @@ export class VillageRenderer {
     if (this.guards) for (const gd of this.guards.children) gd.rotation.y += Math.sin(t * 0.6 + (gd.userData.guard as number) * 1.7) * 0.004;
     for (const b of this.builders.values()) b.arms.forEach((a, i) => { a.rotation.x = 0.9 + Math.sin(t * 9 + i * 1.7) * 0.9; });
     this.stepMarches(dt, t);
+    this.stepMilitia(dt, t);
     this.stepLeaves(dt, t);
     // smoke puffs
     for (const s of this.smoke) {
