@@ -417,7 +417,7 @@ export function MapScreen({ focus }: { focus?: number }) {
 
   // fingers on the map: one drags it around, two pinch to zoom around the point between them
   const onPointerDown = (e: PointerEvent) => {
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* not every pointer can be captured */ }
     touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (touches.current.size === 2) {
       const [a, b] = [...touches.current.values()];
@@ -539,7 +539,7 @@ export function MapScreen({ focus }: { focus?: number }) {
         <Legend data={data} />
       </div>
       <aside class="map-side">
-        {selected ? <VillagePanel v={selected} data={data} /> : (
+        {selected ? <VillagePanel v={selected} data={data} onClose={() => { setSel(null); setHover(null); }} /> : (
           <div class="panel">
             <p class="muted">Click a village to see who rules it, how far away it is, and what your scouts know.</p>
             <p class="muted small">Drag to move · scroll or +/− to zoom · arrow keys pan</p>
@@ -680,7 +680,7 @@ function loadTpl(): { a: Units; b: Units } {
   }
 }
 
-function VillagePanel({ v, data }: { v: MapVillage; data: MapData }) {
+function VillagePanel({ v, data, onClose }: { v: MapVillage; data: MapData; onClose: () => void }) {
   const h = host.value!;
   const pv = view.value!;
   const cur = village.value!;
@@ -696,6 +696,7 @@ function VillagePanel({ v, data }: { v: MapVillage; data: MapData }) {
   return (
     <div class="panel map-info">
       <header>
+        <button type="button" class="icon-btn map-info-close" aria-label="Close" onClick={onClose}><Icon name="close" size={14} /></button>
         <h3>{v.name}</h3>
         <div class="muted small">{coords(v.x, v.y)} · {continent(v.x, v.y)} · <span class="num">{fmt(v.points)}</span> points</div>
       </header>

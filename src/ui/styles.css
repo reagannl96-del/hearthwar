@@ -1362,3 +1362,26 @@ button.realm-row:hover { background: var(--surface-2); border-color: var(--line)
 /* the hero card header: name, then the signature ability pill, then what the hero is best at, each on its own line */
 .hero-card header > div { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; }
 .hero-card .hero-ability { margin: 0; }
+
+/* ---------- phones: a selected village's details slide up over the map ---------- */
+.map-info-close { display: none; }
+@media (max-width: 760px) {
+  .map-side .map-info {
+    position: fixed; left: 8px; right: 8px; bottom: calc(66px + env(safe-area-inset-bottom, 0px)); z-index: 40;
+    max-height: 56vh; overflow-y: auto; box-shadow: 0 -6px 24px rgba(20, 10, 2, 0.45); border-radius: 12px 12px 8px 8px;
+    animation: sheet-up 0.18s ease-out;
+  }
+  .map-side .map-info header { position: relative; padding-right: 34px; }
+  .map-info-close { display: inline-flex; position: absolute; top: 0; right: 0; }
+}
+@keyframes sheet-up { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .map-side .map-info { animation: none; } }
+
+/* ---------- phones: battle reports stay inside the screen ---------- */
+@media (max-width: 640px) {
+  .rep-card { overflow: hidden; }
+  .rep-block { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .rep-side th, .rep-side td { padding: 4px 5px; }
+  .rep-factors { flex-wrap: wrap; row-gap: 6px; }
+  .rep-verdict { font-size: 1.05rem; }
+}
