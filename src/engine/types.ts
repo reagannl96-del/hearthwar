@@ -244,6 +244,12 @@ export interface AIState {
   avoid?: Record<number, number>;
   /** what each village is built for, as a Tribal Wars player would set it up */
   roles?: Record<number, VillageRole>;
+  /** which village the ruler looks at next: a person works through their villages a few at a time */
+  cursor?: number;
+  /** raids still to click out in the current look */
+  raidBudget?: number;
+  /** when the last noble train set out */
+  lastConquest?: number;
 }
 
 /** Offensive (all attack troops), defensive (all defence, a few light cavalry to farm), mixed, or a random assortment. */

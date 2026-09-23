@@ -110,7 +110,11 @@ export function terrainAt(w: World, x: number, y: number): string {
   return w.terrain[y * s + x];
 }
 
-export const aiThinkInterval = (w: World) => Math.min(300_000, Math.max(10_000, Math.round(3_000_000 / w.config.speed)));
+/**
+ * How often an AI ruler looks at the game while online: every couple of minutes on a
+ * fast realm, like a person checking their queues, never every few seconds.
+ */
+export const aiThinkInterval = (w: World) => Math.min(300_000, Math.max(60_000, Math.round(18_000_000 / w.config.speed)));
 /** Beginner protection lasts a fixed 30 real minutes, whatever the world speed. */
 export const PROTECTION_MS = 30 * 60_000;
 export const protectionEnd = (w: World) => w.now + PROTECTION_MS;

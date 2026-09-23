@@ -133,28 +133,47 @@ const RAIDERS: UnitId[] = ['light', 'marcher', 'axe', 'spear', 'heavy'];
 // ---------- main entry ----------
 
 /**
- * Rulers keep human hours: each sleeps about seven hours a day and steps away for
- * a while every few hours. While away nothing new is queued, sent or traded.
+ * Rulers keep a dedicated human's hours: about eight hours of sleep, and through the
+ * rest of the day they drop in for play sessions of half an hour to an hour, with
+ * an hour or so away in between: roughly six and a half hours at the keyboard a day
+ * (more on hard realms, less on easy ones). While away nothing new is queued, sent
+ * or traded; queued work carries on, as it does for a person.
  */
 export function aiAwake(w: World, p: Player): boolean {
   if (w.config.aiAlwaysAwake) return true;
   const minute = Math.floor((w.createdReal + w.now) / 60_000);
   const ofDay = ((minute % 1440) + 1440) % 1440;
   const sleepStart = (p.id * 397) % 1440;
-  if ((ofDay - sleepStart + 1440) % 1440 < 7 * 60) return false;
-  // short breaks: about 40 minutes in every three hours
-  return ((minute + p.id * 53) % 180) >= 40;
+  if ((ofDay - sleepStart + 1440) % 1440 < 8 * 60) return false;
+  const diff = w.config.difficulty;
+  const cycle = diff === 'hard' ? 85 : diff === 'easy' ? 130 : 105;
+  const t = minute + p.id * 37;
+  const session = Math.floor(t / cycle);
+  const len = 30 + (((session * 2654435761 + p.id * 40503) >>> 0) % 26);
+  return t % cycle < len;
 }
 
 export function aiThink(w: World, p: Player): void {
   const ai = p.ai!;
   if (!aiAwake(w, p)) return;
   const incoming = incomingIndex(w, p);
-  for (const vid of [...p.villages]) {
+  // incoming attacks show up as alerts, so every village under threat gets a look
+  for (const [vid, list] of incoming) {
+    const v = w.villages[vid];
+    if (v && v.ownerId === p.id) { updateVillage(w, v, w.now); defend(w, p, v, list); }
+  }
+  // the day-to-day work goes a few villages per look, in turn, as a person clicks through their list
+  const per = w.config.difficulty === 'hard' ? 4 : w.config.difficulty === 'easy' ? 2 : 3;
+  // and only so many raids get clicked out per look, however many villages there are
+  ai.raidBudget = (ai.personality === 'farmer' ? 3 : 2) + (w.config.difficulty === 'hard' ? 1 : 0);
+  const list = [...p.villages];
+  const start = (ai.cursor ?? 0) % Math.max(1, list.length);
+  ai.cursor = start + per;
+  for (let i = 0; i < Math.min(per, list.length); i++) {
+    const vid = list[(start + i) % list.length];
     const v = w.villages[vid];
     if (!v || v.ownerId !== p.id) continue;
     updateVillage(w, v, w.now);
-    defend(w, p, v, incoming.get(v.id));
     trade(w, p, v);
     build(w, p, v);
     research(w, p, v);
@@ -364,10 +383,21 @@ function nobles(w: World, p: Player, v: Village): void {
 interface NobleMemory { target: number; since: number }
 const nobleTargets = new WeakMap<Player, NobleMemory>();
 
+/** hours between noble trains: a person saves up, scouts, and picks the moment */
+const CONQUEST_GAP_H: Record<string, number> = { hard: 5, normal: 8, easy: 12, peaceful: 12 };
+
+/** Every village held is more to look after, so each next conquest takes a little longer to prepare. */
+function conquestReady(w: World, p: Player): boolean {
+  const last = p.ai!.lastConquest;
+  const gapH = (CONQUEST_GAP_H[w.config.difficulty] ?? 8) * (1 + 0.25 * Math.max(0, p.villages.length - 1));
+  return last === undefined || w.now - last >= gapH * 3_600_000;
+}
+
 function conquestDrive(w: World, p: Player): void {
   const ai = p.ai!;
   const homes = p.villages.map((id) => w.villages[id]).filter((v) => (v.units.noble ?? 0) > 0);
   if (homes.length === 0) return;
+  if (!conquestReady(w, p)) return;
   let mem = nobleTargets.get(p);
   const tgt = mem ? w.villages[mem.target] : undefined;
   if (!mem || !tgt || tgt.ownerId === p.id || w.now - mem.since > aiThinkInterval(w) * 120) {
@@ -406,6 +436,7 @@ function conquestDrive(w: World, p: Player): void {
     }
   }
   ai.memory[target.id] = w.now;
+  ai.lastConquest = w.now;
 }
 
 function chooseNobleTarget(w: World, p: Player, from: Village): Village | null {
@@ -443,8 +474,9 @@ function farm(w: World, p: Player, v: Village): void {
   const ai = p.ai!;
   const hasLight = (v.units.light ?? 0) >= 5;
   const radius = hasLight ? 14 : 8;
-  let sends = p.ai!.personality === 'farmer' ? 6 : 4;
-  const cooldown = aiThinkInterval(w) * 4;
+  // a person clicks out a few raids per look, and leaves each farm a while to refill
+  let sends = ai.raidBudget ?? 2;
+  const cooldown = Math.max(aiThinkInterval(w) * 5, 10 * 60_000);
   const targets = villagesNear(w, v.x, v.y, radius)
     .filter((t) => t.ownerId === null && (ai.memory[t.id] ?? 0) + cooldown < w.now)
     .sort((a, b) => distance(v.x, v.y, a.x, a.y) - distance(v.x, v.y, b.x, b.y));
@@ -460,6 +492,7 @@ function farm(w: World, p: Player, v: Village): void {
     ai.memory[t.id] = w.now;
     sends--;
   }
+  ai.raidBudget = sends;
 }
 
 function raidGroup(v: Village, wall: number): Units | null {
@@ -642,13 +675,13 @@ function strike(w: World, p: Player, v: Village, target: Village, army: Units): 
   const cat = (send.catapult ?? 0) > 0 ? pickCatTarget(intel.buildings) : undefined;
   // noblemen to spare and a village worth taking: a noble train right behind the clearing wave
   const nobles = v.units.noble ?? 0;
-  if (target.ownerId !== null && nobles >= 2 && target.points >= 150) {
+  if (target.ownerId !== null && nobles >= 2 && target.points >= 150 && conquestReady(w, p)) {
     const escort = Math.min(60, Math.floor((send.axe ?? 0) * 0.08));
     const waves: Units[] = [{ ...send }];
     const n = Math.min(nobles, 5);
     if (escort > 0) waves[0].axe = (send.axe ?? 0) - escort * n;
     for (let i = 0; i < n; i++) waves.push(escort > 0 ? { noble: 1, axe: escort } : { noble: 1 });
-    if (sendTrain(w, p.id, v.id, target.id, waves, cat).ok) { noteHit(w, p, target); return; }
+    if (sendTrain(w, p.id, v.id, target.id, waves, cat).ok) { noteHit(w, p, target); ai.lastConquest = w.now; return; }
   }
   // is a plain attack worth it? loot we can carry and troops we'd destroy, against what we'd lose
   const hidden = hideCap(intel.buildings?.hiding ?? 0);
