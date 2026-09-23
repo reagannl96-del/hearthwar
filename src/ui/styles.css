@@ -979,3 +979,6 @@ input.tiny { width: 56px; padding: 2px 4px; }
 
 .restart-warn ul { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; line-height: 1.45; }
 .restart-warn input { width: 100%; }
+
+/* full-colour icons keep their ink outline readable on dark leather */
+.topbar .icon, .nav-item:not(.is-active) .icon { filter: drop-shadow(0 0 1px rgba(255, 234, 196, 0.55)) drop-shadow(0 1px 0 rgba(0, 0, 0, 0.4)); }
