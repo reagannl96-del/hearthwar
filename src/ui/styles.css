@@ -1307,3 +1307,13 @@ button.realm-row:hover { background: var(--surface-2); border-color: var(--line)
 .shared-head { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 12px; background: none; border: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
 .shared-head:hover { background: var(--surface-2); }
 .shared-body { padding: 4px 12px 12px; border-top: 1px solid var(--line); }
+
+/* ---------- send troops: Tribal Wars style columns ---------- */
+.send-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(215px, 1fr)); gap: 10px; margin-bottom: 10px; }
+.send-group { margin: 0; padding: 4px 10px 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--parch-hi); min-width: 0; }
+.send-group legend { padding: 0 4px; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2); }
+.send-row { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: center; gap: 6px; padding: 3px 0; }
+.send-row + .send-row { border-top: 1px dotted var(--line); }
+.send-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.92rem; }
+.send-row .num-input input { width: 70px; }
+.send-row .max-link { min-width: 44px; text-align: left; }

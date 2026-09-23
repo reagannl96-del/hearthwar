@@ -96,6 +96,9 @@ export class VillageRenderer {
   private guards: THREE.Group | null = null;
   private guardKey = '';
   private units: Units = {};
+  /** the sorcerer's arcane barrier: a faint dome over the village while he is at home */
+  private barrier: THREE.Mesh | null = null;
+  private barrierTime: { value: number } = { value: 0 };
   private marches: { members: THREE.Group[]; path: THREE.Vector3[]; t: number; len: number; fadeIn: number; fadeOut: number }[] = [];
   private marchSeen = new Set<number>();
   private builders = new Map<BuildingId, { g: THREE.Group; arms: THREE.Object3D[] }>();
@@ -285,6 +288,7 @@ export class VillageRenderer {
   }
 
   dispose(): void {
+    if (this.barrier) (this.barrier.material as THREE.Material).dispose();
     this.disposed = true;
     cancelAnimationFrame(this.raf);
     this.ro.disconnect();
@@ -443,6 +447,7 @@ export class VillageRenderer {
   setTroops(units: Units): void {
     this.units = units;
     this.updateGuards();
+    this.updateBarrier();
     const want: TroopModel[] = [];
     for (const k of TROOP_KINDS) {
       const n = units[k] ?? 0;
@@ -469,6 +474,59 @@ export class VillageRenderer {
       this.troops.push({ kind, g, path, t: r() * len, speed: isRider(kind) ? 2.6 + r() * 1.2 : 1.1 + r() * 0.8, len });
       this.scene.add(g);
     });
+  }
+
+  /**
+   * While a sorcerer is home the village sits under his arcane barrier. It is drawn
+   * as a fresnel dome: nearly invisible where you look through it, a soft violet
+   * glow only toward its edges, with faint bands of light drifting up it, so it
+   * reads as a shield without fogging the village underneath.
+   */
+  private updateBarrier(): void {
+    const on = (this.units.sorcerer ?? 0) > 0;
+    if (on === !!this.barrier) return;
+    if (!on) {
+      this.scene.remove(this.barrier!);
+      disposeTree(this.barrier!);
+      (this.barrier!.material as THREE.Material).dispose();
+      this.barrier = null;
+      return;
+    }
+    const geo = new THREE.SphereGeometry(WALL_R + 5, 64, 24, 0, Math.PI * 2, 0, Math.PI / 2);
+    const matl = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      uniforms: { uTime: this.barrierTime, uColor: { value: new THREE.Color(0xa98bff) } },
+      vertexShader: `
+        varying vec3 vN; varying vec3 vView; varying float vH;
+        void main() {
+          vec4 wp = modelMatrix * vec4(position, 1.0);
+          vN = normalize(mat3(modelMatrix) * normal);
+          vView = normalize(cameraPosition - wp.xyz);
+          vH = position.y;
+          gl_Position = projectionMatrix * viewMatrix * wp;
+        }`,
+      fragmentShader: `
+        uniform float uTime; uniform vec3 uColor;
+        varying vec3 vN; varying vec3 vView; varying float vH;
+        void main() {
+          float rim = pow(1.0 - abs(dot(normalize(vN), normalize(vView))), 2.2);
+          float bands = 0.5 + 0.5 * sin(vH * 0.35 - uTime * 1.2);
+          float a = rim * (0.3 + 0.14 * bands) + 0.02;
+          gl_FragColor = vec4(mix(uColor, vec3(1.0), rim * 0.35), a);
+        }`,
+    });
+    const dome = new THREE.Mesh(geo, matl);
+    dome.userData.dynamic = true;
+    dome.renderOrder = 10;
+    // where the dome meets the ground, a thin ring of light
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(WALL_R + 5, 0.18, 6, 96), new THREE.MeshBasicMaterial({ color: 0xc9b3ff, transparent: true, opacity: 0.55, depthWrite: false }));
+    ring.rotation.x = Math.PI / 2;
+    ring.position.y = 0.15;
+    dome.add(ring);
+    this.barrier = dome;
+    this.scene.add(dome);
   }
 
   /** Archers and spearmen keeping watch from the wall, once it is big enough to stand on. */
@@ -831,6 +889,7 @@ export class VillageRenderer {
     for (const b of this.builders.values()) b.arms.forEach((a, i) => { a.rotation.x = hammerSwing(t * 1.4 + i * 0.47); });
     this.stepMarches(dt, t);
     this.stepMilitia(dt, t);
+    this.barrierTime.value = t;
     for (const m of this.motes) {
       const d = m.userData.mote as { x: number; y: number; z: number; phase: number; speed: number };
       const p = t * d.speed + d.phase;
