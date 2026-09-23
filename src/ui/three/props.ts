@@ -578,3 +578,92 @@ export function troop(kind: TroopModel): THREE.Group {
 }
 
 export const isRider = (k: TroopModel) => k === 'light' || k === 'marcher' || k === 'heavy' || k === 'paladin';
+
+// ---------- hero themes: landmarks ----------
+
+/** A cluster of glowing arcane crystals on a rune stone (sorcerer villages). */
+export function crystalSpire(): THREE.Group {
+  const g = new THREE.Group();
+  g.add(cyl(1.1, 1.3, 0.5, 0x5b5a72, 6));
+  const shards: [number, number, number, number, number][] = [
+    [0, 0, 0.42, 3.4, 0], [0.55, 0.2, 0.3, 2.2, 0.35], [-0.5, -0.25, 0.28, 1.9, -0.3], [0.1, -0.55, 0.22, 1.5, 0.2],
+  ];
+  for (const [x, z, r, h, tilt] of shards) {
+    const s = mesh(new THREE.OctahedronGeometry(r, 0), 0xb58cff, { emissive: 0x5a2fb0 });
+    s.scale.set(1, h / r / 2, 1);
+    s.position.set(x, 0.5 + h / 2, z);
+    s.rotation.z = tilt;
+    g.add(s);
+  }
+  return g;
+}
+
+/** An ancient oak with a ring of standing stones (druid villages). */
+export function greatTree(r: () => number): THREE.Group {
+  const g = new THREE.Group();
+  g.add(cyl(0.45, 0.8, 3.4, 0x4a3420, 7));
+  for (const [x, y, z, s] of [[0, 4.2, 0, 1.9], [1.2, 3.6, 0.4, 1.3], [-1.1, 3.8, -0.3, 1.4], [0.2, 5.2, -0.6, 1.2]]) {
+    g.add(blob(s, r() < 0.5 ? 0x5e8c34 : 0x4f7a2e, x, y, z, 1, 0.8, 1, 1));
+  }
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2 + 0.3;
+    const st = box(0.35, 1.1 + r() * 0.5, 0.25, 0x8e9a80, Math.cos(a) * 1.25, 0, Math.sin(a) * 1.25);
+    st.rotation.y = -a;
+    g.add(st);
+  }
+  return g;
+}
+
+/** A crooked pole of skulls and green rags (goblin camps). */
+export function skullTotem(): THREE.Group {
+  const g = new THREE.Group();
+  g.add(cyl(0.12, 0.18, 3.6, 0x3e2a18, 5));
+  for (const y of [1.6, 2.6, 3.5]) {
+    g.add(blob(0.3, 0xe8dfc8, 0, y, 0.12, 1, 0.9, 1));
+    g.add(box(0.1, 0.1, 0.06, 0x1a1a1a, -0.1, y, 0.4));
+    g.add(box(0.1, 0.1, 0.06, 0x1a1a1a, 0.1, y, 0.4));
+  }
+  g.add(box(0.9, 0.5, 0.05, 0x6f9a2a, 0.5, 3.0, 0));
+  for (const a of [0, 2.1, 4.2]) {
+    const sp = cone(0.12, 0.9, 0x3e2a18, 4, Math.cos(a) * 0.5, 0, Math.sin(a) * 0.5);
+    sp.rotation.z = Math.cos(a) * 0.4;
+    sp.rotation.x = -Math.sin(a) * 0.4;
+    g.add(sp);
+  }
+  return g;
+}
+
+/** What crowns the headquarters in each hero's village. */
+export function hqCrown(theme: 'sorcerer' | 'druid' | 'goblin', r: () => number): THREE.Group {
+  const g = new THREE.Group();
+  if (theme === 'sorcerer') {
+    // a giant wizard hat, bent at the tip, with a gold band and stars
+    g.add(cyl(2.3, 2.3, 0.22, 0x3c2470, 16));
+    g.add(cyl(1.45, 1.55, 0.45, 0xe9b83a, 16, 0, 0.2));
+    g.add(cone(1.45, 3.1, 0x4b2f86, 16, 0, 0.62));
+    const tip = cone(0.72, 1.9, 0x4b2f86, 12);
+    tip.position.set(0.35, 3.25, 0);
+    tip.rotation.z = -0.6;
+    g.add(tip);
+    for (const [x, y, z] of [[0.9, 1.5, 0.75], [-0.8, 1.9, 0.6], [0.2, 2.6, 0.62], [-0.4, 1.2, -1.0]]) {
+      const st = mesh(new THREE.OctahedronGeometry(0.18, 0), 0xf3d36a, { emissive: 0x7a5a10 });
+      st.position.set(x, y, z);
+      g.add(st);
+    }
+  } else if (theme === 'druid') {
+    // an old tree has grown right through the roof
+    g.add(cyl(0.35, 0.5, 2.2, 0x4a3420, 6));
+    for (const [x, y, z, s] of [[0, 2.8, 0, 1.6], [1.1, 2.4, 0.3, 1.1], [-1, 2.5, -0.3, 1.2], [0.1, 3.7, 0, 1]]) {
+      g.add(blob(s, r() < 0.5 ? 0x5e8c34 : 0x4f7a2e, x, y, z, 1, 0.8, 1, 1));
+    }
+  } else {
+    // crude iron spikes, a skull and a green rag
+    for (let i = -2; i <= 2; i++) g.add(cone(0.18, 1.1, 0x3b3530, 4, i * 0.7, 0, 0));
+    g.add(cyl(0.08, 0.08, 2.6, 0x3e2a18, 5, 0, 0));
+    g.add(blob(0.32, 0xe8dfc8, 0, 2.7, 0));
+    g.add(box(0.1, 0.1, 0.06, 0x1a1a1a, -0.11, 2.72, 0.3));
+    g.add(box(0.1, 0.1, 0.06, 0x1a1a1a, 0.11, 2.72, 0.3));
+    g.add(box(1.1, 0.6, 0.05, 0x6f9a2a, 0.6, 1.9, 0));
+  }
+  return g;
+}

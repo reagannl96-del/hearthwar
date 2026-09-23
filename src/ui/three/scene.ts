@@ -2,8 +2,8 @@
 
 import * as THREE from 'three';
 import type { BuildingId } from '../../engine/types';
-import { C, bake, box, cone, cyl, darker, getSeason, mat, rng, roundTower, seasonal } from './kit';
-import { rock, tree, pumpkin, hayBale, barrel, crate } from './props';
+import { C, bake, box, cone, cyl, darker, getSeason, getTheme, mat, rng, roundTower, seasonal } from './kit';
+import { rock, tree, pumpkin, hayBale, barrel, crate, crystalSpire, greatTree, skullTotem } from './props';
 import { distToPaths } from './paths';
 
 export const WALL_R = 44;
@@ -224,7 +224,14 @@ export function buildScenery(seed = 11): THREE.Group {
   for (const it of sceneryPlan(seed)) {
     const inside = Math.hypot(it.x, it.z) < WALL_R;
     const y = inside ? 0 : heightAt(it.x, it.z);
-    if (it.kind === 'oak' || it.kind === 'pine' || it.kind === 'birch') {
+    const theme = getTheme();
+    if (inside && theme !== 'classic' && (it.kind === 'oak' || it.kind === 'birch')) {
+      const lm = theme === 'sorcerer' ? crystalSpire() : theme === 'druid' ? greatTree(r) : skullTotem();
+      if (theme === 'goblin') lm.scale.setScalar(1.5);
+      lm.position.set(it.x, 0, it.z);
+      lm.rotation.y = r() * Math.PI * 2;
+      g.add(lm);
+    } else if (it.kind === 'oak' || it.kind === 'pine' || it.kind === 'birch') {
       const t = tree(it.kind, r, it.scale);
       t.position.set(it.x, inside ? 0 : y - 0.1, it.z);
       g.add(t);
@@ -238,6 +245,35 @@ export function buildScenery(seed = 11): THREE.Group {
     else g.add(crate(it.x, it.z));
   }
   return bake(g);
+}
+
+/**
+ * Spots where defenders can stand on the wall, nearest the viewer first, each
+ * with the direction to look out over (radians about Y). Wooden walls only have
+ * room on their watch towers; stone walls have a walkway between the towers.
+ */
+export function wallGuardPosts(level: number): { x: number; y: number; z: number; face: number }[] {
+  const tier = level <= 0 ? 0 : level < 5 ? 1 : level < 10 ? 2 : level < 15 ? 3 : 4;
+  const R = WALL_R;
+  const start = GATE_A + GATE_HALF, end = GATE_A + Math.PI * 2 - GATE_HALF;
+  const angles: number[] = [];
+  let y = 0;
+  if (tier === 2) {
+    for (let i = 0; i < 8; i++) angles.push(GATE_A + GATE_HALF + 0.35 + (i / 8) * (Math.PI * 2 - GATE_HALF * 2 - 0.5));
+    y = 6.7;
+  } else if (tier >= 3) {
+    const towers = tier === 3 ? 8 : 12;
+    for (let i = 0; i < towers - 1; i++) {
+      const a0 = start + ((end - start) * i) / (towers - 1), a1 = start + ((end - start) * (i + 1)) / (towers - 1);
+      angles.push(a0 + (a1 - a0) * 0.33, a0 + (a1 - a0) * 0.67);
+    }
+    y = (tier === 3 ? 3.4 : 4.6) + 0.3;
+  }
+  // nearest the viewer (the gate side, +Z) first
+  const ang = (a: number) => Math.abs(Math.atan2(Math.sin(a - GATE_A), Math.cos(a - GATE_A)));
+  return angles
+    .sort((a, b) => ang(a) - ang(b))
+    .map((a) => ({ x: Math.cos(a) * R, y, z: Math.sin(a) * R, face: Math.atan2(Math.cos(a), Math.sin(a)) }));
 }
 
 /** The wall ring for a given level. */
@@ -291,6 +327,14 @@ export function buildWall(level: number, color: number): THREE.Group {
     for (let k = 0; k < merlons; k++) {
       seg.add(box(0.6, 0.7, 0.45, C.stone, -len / 2 + (k + 0.5) * (len / merlons), h + 0.3, thick / 2 - 0.1));
       seg.add(box(0.6, 0.7, 0.45, C.stone, -len / 2 + (k + 0.5) * (len / merlons), h + 0.3, -thick / 2 + 0.1));
+    }
+    if (getTheme() === 'goblin') {
+      // sharpened stakes bristling outward from the battlements
+      for (let k = 0; k < merlons; k++) {
+        const st = cone(0.13, 1.3, C.timber, 4, -len / 2 + (k + 0.5) * (len / merlons), h - 0.4, thick / 2 + 0.2);
+        st.rotation.x = 1.25;
+        seg.add(st);
+      }
     }
     seg.position.set((x0 + x1) / 2, 0, (z0 + z1) / 2);
     seg.rotation.y = -Math.atan2(z1 - z0, x1 - x0);

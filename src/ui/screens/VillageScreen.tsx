@@ -39,6 +39,7 @@ export function VillageScreen() {
             winter={prefs.value.season === 'auto' ? isWinter(v.x, v.y, pv.config.size) : prefs.value.season === 'winter'}
             night={night}
             units={v.units}
+            theme={v.hero === 'sorcerer' || v.hero === 'druid' || v.hero === 'goblin' ? v.hero : 'classic'}
             onToggleNight={() => setPrefs({ sceneTime: night ? 'day' : 'night' })}
           />
         </div>

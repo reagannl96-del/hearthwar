@@ -3,9 +3,9 @@
 
 import * as THREE from 'three';
 import type { BuildingId } from '../../engine/types';
-import { C, blob, box, cone, cyl, darker, house, mesh, rng, roundTower } from './kit';
+import { C, blob, box, cone, cyl, darker, getTheme, house, mesh, rng, roundTower } from './kit';
 import {
-  anvil, banner, barrel, campfire, cart, catapult, crate, dummy, fence, hayBale, horse, logPile, pumpkin, ram, rock,
+  anvil, banner, barrel, hqCrown, campfire, cart, catapult, crate, dummy, fence, hayBale, horse, logPile, pumpkin, ram, rock,
   stall, stump, tree, weaponRack, wheatField, windmill,
 } from './props';
 
@@ -38,7 +38,7 @@ export function buildModel(id: BuildingId, level: number, color: number): Built 
   const t = visualTier(id, level);
   const r = rng(id.length * 131 + t * 17);
   switch (id) {
-    case 'main': return mainHall(t, color);
+    case 'main': return crowned(mainHall(t, color), t);
     case 'barracks': return barracks(t, color);
     case 'stable': return stable(t, r);
     case 'workshop': return workshop(t);
@@ -56,6 +56,19 @@ export function buildModel(id: BuildingId, level: number, color: number): Built 
     case 'farm': return farm(t, r);
     case 'wall': return { obj: new THREE.Group(), h: 4, w: 4, d: 4 };
   }
+}
+
+/** In a hero's village the headquarters wears that hero's crown on its roof. */
+function crowned(b: Built, t: number): Built {
+  const theme = getTheme();
+  if (theme === 'classic') return b;
+  const top = [0, 5.0, 6.4, 7.3, 10.2, 11.4][t];
+  const size = [0, 0.75, 0.85, 0.95, 1.2, 1.3][t];
+  const c = hqCrown(theme, rng(t * 7 + 3));
+  c.scale.setScalar(size);
+  c.position.set(0, top, 0);
+  b.obj.add(c);
+  return { ...b, h: b.h + 3 * size };
 }
 
 function mainHall(t: number, color: number): Built {

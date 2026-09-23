@@ -8,6 +8,7 @@ import type { BuildingId } from '../src/engine/types';
 import { buildModel, visualTier } from '../src/ui/three/buildings';
 import { LAYOUT, OUTSIDE, WALL_R, buildingScale, sceneryPlan } from '../src/ui/three/scene';
 import { WALK_PATHS } from '../src/ui/three/paths';
+import { setTheme } from '../src/ui/three/kit';
 
 type P = [number, number];
 
@@ -89,6 +90,20 @@ describe('village layout', () => {
         for (const sa of shapes.get(a)!) for (const sb of shapes.get(b)!) {
           if (overlaps(sa, sb)) { clashes.push(`${a} × ${b}`); break; }
         }
+      }
+    }
+    expect([...new Set(clashes)]).toEqual([]);
+  });
+
+  it('hero-themed headquarters still fit', () => {
+    const clashes: string[] = [];
+    for (const theme of ['sorcerer', 'druid', 'goblin'] as const) {
+      setTheme(theme);
+      const mains = tierLevels('main').map((l) => footprint('main', l));
+      setTheme('classic');
+      for (const id of IDS) {
+        if (id === 'main') continue;
+        for (const sm of mains) for (const so of shapes.get(id)!) if (overlaps(sm, so)) clashes.push(`${theme} main × ${id}`);
       }
     }
     expect([...new Set(clashes)]).toEqual([]);

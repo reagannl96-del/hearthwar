@@ -81,12 +81,50 @@ const WINTER: Record<number, number> = {
   [C.dirt]: 0xcfc5b3, [C.dirtDark]: 0xb3a791, [C.rock]: 0xd0d5da, [C.rockDark]: 0x9aa0a6,
 };
 
+/** Each statue hero gives the village its own look. */
+export type Theme = 'classic' | 'sorcerer' | 'druid' | 'goblin';
+let theme: Theme = 'classic';
+export function setTheme(t: Theme) {
+  theme = t;
+}
+export function getTheme(): Theme {
+  return theme;
+}
+
+const THEMES: Record<Theme, Record<number, number>> = {
+  classic: {},
+  // violet slate roofs, pale lavender walls, blue-grey stone, purple banners
+  sorcerer: {
+    [C.tile]: 0x4b2f86, [C.tileDark]: 0x36205f, [C.tileWarm]: 0x5d3b9e, [C.thatch]: 0x3d4f9a, [C.thatchDark]: 0x2d3a73,
+    [C.plaster]: 0xdcd6ee, [C.plasterWarm]: 0xcfc6e6, [C.timber]: 0x2c2340, [C.timberLight]: 0x4a3d66,
+    [C.stone]: 0x9d9bb3, [C.stoneDark]: 0x747290, [C.stoneLight]: 0xc4c2d8, [C.red]: 0x6a3fa0, [C.slate]: 0x3a3163, [C.door]: 0x2a1d40,
+  },
+  // moss and turf roofs, weathered wood, lichen-green stone, leaf-green banners
+  druid: {
+    [C.tile]: 0x5e7d32, [C.tileDark]: 0x445c24, [C.tileWarm]: 0x6f8f3a, [C.thatch]: 0x7c8f3e, [C.thatchDark]: 0x5b6b2c,
+    [C.plaster]: 0xd8cfae, [C.plasterWarm]: 0xcdbf98, [C.timber]: 0x4a3420, [C.timberLight]: 0x6e5134,
+    [C.stone]: 0x8e9a80, [C.stoneDark]: 0x6c775f, [C.stoneLight]: 0xb0b99f, [C.red]: 0x4f7a2e, [C.slate]: 0x4c5a3a,
+  },
+  // rusty patched roofs, grimy walls, soot-dark wood, goblin-green rags
+  goblin: {
+    [C.tile]: 0x7a4a2a, [C.tileDark]: 0x5c3520, [C.tileWarm]: 0x8f5a2e, [C.thatch]: 0x8a7a3a, [C.thatchDark]: 0x665a2a,
+    [C.plaster]: 0xb9a67c, [C.plasterWarm]: 0xa89468, [C.timber]: 0x3e2a18, [C.timberLight]: 0x5e4428,
+    [C.stone]: 0x7d7566, [C.stoneDark]: 0x5c554a, [C.stoneLight]: 0x9c9483, [C.red]: 0x6f9a2a, [C.slate]: 0x4a4036,
+  },
+};
+
+/** The colour a palette entry really takes: snow first in winter, then the village's theme. */
+function look(c: number): number {
+  if (season === 'winter' && WINTER[c] !== undefined) return WINTER[c];
+  return THEMES[theme][c] ?? c;
+}
+
 export function seasonal(c: number): number {
-  return season === 'winter' ? WINTER[c] ?? c : c;
+  return look(c);
 }
 
 export function mat(color: number, opts: { emissive?: number; opacity?: number; double?: boolean } = {}): THREE.MeshLambertMaterial {
-  if (season === 'winter') color = WINTER[color] ?? color;
+  color = look(color);
   const key = `${color}|${opts.emissive ?? 0}|${opts.opacity ?? 1}|${opts.double ? 1 : 0}`;
   let m = cache.get(key);
   if (!m) {
@@ -225,7 +263,7 @@ export function house(o: {
 }
 
 export function darker(c: number, f = 0.75): number {
-  if (season === 'winter' && WINTER[c] !== undefined) c = WINTER[c];
+  c = look(c);
   const col = new THREE.Color(c);
   col.multiplyScalar(f);
   return col.getHex();

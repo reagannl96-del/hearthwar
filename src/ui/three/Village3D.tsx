@@ -3,6 +3,7 @@ import { BUILDINGS } from '../../engine/data/buildings';
 import type { BuildingId, Buildings, Units } from '../../engine/types';
 import { VillageScene } from '../art/VillageScene';
 import { VillageRenderer, webglAvailable } from './VillageRenderer';
+import type { Theme } from './kit';
 
 interface Props {
   buildings: Buildings;
@@ -15,6 +16,8 @@ interface Props {
   night: boolean;
   /** troops at home; a few of them walk around the village */
   units?: Units;
+  /** the village hero's look */
+  theme?: Theme;
   onToggleNight?: () => void;
 }
 
@@ -37,6 +40,7 @@ export function Village3D(p: Props) {
         onHover: (id, x, y) => setTip(id ? { id, x, y } : null),
         season: p.winter ? 'winter' : 'fall',
         night: p.night,
+        theme: p.theme,
       });
       r.current.update(p.buildings, p.building, p.color, p.points);
       r.current.setTroops(p.units ?? {});
@@ -48,7 +52,7 @@ export function Village3D(p: Props) {
       r.current?.dispose();
       r.current = null;
     };
-  }, [p.winter]);
+  }, [p.winter, p.theme]);
 
   useEffect(() => {
     r.current?.update(p.buildings, p.building, p.color, p.points);

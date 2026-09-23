@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import type { BuildingId } from '../../engine/types';
 import { buildModel, visualTier } from './buildings';
-import { disposeTree, getSeason } from './kit';
+import { disposeTree, getSeason, getTheme } from './kit';
 import { buildWall } from './scene';
 
 let renderer: THREE.WebGLRenderer | null = null;
@@ -26,7 +26,7 @@ function getRenderer(): THREE.WebGLRenderer | null {
 }
 
 export function buildingThumb(id: BuildingId, level: number): string | null {
-  const key = `${id}|${visualTier(id, Math.max(1, level))}|${getSeason()}`;
+  const key = `${id}|${visualTier(id, Math.max(1, level))}|${getSeason()}|${getTheme()}`;
   const hit = cache.get(key);
   if (hit) return hit;
   const r = getRenderer();

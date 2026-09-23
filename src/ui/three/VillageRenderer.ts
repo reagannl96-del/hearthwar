@@ -6,9 +6,10 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { BUILDINGS } from '../../engine/data/buildings';
 import type { BuildingId, Buildings, Units } from '../../engine/types';
 import { buildModel, visualTier } from './buildings';
-import { C, bake, disposeTree, mat, rng, setSeason, type Season } from './kit';
+import { C, bake, disposeTree, mat, rng, setSeason, setTheme, type Season, type Theme } from './kit';
 import { isRider, person, plot, scaffold, troop, type TroopModel } from './props';
 import { FOOT_LOOPS, PEOPLE_LOOPS, RIDE_LOOPS } from './paths';
+import { wallGuardPosts } from './scene';
 import { LAYOUT, OUTSIDE, WALL_R, buildScenery, buildTerrain, buildWall, buildingScale, heightAt } from './scene';
 
 export interface VillageRendererOpts {
@@ -18,6 +19,8 @@ export interface VillageRendererOpts {
   labels?: boolean;
   season?: Season;
   night?: boolean;
+  /** the village hero's look */
+  theme?: Theme;
 }
 
 interface Slot {
@@ -70,6 +73,9 @@ export class VillageRenderer {
   private lanterns: THREE.Object3D[] = [];
   private troops: { kind: TroopModel; g: THREE.Group; path: THREE.Vector3[]; t: number; speed: number; len: number }[] = [];
   private troopKey = '';
+  private guards: THREE.Group | null = null;
+  private guardKey = '';
+  private units: Units = {};
 
   constructor(private container: HTMLElement, private opts: VillageRendererOpts = {}) {
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
@@ -89,6 +95,7 @@ export class VillageRenderer {
 
     this.season = opts.season ?? 'fall';
     setSeason(this.season);
+    setTheme(opts.theme ?? 'classic');
     const sky = new THREE.Color(this.season === 'winter' ? 0xdfe7ee : 0xe8cf9f);
     this.scene.background = sky;
     this.scene.fog = new THREE.Fog(sky, 260, 470);
@@ -179,6 +186,7 @@ export class VillageRenderer {
     for (const id of ALL) this.updateSlot(id, b[id], constructing[id] !== undefined);
     this.updatePeople(points);
     this.lastBuildings = { ...b };
+    this.updateGuards();
     this.updateLabels(b, constructing);
   }
 
@@ -402,6 +410,8 @@ export class VillageRenderer {
    * you have, two once you have a proper company of them.
    */
   setTroops(units: Units): void {
+    this.units = units;
+    this.updateGuards();
     const want: TroopModel[] = [];
     for (const k of TROOP_KINDS) {
       const n = units[k] ?? 0;
@@ -428,6 +438,40 @@ export class VillageRenderer {
       this.troops.push({ kind, g, path, t: r() * len, speed: isRider(kind) ? 2.6 + r() * 1.2 : 1.1 + r() * 0.8, len });
       this.scene.add(g);
     });
+  }
+
+  /** Archers and spearmen keeping watch from the wall, once it is big enough to stand on. */
+  private updateGuards(): void {
+    const level = this.lastBuildings?.wall ?? 0;
+    const posts = wallGuardPosts(level);
+    const archers = this.units.archer ?? 0, spears = this.units.spear ?? 0;
+    const wantA = archers > 0 ? Math.min(4, 1 + Math.floor(archers / 150)) : 0;
+    const wantS = spears > 0 ? Math.min(4, 1 + Math.floor(spears / 300)) : 0;
+    // wooden towers only hold archers; stone walkways take both
+    const onTowers = level < 10;
+    const kinds: TroopModel[] = [];
+    for (let i = 0; i < Math.max(wantA, wantS); i++) {
+      if (i < wantA) kinds.push('archer');
+      if (i < wantS && !onTowers) kinds.push('spear');
+    }
+    const n = Math.min(kinds.length, posts.length);
+    const key = `${level >= 10 ? 'stone' : level >= 5 ? 'tower' : 'none'}:${kinds.slice(0, n).join(',')}`;
+    if (key === this.guardKey) return;
+    this.guardKey = key;
+    if (this.guards) { this.scene.remove(this.guards); disposeTree(this.guards); this.guards = null; }
+    if (n === 0) return;
+    const g = new THREE.Group();
+    for (let i = 0; i < n; i++) {
+      const p = posts[i];
+      const t = troop(kinds[i]);
+      t.scale.setScalar(1.3);
+      t.position.set(p.x, p.y, p.z);
+      t.rotation.y = p.face;
+      t.userData.guard = i;
+      g.add(t);
+    }
+    this.guards = g;
+    this.scene.add(g);
   }
 
   // ---------- leaves ----------
@@ -596,6 +640,7 @@ export class VillageRenderer {
       p.g.position.set(pos.x, pos.y + bob, pos.z);
       p.g.rotation.y = Math.atan2(dir.x, dir.z);
     }
+    if (this.guards) for (const gd of this.guards.children) gd.rotation.y += Math.sin(t * 0.6 + (gd.userData.guard as number) * 1.7) * 0.004;
     this.stepLeaves(dt, t);
     // smoke puffs
     for (const s of this.smoke) {

@@ -1,7 +1,7 @@
 // Player-scoped read models. The UI only ever sees these projections, never the raw
 // world, so a multiplayer server can send exactly this data to each client.
 
-import { hasPaladin, nobleInfo, buildQueueSlots } from './actions';
+import { hasPaladin, nobleInfo, buildQueueSlots, villageHero } from './actions';
 import { cancelWindow, playerName, travelTime } from './commands';
 import { commandsOf, commandsTo } from './cmdindex';
 import { UNITS } from './data/units';
@@ -48,6 +48,8 @@ export interface VillageView {
   scavenge: (ScavengeRun | null)[];
   militiaUntil?: number;
   watchtower: number;
+  /** the statue hero this village keeps (home, training or away); it sets the look of the village */
+  hero: UnitId | null;
 }
 
 export interface CommandView {
@@ -150,6 +152,7 @@ function villageView(w: World, pid: number, vid: number): VillageView {
     scavenge: v.scavenge.map((r) => (r ? { ...r, units: { ...r.units }, loot: { ...r.loot } } : null)),
     militiaUntil: v.militiaUntil,
     watchtower: v.buildings.watchtower,
+    hero: villageHero(w, v),
   };
 }
 
