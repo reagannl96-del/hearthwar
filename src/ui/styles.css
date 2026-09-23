@@ -1139,3 +1139,35 @@ input.tiny { width: 56px; padding: 2px 4px; }
 .hero-stats dt { color: var(--ink-2); font-weight: 700; }
 .hero-stats dd { margin: 0; }
 .hero-card .pill { justify-self: start; }
+
+/* map hover card: floats just above the village under the cursor */
+.map-hover {
+  left: 0; top: 0;
+  transform: translate(-50%, calc(-100% - 6px));
+  max-width: 260px;
+  padding: 7px 11px 8px;
+  border-radius: 6px;
+  background: linear-gradient(rgba(52, 34, 17, 0.96), rgba(34, 22, 10, 0.96));
+  border: 1px solid #a07a3e;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  white-space: nowrap;
+  z-index: 3;
+}
+.map-hover::after {
+  content: '';
+  position: absolute;
+  left: 50%; bottom: -6px;
+  width: 10px; height: 10px;
+  transform: translateX(-50%) rotate(45deg);
+  background: #22160a;
+  border-right: 1px solid #a07a3e;
+  border-bottom: 1px solid #a07a3e;
+}
+.mh-name { font-family: var(--font-display); font-size: 1.05rem; color: #fff3d6; line-height: 1.15; }
+.mh-owner { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; color: #e9d4a6; margin-top: 2px; }
+.mh-dot { width: 9px; height: 9px; border-radius: 50%; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 0 6px currentColor; flex: none; }
+.mh-tribe { color: #cdb58a; }
+.mh-tag { margin-left: 4px; padding: 0 6px; border-radius: 8px; background: rgba(255, 255, 255, 0.16); color: #fff; font-size: 0.72rem; font-weight: 700; }
+.mh-meta { display: flex; gap: 10px; align-items: center; font-size: 0.8rem; color: #cdb58a; margin-top: 3px; }
+.mh-meta b { color: #fff3d6; }
+.mh-bonus { color: #9fd36a; font-weight: 700; }

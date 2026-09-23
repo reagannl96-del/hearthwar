@@ -204,17 +204,6 @@ export function MapScreen({ focus }: { focus?: number }) {
             ctx.ellipse(px + z / 2, py + z * 0.6, z * 0.5, z * 0.32, 0, 0, Math.PI * 2);
             ctx.stroke();
           }
-          if (z >= 30) {
-            ctx.font = `600 ${Math.min(12, z * 0.3)}px system-ui, sans-serif`;
-            ctx.textAlign = 'center';
-            const label = z >= 40 && v.ownerId !== null ? `${v.name.slice(0, 16)} · ${fmt(v.points)}` : fmt(v.points);
-            const tw = ctx.measureText(label).width + 6;
-            ctx.fillStyle = col['--map-label-bg'];
-            ctx.fillRect(px + z / 2 - tw / 2, py + z * 0.98, tw, 14);
-            ctx.fillStyle = col['--map-label'];
-            ctx.fillText(label, px + z / 2, py + z * 0.98 + 11);
-            ctx.textAlign = 'start';
-          }
         }
         if (v.id === sel || (v.id === hover && v.ownerId !== me)) {
           ctx.strokeStyle = v.id === sel ? 'rgba(255,255,255,0.95)' : 'rgba(255,245,215,0.7)';
@@ -399,7 +388,7 @@ export function MapScreen({ focus }: { focus?: number }) {
   };
 
   const selected = sel !== null ? byId.get(sel) : undefined;
-  const hovered = hover !== null && hover !== sel ? byId.get(hover) : undefined;
+  const hovered = hover !== null ? byId.get(hover) : undefined;
 
   return (
     <div class="map-layout">
@@ -443,7 +432,16 @@ export function MapScreen({ focus }: { focus?: number }) {
               e.preventDefault();
             }}
           />
-          {hovered && <HoverCard v={hovered} data={data} />}
+          {hovered && canvas.current && (
+            <HoverCard
+              v={hovered}
+              data={data}
+              x={(hovered.x + 0.5 - center[0]) * zoom + canvas.current.clientWidth / 2}
+              y={(hovered.y + 0.1 - center[1]) * zoom + canvas.current.clientHeight / 2}
+              mine={hovered.ownerId === pv.me.id}
+              home={hovered.id === pv.me.homeVid}
+            />
+          )}
           <canvas
             ref={mini}
             class="minimap"
@@ -480,19 +478,23 @@ function glow(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, st
   const [cr, cg, cb] = rgbOf(color);
   const rgba = (a: number, lift = 0) =>
     `rgba(${Math.round(cr + (255 - cr) * lift)}, ${Math.round(cg + (255 - cg) * lift)}, ${Math.round(cb + (255 - cb) * lift)}, ${a})`;
-  const g = ctx.createRadialGradient(x, y, 0, x, y, r);
-  g.addColorStop(0, rgba(strong ? 0.95 : 0.8, 0.45));
-  g.addColorStop(0.45, rgba(strong ? 0.6 : 0.45));
+  const g = ctx.createRadialGradient(x, y, r * 0.2, x, y, r);
+  g.addColorStop(0, rgba(strong ? 0.5 : 0.38, 0.35));
+  g.addColorStop(0.5, rgba(strong ? 0.26 : 0.18));
   g.addColorStop(1, rgba(0));
   ctx.fillStyle = g;
   ctx.beginPath();
   ctx.ellipse(x, y, r, r * 0.72, 0, 0, Math.PI * 2);
   ctx.fill();
-  ctx.strokeStyle = rgba(strong ? 0.95 : 0.75, 0.3);
-  ctx.lineWidth = strong ? 2 : 1.4;
+  ctx.save();
+  ctx.shadowColor = rgba(0.9);
+  ctx.shadowBlur = strong ? 8 : 5;
+  ctx.strokeStyle = rgba(strong ? 1 : 0.85, 0.25);
+  ctx.lineWidth = strong ? 2.2 : 1.6;
   ctx.beginPath();
   ctx.ellipse(x, y, r * 0.62, r * 0.44, 0, 0, Math.PI * 2);
   ctx.stroke();
+  ctx.restore();
 }
 
 function rgbOf(hex: string): [number, number, number] {
@@ -507,13 +509,24 @@ function shade(hex: string, amt: number): string {
   return `rgb(${f(m[1])},${f(m[2])},${f(m[3])})`;
 }
 
-function HoverCard({ v, data }: { v: MapVillage; data: MapData }) {
+function HoverCard({ v, data, x, y, mine, home }: { v: MapVillage; data: MapData; x: number; y: number; mine: boolean; home: boolean }) {
   const owner = v.ownerId !== null ? data.players[v.ownerId] : null;
   const tribe = owner?.tribeId ? data.tribes[owner.tribeId] : null;
+  const m = marks.value;
+  const color = mine ? (home ? '#ffffff' : '#ffc43c') : markFor(m, v.id, v.ownerId, owner?.tribeId) ?? owner?.color ?? '#9c8f7a';
   return (
-    <div class="map-hover" role="tooltip">
-      <b>{v.name}</b> <span class="muted">({coords(v.x, v.y)})</span>
-      <div class="small">{owner ? owner.name : 'Barbarians'}{tribe ? ` [${tribe.tag}]` : ''} · <span class="num">{fmt(v.points)}</span> pts{v.bonus ? ' · bonus' : ''}</div>
+    <div class="map-hover" role="tooltip" style={{ left: `${x}px`, top: `${y}px` }}>
+      <div class="mh-name">{v.name}</div>
+      <div class="mh-owner">
+        <i class="mh-dot" style={{ background: color }} />
+        {owner ? owner.name : 'Barbarians'}{tribe && <span class="mh-tribe"> [{tribe.tag}]</span>}
+        {home && <span class="mh-tag">Home</span>}
+      </div>
+      <div class="mh-meta">
+        <span><Icon name="points" size={12} /> <b class="num">{fmt(v.points)}</b></span>
+        <span class="num">{coords(v.x, v.y)} · {continent(v.x, v.y)}</span>
+        {v.bonus && <span class="mh-bonus">bonus</span>}
+      </div>
     </div>
   );
 }
