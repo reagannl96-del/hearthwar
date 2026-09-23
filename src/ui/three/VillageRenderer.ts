@@ -288,7 +288,7 @@ export class VillageRenderer {
   }
 
   dispose(): void {
-    if (this.barrier) (this.barrier.material as THREE.Material).dispose();
+    this.barrier?.traverse((o) => { if (o instanceof THREE.Mesh) (o.material as THREE.Material).dispose(); });
     this.disposed = true;
     cancelAnimationFrame(this.raf);
     this.ro.disconnect();
@@ -487,8 +487,8 @@ export class VillageRenderer {
     if (on === !!this.barrier) return;
     if (!on) {
       this.scene.remove(this.barrier!);
+      this.barrier!.traverse((o) => { if (o instanceof THREE.Mesh) (o.material as THREE.Material).dispose(); });
       disposeTree(this.barrier!);
-      (this.barrier!.material as THREE.Material).dispose();
       this.barrier = null;
       return;
     }

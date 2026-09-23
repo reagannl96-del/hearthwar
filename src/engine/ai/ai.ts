@@ -410,6 +410,7 @@ function conquestDrive(w: World, p: Player): void {
   const target = w.villages[mem.target];
   if (!target) return;
   const intel = p.intel[target.id];
+  let sent = false;
   for (const home of homes) {
     if (distance(home.x, home.y, target.x, target.y) > 22) continue;
     const n = home.units.noble ?? 0;
@@ -418,7 +419,7 @@ function conquestDrive(w: World, p: Player): void {
       const per = Math.min(Math.floor((home.units.axe ?? 0) / n), 60);
       const waves: Units[] = [];
       for (let i = 0; i < n; i++) waves.push(per > 0 ? { noble: 1, axe: per } : { noble: 1 });
-      if (sendTrain(w, p.id, home.id, target.id, waves).ok) continue;
+      if (sendTrain(w, p.id, home.id, target.id, waves).ok) { sent = true; continue; }
     }
     for (let i = 0; i < n; i++) {
       const escort: Units = { noble: 1 };
@@ -434,8 +435,10 @@ function conquestDrive(w: World, p: Player): void {
       if (wall >= 3 && (home.units.ram ?? 0) > 0) escort.ram = Math.min(home.units.ram!, 5 + wall * 3);
       const r = sendTroops(w, { ownerId: p.id, fromVid: home.id, toVid: target.id, kind: 'attack', units: escort, tag: 'noble' });
       if (!r.ok) break;
+      sent = true;
     }
   }
+  if (!sent) return;
   ai.memory[target.id] = w.now;
   ai.lastConquest = w.now;
 }

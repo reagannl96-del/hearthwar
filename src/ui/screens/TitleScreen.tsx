@@ -5,7 +5,7 @@ import { LocalHost, deleteSave, importSave, listSaves, type SaveMeta } from '../
 import { Icon } from '../art/icons';
 import { Btn } from '../components/common';
 import { fmt } from '../format';
-import { startHost, forgetResume, resumeTarget } from '../store';
+import { startHost, forgetResume, beginResume, resumeTarget } from '../store';
 import { ShowcaseVillage } from '../three/Village3D';
 import { onlineEnabled } from '../../net/supabase';
 import { OnlinePanel } from './OnlinePanel';
@@ -44,7 +44,7 @@ export function TitleScreen() {
   // coming back after a refresh: straight into the realm the player was in
   useEffect(() => {
     const r = resumeTarget();
-    if (r?.kind === 'local') void listSaves().then((all) => { if (all.some((x) => x.id === r.id)) void open(r.id); else forgetResume(); });
+    if (r?.kind === 'local' && beginResume()) void listSaves().then((all) => { if (all.some((x) => x.id === r.id)) void open(r.id); else forgetResume(); });
   }, []);
 
   const open = async (id: string) => {
@@ -54,6 +54,7 @@ export function TitleScreen() {
       const h = await LocalHost.load(id, (done, total) => setLoading({ label: 'The realm moved on while you were away…', p: total > 0 ? done / total : 1 }));
       startHost(h);
     } catch (e) {
+      forgetResume();
       setError((e as Error).message);
       setLoading(null);
     }

@@ -172,7 +172,9 @@ export class Connection {
   private async reconnect() {
     if (this.closed) return;
     try {
-      await this.open();
+      const hello = await this.open();
+      // the realm moved on while we were away (a new round): start over with it
+      if (!hello.joined) { location.reload(); return; }
     } catch {
       setTimeout(() => this.reconnect(), 5000);
     }

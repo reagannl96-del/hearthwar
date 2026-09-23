@@ -156,10 +156,10 @@ export abstract class HostBase {
     return b ? recruitTime(u, v.buildings[b], this.world.config.speed, v.bonus) : 0;
   }
 
-  travelTime(fromVid: number, toVid: number, units: Units): number {
+  travelTime(fromVid: number, toVid: number, units: Units, support = false): number {
     const a = this.world.villages[fromVid], b = this.world.villages[toVid];
     if (!a || !b) return 0;
-    return travelTime(this.world, a, b, units, this.pid);
+    return travelTime(this.world, a, b, units, this.pid, support);
   }
 
   merchantTime(fromVid: number, toVid: number): number {

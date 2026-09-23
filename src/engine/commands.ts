@@ -548,11 +548,17 @@ function resolveAttack(w: World, c: Command, hooks: ArrivalHooks): void {
         home.outPop += n * UNITS.spear.pop;
         risen = { side: 'attacker', n };
       }
-    } else if (result.winner === 'defender' && target.ownerId !== null && stacks.some((st) => (st.units.necromancer ?? 0) > 0)) {
-      const n = Math.min(Math.floor(fallen(result.attLost) * share(defItems.some((i) => i.special === 'raise'))), Math.max(0, popFree(target)));
-      if (n > 0) {
-        target.units.spear = (target.units.spear ?? 0) + n;
-        risen = { side: 'defender', n };
+    } else if (result.winner === 'defender') {
+      const st = stacks.find((x) => (x.units.necromancer ?? 0) > 0 && x.ownerId !== null);
+      const master = st ? (st.home ? target : w.villages[st.fromVid]) : undefined;
+      if (st && master && master.ownerId === st.ownerId) {
+        const lantern = equippedItem(w, st.ownerId, st.units)?.special === 'raise';
+        const n = Math.min(Math.floor(fallen(result.attLost) * share(lantern)), Math.max(0, popFree(master)));
+        if (n > 0) {
+          st.units.spear = (st.units.spear ?? 0) + n;
+          if (!st.home) master.outPop += n * UNITS.spear.pop;
+          risen = { side: 'defender', n };
+        }
       }
     }
   }

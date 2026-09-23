@@ -222,8 +222,10 @@ export const hasPaladin = (w: World, pid: number): boolean => hasHero(w, pid, 'p
 
 /** A player's legendary items for one kind of hero (null until they have trained one). */
 export function gearOf(p: Player, hero: UnitId): HeroGear | null {
+  if (!HEROES.includes(hero)) return null;
   if (hero === 'paladin') return p.paladin;
-  return p.heroGear?.[hero] ?? null;
+  const g = p.heroGear;
+  return g && Object.prototype.hasOwnProperty.call(g, hero) ? g[hero] ?? null : null;
 }
 
 /** The hero this village already has (home, training, marching or stationed elsewhere), if any. */
@@ -387,6 +389,7 @@ function equip(w: World, pid: number, item: string | null, heroKind?: UnitId): A
   const def = item !== null ? ITEM_BY_ID[item] : undefined;
   if (item !== null && !def) return fail('Unknown item.');
   const hero = def ? itemHero(def) : heroKind ?? 'paladin';
+  if (!HEROES.includes(hero)) return fail('Unknown hero.');
   const gear = gearOf(p, hero);
   if (!gear) return fail(`Train a ${UNITS[hero].name.toLowerCase()} first.`);
   if (item !== null && !gear.items.includes(item)) return fail(`Your ${UNITS[hero].name.toLowerCase()} has not found that item yet.`);

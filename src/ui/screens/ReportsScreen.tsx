@@ -93,7 +93,7 @@ function ReportView({ r }: { r: Report }) {
         )}
         {r.battle && <Battle b={r.battle} kind={r.kind} />}
       </article>
-      {view.value!.me.tribeId != null && <ShareReport r={r} />}
+      {view.value!.me.tribeId != null && <ShareReport key={r.id} r={r} />}
     </div>
   );
 }
@@ -237,7 +237,10 @@ function LuckMeter({ luck }: { luck: number }) {
 
 function Battle({ b, kind, shared }: { b: BattleData; kind: Report['kind']; shared?: boolean }) {
   const pv = view.value!;
-  const mine = b.attacker.playerId === pv.me.id && !shared;
+  const myTribe = pv.me.tribeId;
+  const friendly = (pid: number | null) => pid === pv.me.id || (shared && myTribe != null && pid != null && host.value!.world.players[pid]?.tribeId === myTribe);
+  // the report reads from our side: our own attack, or (in the forum) a tribe mate's
+  const mine = shared ? !!friendly(b.attacker.playerId) || !friendly(b.defender.playerId) : b.attacker.playerId === pv.me.id;
   const cols = columns(b);
   const attWon = b.winner === 'attacker';
   const good = attWon === mine;
@@ -278,7 +281,7 @@ function Battle({ b, kind, shared }: { b: BattleData; kind: Report['kind']; shar
             { label: 'Losses', units: b.defLost, tone: 'loss' },
           ]}
         />
-        {!b.defUnits && <p class="muted small rep-note">None of your troops survived to see the defenders.</p>}
+        {!b.defUnits && <p class="muted small rep-note">None of the attacking troops survived to see the defenders.</p>}
       </div>
 
       {b.scout && (
@@ -361,7 +364,7 @@ function Battle({ b, kind, shared }: { b: BattleData; kind: Report['kind']; shar
         </div>
       )}
 
-      {kind === 'attack' && mine && (
+      {kind === 'attack' && mine && !shared && (
         <div class="row gap rep-actions">
           <Btn onClick={() => { rallyTarget.value = { x: b.defender.x, y: b.defender.y, kind: 'attack', units: b.attUnits as Record<string, number> }; go({ name: 'building', id: 'rally', tab: 'send' }); }}><Icon name="attack" size={16} /> Attack again with the same troops</Btn>
           <Btn variant="ghost" onClick={() => go({ name: 'map', focus: b.defender.vid })}><Icon name="map" size={16} /> Show on map</Btn>

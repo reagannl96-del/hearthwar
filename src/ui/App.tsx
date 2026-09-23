@@ -17,7 +17,7 @@ import { TitleScreen } from './screens/TitleScreen';
 import { VillageScreen } from './screens/VillageScreen';
 import { GameOver } from './screens/GameOver';
 import {
-  applyTheme, dismissToast, go, host, liveRes, now, online, paused, route, setPaused, setWarp, toasts, view, vid, village, warp,
+  applyTheme, dismissToast, go, host, liveRes, now, online, paused, resumeSucceeded, route, setPaused, setWarp, toasts, view, vid, village, warp,
   type Route,
 } from './store';
 
@@ -26,11 +26,15 @@ export function App() {
     applyTheme();
   }, []);
   if (!host.value || !view.value) return <TitleScreen />;
+  // every village lost: only the end screen (the header and pages need a village)
+  if (view.value.villages.length === 0 || !village.value) return <div class="shell"><GameOver /></div>;
   return <Game />;
 }
 
 function Game() {
   const v = view.value!;
+  // the realm opened and drew: a refresh may bring the player straight back to it
+  useEffect(() => { resumeSucceeded(); }, []);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
@@ -232,8 +236,10 @@ function Nav() {
   const sorted = [...items].sort((a, b) => rank(a.key) - rank(b.key));
   const drop = (target: string) => {
     if (!dragging || dragging === target) return;
-    const keys = sorted.map((x) => x.key).filter((k) => k !== dragging);
-    keys.splice(keys.indexOf(target), 0, dragging);
+    const all = sorted.map((x) => x.key);
+    const rightward = all.indexOf(dragging) < all.indexOf(target);
+    const keys = all.filter((k) => k !== dragging);
+    keys.splice(keys.indexOf(target) + (rightward ? 1 : 0), 0, dragging);
     setOrder(keys);
     saveNavOrder(keys);
   };
@@ -246,6 +252,7 @@ function Nav() {
     <nav class={`nav ${dragging ? 'is-sorting' : ''}`} aria-label="Main">
       {sorted.map((it) => (
         <button
+          key={it.key}
           type="button"
           draggable
           onDragStart={(e) => { setDragging(it.key); e.dataTransfer?.setData('text/plain', it.key); if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'; }}

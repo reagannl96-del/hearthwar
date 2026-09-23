@@ -117,11 +117,12 @@ async function maybeStartNextRound(): Promise<void> {
     clockBase = Date.now() - world.now;
     invalidateSpatial();
     pubCache = null;
-    await saveWorld();
+    // nobody may act on the new realm with an old player id: clear them before anything else can run
     for (const c of clients) {
       c.pid = null;
       send(c, { t: 'reset' });
     }
+    await saveWorld(true);
     console.log(`A new round has begun: "${world.name}".`);
   } finally {
     resetting = false;
@@ -139,8 +140,8 @@ async function saveArchive(w: World): Promise<void> {
 }
 
 let saving = false;
-async function saveWorld(): Promise<void> {
-  if (saving) return;
+async function saveWorld(force = false): Promise<void> {
+  if (saving && !force) return;
   saving = true;
   try {
     await writeStored(world);
@@ -213,6 +214,7 @@ function handle(c: Client, m: ClientMsg) {
   if (!c.userId) return send(c, { t: 'error', message: 'Sign in first.' });
   if (m.t === 'join') {
     if (c.pid !== null) return;
+    if (world.finished) return send(c, { t: 'error', message: 'This round is over. A new realm opens soon.' });
     const p = spawnPlayer(world, String(m.name ?? ''), String(m.village ?? ''));
     if (!p) return send(c, { t: 'error', message: 'The realm is full.' });
     world.accounts![c.userId] = p.id;
@@ -243,7 +245,7 @@ function handle(c: Client, m: ClientMsg) {
   }
   if (m.t === 'respawn') {
     const p = world.players[c.pid];
-    if (!p?.eliminated) return;
+    if (!p?.eliminated || world.finished) return;
     respawnHuman(world, String(m.village ?? 'New Hope'), c.pid);
     sendPublic(c);
     sendPrivate(c);

@@ -1,5 +1,6 @@
 // World creation: terrain, player & barbarian placement, AI personalities, tribes.
 
+import { HEROES } from './data/units';
 import { PLAYER_COLORS, rulerName, tribeName, villageName } from './data/names';
 import { pushEvent } from './events';
 import { HOUR, res, villagePoints } from './formulas';
@@ -125,7 +126,21 @@ export const protectionEnd = (w: World) => w.now + PROTECTION_MS;
  */
 export function migrateWorld(w: World): void {
   if (!w.round) growRealm(w);
+  // rounds belong to the shared online realm; a world of your own never ends
+  if (w.accounts === undefined && w.config.roundDays === undefined && w.endsAt !== undefined && !w.finished) {
+    w.endsAt = undefined;
+    w.events = w.events.filter((e) => e.type !== 'end');
+  }
   scheduleRoundEnd(w);
+  // heroes trained before each hero kind had its own legendary items get an armory now
+  for (const id in w.players) {
+    const p = w.players[id];
+    for (const vid of p.villages) {
+      const v = w.villages[vid];
+      const h = v ? villageHero(w, v) ?? v.heroKind : undefined;
+      if (h && h !== 'paladin' && HEROES.includes(h)) (p.heroGear ??= {})[h] ??= { items: [], equipped: null };
+    }
+  }
   const cap = protectionEnd(w);
   normalizeTribes(w);
   for (const id in w.villages) {
@@ -435,6 +450,7 @@ function settle(w: World, p: Player, villageNameText: string, strict = false): V
  * for rulers and every half hour for barbarians on a normal-speed world.
  */
 export function realmGrowth(w: World): void {
+  if (w.finished) return;
   const tick = barbInterval(w);
   const size = w.config.size;
   const rulers = Object.values(w.players).filter((p) => p.kind === 'ai' && !p.eliminated).length;
@@ -608,6 +624,7 @@ export function restartPlayer(w: World, pid: number, villageNameText: string): V
   p.points = 0;
   p.coins = 0;
   p.paladin = null;
+  p.heroGear = undefined;
   p.questsClaimed = [];
   p.intel = {};
   p.history = [];

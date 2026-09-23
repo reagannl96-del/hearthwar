@@ -18,7 +18,7 @@ import type {
   ResearchJob, ScavengeRun, UnitId, Units, World, WorldConfig, Diplomacy, ForumThread, TribeAlert, TribeRight, RoundResult, HeroGear } from './types';
 import { farmMax, popUsed, productionRates, updateVillage } from './village';
 
-export interface SupportView { fromVid: number; fromName: string; ownerId: number; ownerName: string; units: Units }
+export interface SupportView { fromVid: number; fromName: string; ownerId: number; ownerName: string; units: Units; theme: VillageTheme }
 export interface StationedView { hostVid: number; hostName: string; hostX: number; hostY: number; hostOwner: string; units: Units }
 
 export interface VillageView {
@@ -71,6 +71,8 @@ export interface CommandView {
   ownerName: string;
   depart: number;
   arrive: number;
+  /** the look of the army: the sending village's */
+  theme: VillageTheme;
   units?: Units;
   res?: Res;
   repeat?: boolean;
@@ -154,7 +156,7 @@ function villageView(w: World, pid: number, vid: number): VillageView {
     units: { ...v.units },
     support: v.support.map((s) => ({
       fromVid: s.fromVid, fromName: w.villages[s.fromVid]?.name ?? '?', ownerId: s.ownerId,
-      ownerName: playerName(w, s.ownerId), units: { ...s.units },
+      ownerName: playerName(w, s.ownerId), units: { ...s.units }, theme: themeOfHero(w.villages[s.fromVid]?.heroKind),
     })),
     stationed,
     merchants: merchantCount(v.buildings.market, v.bonus),
@@ -206,7 +208,7 @@ export function buildView(w: World, pid: number): PlayerView {
     const base = {
       id: c.id, kind: c.kind, fromVid: from.id, fromName: from.name, fromX: from.x, fromY: from.y,
       toVid: to.id, toName: to.name, toX: to.x, toY: to.y, ownerId: c.ownerId, ownerName: playerName(w, c.ownerId),
-      depart: c.depart, arrive: c.arrive, origin: c.origin, losses: c.losses,
+      depart: c.depart, arrive: c.arrive, origin: c.origin, losses: c.losses, theme: themeOfHero(from.heroKind),
       originName: c.origin !== undefined ? w.villages[c.origin]?.name : undefined,
     };
     if (c.ownerId === pid) {
@@ -329,6 +331,8 @@ export interface VillageInfo {
   travel?: Partial<Record<UnitId, number>>;
   own: boolean;
   loyalty?: number;
+  /** the village's look, for its troops */
+  theme: VillageTheme;
 }
 
 export function villageInfo(w: World, pid: number, vid: number, fromVid?: number): VillageInfo | null {
@@ -340,6 +344,7 @@ export function villageInfo(w: World, pid: number, vid: number, fromVid?: number
     id: v.id, name: v.name, x: v.x, y: v.y, points: v.points, ownerId: v.ownerId, ownerName: playerName(w, v.ownerId),
     tribe: owner?.tribeId ? w.tribes[owner.tribeId]?.tag : undefined, bonus: v.bonus, intel: p.intel[v.id],
     note: p.notes[v.id], protected: !!owner && owner.protectedUntil > w.now, own: v.ownerId === pid,
+    theme: themeOfHero(v.heroKind),
   };
   if (v.ownerId === pid) info.loyalty = v.loyalty;
   const from = fromVid !== undefined ? w.villages[fromVid] : undefined;

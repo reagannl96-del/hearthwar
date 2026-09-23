@@ -1,3 +1,4 @@
+import type { VillageTheme } from '../../engine/data/themes';
 import type { ComponentChildren } from 'preact';
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { BUILDINGS, BUILDING_ORDER } from '../../engine/data/buildings';
@@ -82,11 +83,12 @@ function SendTroops({ v }: { v: VillageView }) {
   }
   const any = hasUnits(chosen);
   const dur = tid !== undefined && any ? h.travelTime(v.id, tid, chosen) : 0;
+  const supportDur = tid !== undefined && any ? h.travelTime(v.id, tid, chosen, true) : 0;
   const send = (kind: 'attack' | 'support') => {
     if (tid === undefined) return;
     const ok = act(
       { type: 'send', vid: v.id, target: tid, kind, units: chosen, catTarget: cat || undefined },
-      `${kind === 'attack' ? 'Attack' : 'Support'} sent to ${info?.name}. Arrives in ${fmtDur(dur / warp.value)}.`,
+      `${kind === 'attack' ? 'Attack' : 'Support'} sent to ${info?.name}. Arrives in ${fmtDur((kind === 'support' ? supportDur : dur) / warp.value)}.`,
     );
     if (ok) setUnits({});
   };
@@ -258,7 +260,7 @@ function NobleTrain({ v }: { v: VillageView }) {
             <div>
               <b>{info.name}</b> <span class="muted">({coords(info.x, info.y)})</span>
               <div class="muted small">{info.ownerName} · <span class="num">{fmt(info.points)}</span> points</div>
-              {info.intel?.units && <div class="small">Last seen: <UnitList units={info.intel.units} empty="no troops" /></div>}
+              {info.intel?.units && <div class="small">Last seen: <UnitList units={info.intel.units} empty="no troops" theme={info.theme} /></div>}
             </div>
           </div>
         )}
@@ -342,7 +344,7 @@ function TroopsTab({ v }: { v: VillageView }) {
         {v.support.length === 0 ? <Empty>No foreign troops are stationed here.</Empty> : (
           <ul class="support-list">
             {v.support.map((s) => (
-              <SupportRow host={v.id} from={s.fromVid} units={s.units} allLabel="Send all home" done="Support sent home.">
+              <SupportRow key={s.fromVid} host={v.id} from={s.fromVid} units={s.units} theme={s.theme} allLabel="Send all home" done="Support sent home.">
                 <span>{s.ownerName} · from {s.fromName}</span>
               </SupportRow>
             ))}
@@ -353,7 +355,7 @@ function TroopsTab({ v }: { v: VillageView }) {
         {v.stationed.length === 0 ? <Empty>None of this village's troops are stationed elsewhere.</Empty> : (
           <ul class="support-list">
             {v.stationed.map((s) => (
-              <SupportRow host={s.hostVid} from={v.id} units={s.units} allLabel="Withdraw all" done="Troops are marching home.">
+              <SupportRow key={s.hostVid} host={s.hostVid} from={v.id} units={s.units} allLabel="Withdraw all" done="Troops are marching home.">
                 <span>In <VillageLink vid={s.hostVid} name={s.hostName} x={s.hostX} y={s.hostY} /> <span class="muted">({s.hostOwner})</span></span>
               </SupportRow>
             ))}
@@ -368,7 +370,7 @@ function TroopsTab({ v }: { v: VillageView }) {
  * A stack of support troops: send the whole stack home at once, or pick just
  * some of them (the rest stay where they are).
  */
-function SupportRow({ host, from, units, allLabel, done, children }: { host: number; from: number; units: Units; allLabel: string; done: string; children: ComponentChildren }) {
+function SupportRow({ host, from, units, theme, allLabel, done, children }: { host: number; from: number; units: Units; theme?: VillageTheme; allLabel: string; done: string; children: ComponentChildren }) {
   const [picking, setPicking] = useState(false);
   const [pick, setPick] = useState<Units>({});
   const kinds = ARMY_ORDER.filter((u) => (units[u] ?? 0) > 0);
@@ -378,7 +380,7 @@ function SupportRow({ host, from, units, allLabel, done, children }: { host: num
   return (
     <li class={`support-row ${picking ? 'is-picking' : ''}`}>
       {children}
-      <UnitList units={units} />
+      <UnitList units={units} theme={theme} />
       <span class="row gap">
         <Btn small variant="ghost" onClick={() => act({ type: 'withdraw', host, from }, done)}>{allLabel}</Btn>
         <Btn small variant="quiet" onClick={() => { setPicking(!picking); setPick({}); }}>{picking ? 'Cancel' : 'Choose troops'}</Btn>
@@ -386,9 +388,9 @@ function SupportRow({ host, from, units, allLabel, done, children }: { host: num
       {picking && (
         <div class="support-pick">
           {kinds.map((u) => (
-            <label class="send-row" title={unitName(u)}>
-              <UnitIcon u={u} size={20} />
-              <span class="send-name">{unitName(u)}</span>
+            <label class="send-row" title={unitName(u, false, theme)}>
+              <UnitIcon u={u} size={20} theme={theme} />
+              <span class="send-name">{unitName(u, false, theme)}</span>
               <NumInput value={pick[u] ?? ''} max={units[u] ?? 0} onInput={(n) => setPick({ ...pick, [u]: n === '' ? 0 : n })} />
             </label>
           ))}
@@ -425,9 +427,9 @@ export function CommandRow({ c, compact }: { c: CommandView; compact?: boolean }
         <div>{text}{c.repeat && <span class="pill" title="Repeats automatically while the raids come back clean">repeat</span>}</div>
         {!compact && (
           <div class="muted small">
-            {c.units && <UnitList units={c.units} />}
+            {c.units && <UnitList units={c.units} theme={c.theme} />}
             {c.res && <> · carrying <span class="num">{fmt(c.res.wood + c.res.clay + c.res.iron)}</span></>}
-            {incoming && c.kind === 'attack' && (c.detected ? <> · lookouts report <b>{unitName(c.detected, true)}</b></> : <> · troops unknown</>)}
+            {incoming && c.kind === 'attack' && (c.detected ? <> · lookouts report <b>{unitName(c.detected, true, c.theme)}</b></> : <> · troops unknown</>)}
           </div>
         )}
       </div>

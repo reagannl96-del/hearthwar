@@ -117,7 +117,7 @@ export function VillageScreen() {
               {v.support.map((s) => (
                 <div class="support-row">
                   <span class="muted small">{s.ownerName} · {s.fromName}</span>
-                  <UnitList units={s.units} />
+                  <UnitList units={s.units} theme={s.theme} />
                 </div>
               ))}
             </div>

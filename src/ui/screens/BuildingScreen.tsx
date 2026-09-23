@@ -194,7 +194,7 @@ function RecruitQueue({ v, b }: { v: VillageView; b: RecruitBuilding }) {
           const end = j.start + j.count * j.per;
           return (
             <li class="queue-item">
-              <Icon name={j.unit} size={18} />
+              <UnitIcon u={j.unit} size={18} />
               <span class="grow">
                 {fmt(j.count - j.done)} {unitName(j.unit, true)}
                 {i === 0 && <Progress from={j.start + j.done * j.per} to={j.start + (j.done + 1) * j.per} />}
@@ -293,7 +293,7 @@ function SmithyPanel({ v }: { v: VillageView }) {
           <ul class="queue">
             {v.research.map((j, i) => (
               <li class="queue-item">
-                <Icon name={j.unit} size={18} />
+                <UnitIcon u={j.unit} size={18} />
                 <span class="grow">
                   {unitName(j.unit)} {j.level === 1 ? '(unlock)' : `→ level ${j.level}`}
                   {i === 0 && <Progress from={j.start} to={j.end} />}

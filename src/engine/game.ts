@@ -26,7 +26,7 @@ const hooks: ArrivalHooks = {
     aiOnBattle(w, c, target, data);
   },
   onReturn(w, c) {
-    if (!c.repeat || c.origin === undefined) return;
+    if (!c.repeat || c.origin === undefined || w.finished) return;
     const target = w.villages[c.origin];
     const owner = w.players[c.ownerId];
     if (!target || !owner) return;

@@ -57,6 +57,8 @@ export function standings(w: World): Standings {
 /** Give a world its end date (new worlds, and older ones the first time they load). */
 export function scheduleRoundEnd(w: World): void {
   if (w.endsAt !== undefined) return;
+  // only the shared online realm plays in rounds
+  if (w.accounts === undefined && w.config.roundDays === undefined) return;
   w.endsAt = w.now + roundDays(w) * DAY;
   pushEvent(w, 'end', w.endsAt, 0);
 }

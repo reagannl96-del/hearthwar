@@ -142,7 +142,7 @@ describe('the necromancer', () => {
 describe('a round of the realm', () => {
   it('runs two weeks, ranks tribes by their share of ruled villages, then freezes on the final standings', async () => {
     const { standings, DOMINATION } = await import('../src/engine/round');
-    const w = createWorld({ worldName: 'T', playerName: 'P', villageName: 'H', seed: 41, config: { ...defaultConfig(), difficulty: 'peaceful', aiCount: 10, size: 90 } });
+    const w = createWorld({ worldName: 'T', playerName: 'P', villageName: 'H', seed: 41, config: { ...defaultConfig(), difficulty: 'peaceful', aiCount: 10, size: 90, roundDays: 14 } });
     expect(w.endsAt).toBe(14 * 86_400_000);
     const s = standings(w);
     const ruled = Object.values(w.villages).filter((v) => v.ownerId !== null).length;
@@ -170,6 +170,7 @@ describe('a round of the realm', () => {
   it('older worlds get an end date the first time they load', () => {
     const w = createWorld({ worldName: 'T', playerName: 'P', villageName: 'H', seed: 42, config: { ...defaultConfig(), aiCount: 2, size: 60 } });
     w.endsAt = undefined;
+    w.accounts = {}; // an online realm
     w.now = 5 * 86_400_000;
     migrateWorld(w);
     expect(w.endsAt).toBe(19 * 86_400_000);
@@ -222,5 +223,29 @@ describe('heroes, rebalanced', () => {
     expect(gear!.equipped).toBe(other);
     // nobody can wear another hero's items
     expect(applyAction(w, p.id, { type: 'equip', item: 'wardstaff' }).ok).toBe(false);
+  });
+});
+
+describe('review fixes', () => {
+  it('rejects equipping for a made-up hero, and never touches inherited object keys', () => {
+    const w = createWorld({ worldName: 'T', playerName: 'P', villageName: 'H', seed: 61, config: { ...defaultConfig(), aiCount: 2, size: 60 } });
+    const p = w.players[w.humanId];
+    p.heroGear = { goblin: { items: [], equipped: null } };
+    for (const hero of ['__proto__', 'constructor', 'xyz', 'spear']) {
+      expect(applyAction(w, p.id, { type: 'equip', item: null, hero } as never).ok).toBe(false);
+    }
+    expect(({} as Record<string, unknown>).equipped).toBeUndefined();
+  });
+
+  it('gives heroes trained before per-hero items an armory, and keeps rounds out of worlds of your own', () => {
+    const w = createWorld({ worldName: 'T', playerName: 'P', villageName: 'H', seed: 62, config: { ...defaultConfig(), aiCount: 2, size: 60 } });
+    expect(w.endsAt).toBeUndefined();
+    const p = w.players[w.humanId];
+    const v = w.villages[p.villages[0]];
+    v.units.sorcerer = 1;
+    v.heroKind = 'sorcerer';
+    migrateWorld(w);
+    expect(p.heroGear?.sorcerer).toEqual({ items: [], equipped: null });
+    expect(w.endsAt).toBeUndefined();
   });
 });

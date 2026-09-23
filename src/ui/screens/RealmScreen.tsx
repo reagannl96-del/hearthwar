@@ -68,27 +68,27 @@ export function RealmScreen() {
 
       <Section title="Race for the realm">
         {rows.length === 0 && r.tribeless.villages === 0 ? <Empty>No one rules any villages yet.</Empty> : (
-          <div class="realm-bars" role="table" aria-label="Share of ruled villages by tribe">
+          <div class="realm-bars" aria-label="Share of ruled villages by tribe">
             {rows.map((t, i) => (
-              <button type="button" role="row" class={`realm-row ${t.id === r.myTribeId ? 'is-mine' : ''}`} onClick={() => go({ name: 'tribe', id: t.id })} title={`${t.name}: ${t.villages} villages, ${t.members} members, ${fmt(t.points)} points`}>
-                <span role="cell" class="realm-rank num">{i + 1}</span>
-                <span role="cell" class="realm-name"><i class="sw" style={{ background: t.color }} /> <b>[{t.tag}]</b> {t.name}</span>
-                <span role="cell" class="realm-track">
+              <button type="button" class={`realm-row ${t.id === r.myTribeId ? 'is-mine' : ''}`} onClick={() => go({ name: 'tribe', id: t.id })} title={`${t.name}: ${t.villages} villages, ${t.members} members, ${fmt(t.points)} points`}>
+                <span class="realm-rank num">{i + 1}</span>
+                <span class="realm-name"><i class="sw" style={{ background: t.color }} /> <b>[{t.tag}]</b> {t.name}</span>
+                <span class="realm-track">
                   <span class="realm-fill" style={{ width: `${(t.share / scale) * 100}%`, background: t.color }} />
                   <span class="realm-goal" style={{ left: `${(r.threshold / scale) * 100}%` }} />
                 </span>
-                <span role="cell" class="realm-val num">{pct(t.share)} <span class="muted">· {fmt(t.villages)}</span></span>
+                <span class="realm-val num">{pct(t.share)} <span class="muted">· {fmt(t.villages)}</span></span>
               </button>
             ))}
             {r.tribeless.villages > 0 && (
-              <div role="row" class="realm-row is-tribeless">
-                <span role="cell" class="realm-rank" />
-                <span role="cell" class="realm-name muted">Rulers without a tribe ({r.tribeless.rulers})</span>
-                <span role="cell" class="realm-track">
+              <div class="realm-row is-tribeless">
+                <span class="realm-rank" />
+                <span class="realm-name muted">Rulers without a tribe ({r.tribeless.rulers})</span>
+                <span class="realm-track">
                   <span class="realm-fill" style={{ width: `${(r.tribeless.share / scale) * 100}%` }} />
                   <span class="realm-goal" style={{ left: `${(r.threshold / scale) * 100}%` }} />
                 </span>
-                <span role="cell" class="realm-val num">{pct(r.tribeless.share)} <span class="muted">· {fmt(r.tribeless.villages)}</span></span>
+                <span class="realm-val num">{pct(r.tribeless.share)} <span class="muted">· {fmt(r.tribeless.villages)}</span></span>
               </div>
             )}
             <div class="realm-legend small muted"><span class="realm-goal-key" /> {pct(r.threshold)}: domination</div>
@@ -109,7 +109,7 @@ export function RealmScreen() {
               {r.rulers.map((p, i) => (
                 <tr class={`clickable ${p.id === r.meId ? 'is-me' : ''}`} onClick={() => go({ name: 'ranking', player: p.id })}>
                   <td class="num">{i + 1}</td>
-                  <td>{p.name}{p.tag && <span class="muted"> [{p.tag}]</span>}</td>
+                  <td><button type="button" class="link" onClick={(e) => { e.stopPropagation(); go({ name: 'ranking', player: p.id }); }}>{p.name}</button>{p.tag && <span class="muted"> [{p.tag}]</span>}</td>
                   <td class="right num">{fmt(p.villages)}</td>
                   <td class="right num">{fmt(p.points)}</td>
                 </tr>

@@ -107,15 +107,16 @@ export function go(r: Route) {
   route.value = r;
   if (typeof window !== 'undefined') {
     // each screen is a step in the browser's history, so Back and Forward move around the game
-    if (!same) try { history.pushState({ hw: r }, ''); } catch { /* history unavailable */ }
+    if (!same) try { history.pushState({ hw: r, world: host.value?.world.id }, ''); } catch { /* history unavailable */ }
     window.scrollTo({ top: 0 });
   }
 }
 
 if (typeof window !== 'undefined') {
   window.addEventListener('popstate', (e) => {
-    const r = (e.state as { hw?: Route } | null)?.hw;
-    if (host.value && r) route.value = r;
+    const st = e.state as { hw?: Route; world?: string } | null;
+    // only steps taken in the realm that is open now
+    if (host.value && st?.hw && st.world === host.value.world.id) route.value = st.hw;
   });
 }
 
@@ -133,6 +134,30 @@ export function resumeTarget(): { kind: 'online' } | { kind: 'local'; id: string
 }
 export function forgetResume(): void {
   lsSet(RESUME_KEY, '');
+}
+
+/**
+ * Guard against a resume that keeps failing (say the realm crashes as it opens):
+ * each attempt is marked for this tab, and if the page comes back while the mark is
+ * still there, the last attempt never made it, so the title screen is shown instead.
+ */
+const TRY_KEY = 'hw-resume-try';
+let resumeTried = false;
+export function beginResume(): boolean {
+  if (resumeTried) return false;
+  resumeTried = true;
+  try {
+    if (sessionStorage.getItem(TRY_KEY)) {
+      sessionStorage.removeItem(TRY_KEY);
+      forgetResume();
+      return false;
+    }
+    sessionStorage.setItem(TRY_KEY, '1');
+  } catch { /* storage unavailable: resume anyway */ }
+  return true;
+}
+export function resumeSucceeded(): void {
+  try { sessionStorage.removeItem(TRY_KEY); } catch { /* ignore */ }
 }
 
 export function act(a: Action, success?: string): boolean {
@@ -244,7 +269,7 @@ export function startHost(h: HostBase) {
   stopHost();
   host.value = h;
   lsSet(RESUME_KEY, h.multiplayer ? 'online' : `local:${h.world.id}`);
-  try { history.replaceState({ hw: { name: 'village' } }, ''); } catch { /* history unavailable */ }
+  try { history.replaceState({ hw: { name: 'village' }, world: h.world.id }, ''); } catch { /* history unavailable */ }
   if (import.meta.env.DEV) (window as unknown as { __hw: HostBase }).__hw = h;
   if (h.multiplayer) {
     const r = h as HostBase & { onServerError: ((m: string) => void) | null; onConnection: ((up: boolean) => void) | null };

@@ -54,6 +54,8 @@ export function MapScreen({ focus }: { focus?: number }) {
   const mini = useRef<HTMLCanvasElement>(null);
   const wrap = useRef<HTMLDivElement>(null);
   const drag = useRef<{ x: number; y: number; cx: number; cy: number; moved: boolean } | null>(null);
+  const touches = useRef(new Map<number, { x: number; y: number }>());
+  const pinch = useRef<{ dist: number; zoom: number } | null>(null);
   const colors = useRef<Record<string, string>>({});
   useWorldMarks(pv.worldName);
   const mk = marks.value;
@@ -413,11 +415,27 @@ export function MapScreen({ focus }: { focus?: number }) {
     try { localStorage.setItem('hw-map-zoom', String(nz)); } catch { /* ignore */ }
   };
 
+  // fingers on the map: one drags it around, two pinch to zoom around the point between them
   const onPointerDown = (e: PointerEvent) => {
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (touches.current.size === 2) {
+      const [a, b] = [...touches.current.values()];
+      pinch.current = { dist: Math.hypot(a.x - b.x, a.y - b.y) || 1, zoom };
+      drag.current = null;
+      return;
+    }
     drag.current = { x: e.clientX, y: e.clientY, cx: center[0], cy: center[1], moved: false };
   };
   const onPointerMove = (e: PointerEvent) => {
+    if (touches.current.has(e.pointerId)) touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const p = pinch.current;
+    if (p && touches.current.size >= 2) {
+      const [a, b] = [...touches.current.values()];
+      const dist = Math.hypot(a.x - b.x, a.y - b.y);
+      setZoomAround(p.zoom * (dist / p.dist), (a.x + b.x) / 2, (a.y + b.y) / 2);
+      return;
+    }
     const d = drag.current;
     if (d) {
       const dx = e.clientX - d.x, dy = e.clientY - d.y;
@@ -430,12 +448,21 @@ export function MapScreen({ focus }: { focus?: number }) {
     setHover(v ? v.id : null);
   };
   const onPointerUp = (e: PointerEvent) => {
+    touches.current.delete(e.pointerId);
+    if (pinch.current) {
+      // lifting one finger of a pinch ends it; the other finger does not start a drag
+      if (touches.current.size < 2) pinch.current = null;
+      drag.current = null;
+      return;
+    }
     const d = drag.current;
     drag.current = null;
     if (d && !d.moved) {
       const [x, y] = toField(e);
       const v = grid.get(y * data.size + x);
       setSel(v ? v.id : null);
+      // phones have no hover: show the village's card where it was tapped
+      if (e.pointerType !== 'mouse') setHover(v ? v.id : null);
     }
   };
 
@@ -466,11 +493,12 @@ export function MapScreen({ focus }: { focus?: number }) {
             ref={canvas}
             class="map-canvas"
             tabIndex={0}
-            aria-label="World map. Drag to move, scroll to zoom, click a village for details."
+            aria-label="World map. Drag to move, scroll or pinch to zoom, click or tap a village for details."
             onPointerDown={onPointerDown as unknown as (e: Event) => void}
             onPointerMove={onPointerMove as unknown as (e: Event) => void}
             onPointerUp={onPointerUp as unknown as (e: Event) => void}
-            onPointerLeave={() => setHover(null)}
+            onPointerLeave={(e: PointerEvent) => { if (e.pointerType === 'mouse') setHover(null); }}
+            onPointerCancel={(e: PointerEvent) => { touches.current.delete(e.pointerId); pinch.current = null; drag.current = null; }}
             onWheel={(e: WheelEvent) => { e.preventDefault(); setZoomAround(zoom * (e.deltaY < 0 ? 1.15 : 1 / 1.15), e.clientX, e.clientY); }}
             onKeyDown={(e: KeyboardEvent) => {
               const step = 20 / zoom * 3;
