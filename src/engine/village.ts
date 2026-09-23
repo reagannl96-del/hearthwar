@@ -58,7 +58,8 @@ export function aiEconomyBonus(w: World, v: Village): number {
   const p = w.players[v.ownerId];
   if (!p || p.kind !== 'ai') return 1;
   const d = w.config.difficulty;
-  return d === 'hard' ? 1.5 : d === 'normal' ? 1.2 : 1;
+  // rulers play on a human's footing: no bonus on normal, a small edge on hard
+  return d === 'hard' ? 1.15 : d === 'easy' ? 0.9 : 1;
 }
 
 export function productionRates(w: World, v: Village, t = w.now): Res {

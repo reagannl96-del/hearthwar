@@ -39,6 +39,8 @@ export interface WorldConfig {
   luck: number;
   /** Beginner protection in game-hours at speed 1 (scaled by speed). */
   protectionHours: number;
+  /** testing: AI rulers never sleep or take breaks */
+  aiAlwaysAwake?: boolean;
 }
 
 export interface BuildJob {

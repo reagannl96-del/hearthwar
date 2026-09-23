@@ -29,3 +29,22 @@ describe('daily awards', () => {
     expect(a.dailyAwards!.length).toBe(1);
   });
 });
+
+describe('AI rulers keep human hours', () => {
+  it('each sleeps about seven hours a day and takes breaks', async () => {
+    const { aiAwake } = await import('../src/engine/ai/ai');
+    const w = createWorld({ worldName: 'T', playerName: 'P', villageName: 'H', seed: 4, config: { ...defaultConfig(), aiCount: 5, size: 50 } });
+    for (const p of Object.values(w.players).filter((x) => x.kind === 'ai')) {
+      let awake = 0;
+      const start = w.now;
+      for (let m = 0; m < 1440; m++) {
+        w.now = start + m * 60_000;
+        if (aiAwake(w, p)) awake++;
+      }
+      w.now = start;
+      // awake roughly 12-15 hours of the day, never around the clock
+      expect(awake).toBeGreaterThan(11 * 60);
+      expect(awake).toBeLessThan(16 * 60);
+    }
+  });
+});

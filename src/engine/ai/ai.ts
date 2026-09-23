@@ -73,7 +73,7 @@ const ARMY: Record<P, Partial<Record<UnitId, number>>> = {
   expander: { spear: 0.2, sword: 0.15, axe: 0.25, scout: 0.04, light: 0.25, ram: 0.04, heavy: 0.07 },
 };
 
-const TROOP_SHARE: Record<P, number> = { warlord: 0.65, farmer: 0.5, turtle: 0.55, expander: 0.45 };
+const TROOP_SHARE: Record<P, number> = { warlord: 0.5, farmer: 0.38, turtle: 0.42, expander: 0.35 };
 
 const OFFENSIVE: UnitId[] = ['axe', 'light', 'marcher', 'heavy', 'ram', 'catapult'];
 
@@ -132,8 +132,23 @@ const RAIDERS: UnitId[] = ['light', 'marcher', 'axe', 'spear', 'heavy'];
 
 // ---------- main entry ----------
 
+/**
+ * Rulers keep human hours: each sleeps about seven hours a day and steps away for
+ * a while every few hours. While away nothing new is queued, sent or traded.
+ */
+export function aiAwake(w: World, p: Player): boolean {
+  if (w.config.aiAlwaysAwake) return true;
+  const minute = Math.floor((w.createdReal + w.now) / 60_000);
+  const ofDay = ((minute % 1440) + 1440) % 1440;
+  const sleepStart = (p.id * 397) % 1440;
+  if ((ofDay - sleepStart + 1440) % 1440 < 7 * 60) return false;
+  // short breaks: about 40 minutes in every three hours
+  return ((minute + p.id * 53) % 180) >= 40;
+}
+
 export function aiThink(w: World, p: Player): void {
   const ai = p.ai!;
+  if (!aiAwake(w, p)) return;
   const incoming = incomingIndex(w, p);
   for (const vid of [...p.villages]) {
     const v = w.villages[vid];

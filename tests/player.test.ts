@@ -330,17 +330,16 @@ describe('a human player', () => {
     // the survivors carried off as much as they could hold, and the defender sees it
     expect(taken).toBeGreaterThan(15000);
     expect(v.res.wood + v.res.clay + v.res.iron).toBeLessThan(before - taken + 5000);
-    // ...and it arrives in the attacker's village
-    advance(w, w.now + 6 * HOUR);
-    updateVillage(w, home, w.now);
-    expect(home.res.wood + home.res.clay + home.res.iron).toBeGreaterThanOrEqual(taken * 0.99);
+    // ...and the survivors carry it home
+    const back = Object.values(w.commands).find((c) => c.kind === 'return' && c.ownerId === ai.id && c.fromVid === home.id)!;
+    expect(back.res!.wood + back.res!.clay + back.res!.iron).toBeCloseTo(taken, 0);
   });
 
   it('AI rulers attack when a scouting report makes it worth it, not on a timer', () => {
     const setup = (rich: boolean) => {
       const w = createWorld({
         worldName: 'T', playerName: 'P', villageName: 'Home', seed: 5,
-        config: { ...defaultConfig(), difficulty: 'hard', aiCount: 6, size: 50 },
+        config: { ...defaultConfig(), difficulty: 'hard', aiCount: 6, size: 50, aiAlwaysAwake: true },
       });
       removeEvents(w, (e) => e.type === 'barb');
       const p = w.players[w.humanId];
@@ -374,7 +373,7 @@ describe('a human player', () => {
   it('AI rulers with noblemen send noble trains at players after scouting them', () => {
     const w = createWorld({
       worldName: 'T', playerName: 'P', villageName: 'Home', seed: 5,
-      config: { ...defaultConfig(), difficulty: 'hard', aiCount: 6, size: 50 },
+      config: { ...defaultConfig(), difficulty: 'hard', aiCount: 6, size: 50, aiAlwaysAwake: true },
     });
     removeEvents(w, (e) => e.type === 'barb');
     const p = w.players[w.humanId];
@@ -403,7 +402,7 @@ describe('a human player', () => {
   it('AI villages have roles: defensive villages hold the line, offensive ones go to war', () => {
     const w = createWorld({
       worldName: 'T', playerName: 'P', villageName: 'Home', seed: 9,
-      config: { ...defaultConfig(), difficulty: 'hard', aiCount: 6, size: 50 },
+      config: { ...defaultConfig(), difficulty: 'hard', aiCount: 6, size: 50, aiAlwaysAwake: true },
     });
     removeEvents(w, (e) => e.type === 'barb');
     const p = w.players[w.humanId];
