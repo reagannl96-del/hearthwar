@@ -234,6 +234,15 @@ function RecruitPanel({ v, b }: { v: VillageView; b: RecruitBuilding }) {
     if (any) setCounts({});
   };
   const army = (u: UnitId) => v.units[u] ?? 0;
+  // everything this village owns: at home, marching, stationed abroad and out scavenging
+  const pv = view.value!;
+  const owned = (u: UnitId) => {
+    let n = army(u);
+    for (const c of pv.commands) if (c.dir === 'out' && c.fromVid === v.id) n += c.units?.[u] ?? 0;
+    for (const st of v.stationed) n += st.units[u] ?? 0;
+    for (const run of v.scavenge) n += run?.units[u] ?? 0;
+    return n;
+  };
   return (
     <div class="stack">
       <RecruitQueue v={v} b={b} />
@@ -242,7 +251,7 @@ function RecruitPanel({ v, b }: { v: VillageView; b: RecruitBuilding }) {
           <div class="table-scroll">
             <table class="recruit-table">
               <thead>
-                <tr><th>Unit</th><th>Cost each</th><th class="right">At home</th><th>Recruit</th></tr>
+                <tr><th>Unit</th><th>Cost each</th><th class="right" title="Troops at home, and in brackets every one this village owns (marching, stationed abroad or scavenging too)">At home (total)</th><th>Recruit</th></tr>
               </thead>
               <tbody>
                 {units.map((u) => {
@@ -256,7 +265,7 @@ function RecruitPanel({ v, b }: { v: VillageView; b: RecruitBuilding }) {
                         <div class="muted small">{UNITS[u].description}</div>
                       </td>
                       <td><Cost cost={UNITS[u].cost} have={have} pop={UNITS[u].pop} time={per} compact /></td>
-                      <td class="right num">{fmt(army(u))}</td>
+                      <td class="right num">{fmt(army(u))}{owned(u) > army(u) && <span class="muted"> ({fmt(owned(u))})</span>}</td>
                       <td>
                         {av.ok ? (
                           <NumInput id={`recruit-${u}`} value={counts[u] ?? ''} max={chk.max} onInput={(n) => setCounts({ ...counts, [u]: n })} />
