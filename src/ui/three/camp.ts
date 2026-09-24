@@ -11,7 +11,7 @@
 
 import * as THREE from 'three';
 import type { Units, UnitId } from '../../engine/types';
-import { C, blob, box, cone, cyl, getTheme, mesh, setTheme, type Theme } from './kit';
+import { BLOOD, C, EMBER, EMBER_E, blob, box, cone, cyl, getTheme, mesh, orcSkull, setTheme, type Theme } from './kit';
 import { troop, type TroopModel } from './props';
 import { CAMP_AREA, CAMP_FIRE, heightAt } from './scene';
 
@@ -206,6 +206,32 @@ export function supportTent(th: Theme): THREE.Group {
       g.add(box(0.6, 0.8, 0.06, 0x1e140a, 0, 0, 1.15));
       g.add(blob(0.22, 0xe9b83a, 0.9, 0.1, 1.05, 1, 0.5, 1)); // a little pile of loot at the door
       g.add(lantern(0x9aff3a, 0x4a9a10, -0.8, 1.0, 1.2));
+      break;
+    }
+    case 'orc': {
+      // a war tent of smoked hides on crossed poles, a blood-red cloth over the door, a skull on a stake, a fire basket
+      g.add(cone(1.55, 2.3, 0x5a4028, 7));
+      for (let i = 0; i < 3; i++) {
+        const a = i * 2.1 + 0.6;
+        const p = box(0.7, 0.6, 0.05, i % 2 ? 0x7a5a3a : 0x6e4a2a, Math.cos(a) * 0.95, 0.7, Math.sin(a) * 0.95);
+        p.rotation.y = -a + Math.PI / 2;
+        p.rotation.x = -0.55;
+        g.add(p);
+      }
+      for (let i = 0; i < 4; i++) {
+        const a = (i / 4) * Math.PI * 2 + 0.4;
+        const pole = cone(0.05, 1.1, 0x33241a, 4, Math.cos(a) * 0.12, 1.9, Math.sin(a) * 0.12);
+        pole.rotation.z = -Math.cos(a) * 0.35;
+        pole.rotation.x = Math.sin(a) * 0.35;
+        g.add(pole);
+      }
+      g.add(box(0.7, 1.0, 0.08, 0x1c1410, 0, 0, 1.1));
+      g.add(box(0.8, 0.4, 0.05, BLOOD, 0, 0.95, 1.12));
+      g.add(cyl(0.04, 0.05, 1.5, 0x33241a, 4, -0.85, 0, 1.2));
+      const sk = orcSkull(0.3);
+      sk.position.set(-0.85, 1.6, 1.2);
+      g.add(sk);
+      g.add(lantern(EMBER, EMBER_E, 0.8, 0.9, 1.3));
       break;
     }
     case 'necromancer': {

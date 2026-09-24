@@ -1,6 +1,6 @@
 import { useState } from 'preact/hooks';
 import { BUILDINGS, BUILDING_ORDER } from '../../engine/data/buildings';
-import { ARMY_ORDER, ITEM_BY_ID, UNITS, itemHero } from '../../engine/data/units';
+import { ARMY_ORDER, HERO_POWERS, ITEM_BY_ID, UNITS, isHero, itemHero } from '../../engine/data/units';
 import type { BattleData, Report, ResKey, SideInfo, UnitId, Units, SharedReport } from '../../engine/types';
 import { Icon } from '../art/icons';
 import { Btn, Empty, PlayerLink, Res, Section, VillageLink, UnitIcon, unitName } from '../components/common';
@@ -192,7 +192,8 @@ function columns(b: BattleData): UnitId[] {
   const seen = (u: UnitId) => [b.attUnits, b.defUnits, b.scout?.unitsOutside].some((x) => (x?.[u] ?? 0) > 0);
   return ARMY_ORDER.filter((u) => {
     if ((u === 'archer' || u === 'marcher') && !pv.config.archers) return seen(u);
-    if (u === 'militia' || u === 'sorcerer' || u === 'druid' || u === 'goblin' || u === 'necromancer') return seen(u);
+    // the paladin keeps his classic column; the other statue heroes only show up when they fought
+    if (u === 'militia' || (isHero(u) && u !== 'paladin')) return seen(u);
     return true;
   });
 }
@@ -265,6 +266,7 @@ const EFFECTS: Record<string, { hero: string; text: string }> = {
   sneak: { hero: 'goblin', text: 'Sneak in: goblins slipped over 4 wall levels' },
   'dread-att': { hero: 'necromancer', text: 'Dread: the defending infantry faltered' },
   'dread-def': { hero: 'necromancer', text: 'Dread: the attacking infantry faltered' },
+  warcry: { hero: 'orc', text: `Warcry: the Orc King's rams and rock-hurlers struck ${Math.round(HERO_POWERS.warcry * 100)}% harder, and his warband fought ${Math.round(HERO_POWERS.bloodlust * 100)}% harder` },
 };
 
 function Battle({ b, kind, shared }: { b: BattleData; kind: Report['kind']; shared?: boolean }) {

@@ -1,7 +1,7 @@
 // Village economy: lazy resource accrual, recruitment delivery, population & capacity.
 
 import { BUILDINGS, BUILDING_ORDER } from './data/buildings';
-import { UNITS } from './data/units';
+import { HERO_POWERS, UNITS } from './data/units';
 import {
   HOUR, bonusMultiplier, buildingPop, farmCap, hideCap, mineRate, res, storageCap, unitsPop, villagePoints,
 } from './formulas';
@@ -9,7 +9,7 @@ import type { BuildingId, Buildings, RecruitBuilding, Res, UnitId, Village, Worl
 import { RES_KEYS } from './types';
 import { invalidateSpatial } from './spatial';
 
-export const RECRUIT_BUILDINGS: RecruitBuilding[] = ['barracks', 'stable', 'workshop', 'academy', 'statue'];
+export const RECRUIT_BUILDINGS: RecruitBuilding[] = ['barracks', 'stable', 'workshop', 'academy', 'statue', 'market'];
 
 /** Loyalty points regained per hour. Grows slower than world speed so a single nobleman can still conquer. */
 export const loyaltyRegen = (speed: number) => speed ** 0.6;
@@ -32,7 +32,7 @@ export function createVillage(w: World, x: number, y: number, name: string, owne
     units: {},
     support: [],
     buildQueue: [],
-    recruit: { barracks: [], stable: [], workshop: [], academy: [], statue: [] },
+    recruit: { barracks: [], stable: [], workshop: [], academy: [], statue: [], market: [] },
     research: [],
     tech: {},
     points: 0,
@@ -100,7 +100,9 @@ export function hideOf(v: Village): number {
 }
 
 export function farmMax(v: Village): number {
-  return farmCap(v.buildings.farm, v.bonus);
+  // the horde: a village sworn to the Orc King feeds more mouths
+  const horde = v.heroKind === 'orc' ? 1 + HERO_POWERS.horde : 1;
+  return Math.round(farmCap(v.buildings.farm, v.bonus) * horde);
 }
 
 /** level a building will have once everything in the queue has finished */
@@ -240,8 +242,11 @@ export function recomputeCounters(w: World): void {
     const c = w.commands[id];
     const home = w.villages[c.fromVid];
     if (!home) continue;
-    if (c.kind === 'trade' || c.kind === 'tradeback') home.merchantsOut += c.merchants ?? 0;
-    else if (home.ownerId === c.ownerId) home.outPop += unitsPop(c.units);
+    if (c.kind === 'trade' || c.kind === 'tradeback') {
+      home.merchantsOut += c.merchants ?? 0;
+      // horse merchants on the road still eat at home
+      if (home.ownerId === c.ownerId) home.outPop += unitsPop(c.units);
+    } else if (home.ownerId === c.ownerId) home.outPop += unitsPop(c.units);
   }
   for (const id in w.villages) {
     const v = w.villages[id];

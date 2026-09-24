@@ -113,6 +113,8 @@ export interface PlayerView {
     homeVid: number | null;
     /** the village manager's templates and assignments */
     manager: import('./manager').ManagerState | null;
+    /** the ruler's own banner (flown at the gate of villages with a level 20 wall) */
+    flag?: import('./data/flags').FlagDesign;
   };
   villages: VillageView[];
   /** tribe invitations waiting for me */
@@ -150,6 +152,7 @@ function villageView(w: World, pid: number, vid: number): VillageView {
       barracks: v.recruit.barracks.map((j) => ({ ...j })),
       stable: v.recruit.stable.map((j) => ({ ...j })),
       workshop: v.recruit.workshop.map((j) => ({ ...j })),
+      market: (v.recruit.market ?? []).map((j) => ({ ...j })),
       academy: v.recruit.academy.map((j) => ({ ...j })),
       statue: v.recruit.statue.map((j) => ({ ...j })),
     },
@@ -267,6 +270,7 @@ export function buildView(w: World, pid: number): PlayerView {
       tribeId: p.tribeId,
       homeVid: p.villages[0] ?? null,
       manager: p.manager ? JSON.parse(JSON.stringify(p.manager)) : null,
+      flag: p.flag ? { ...p.flag } : undefined,
     },
     villages,
     tribeInvites: invitesFor(w, pid).length,

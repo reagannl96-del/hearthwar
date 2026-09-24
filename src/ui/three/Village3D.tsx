@@ -6,6 +6,7 @@ import { VillageRenderer, webglAvailable, type MarchInfo, type Quality } from '.
 import { dayClock } from '../store';
 import type { TheatreInput, TheatreReport } from './battle/theatre';
 import type { Theme } from './kit';
+import type { FlagDesign } from '../../engine/data/flags';
 
 interface Props {
   buildings: Buildings;
@@ -39,6 +40,8 @@ interface Props {
   onReplayed?: () => void;
   /** the winter festival is on: a lit tree, presents and villagers gathered round it */
   festive?: boolean;
+  /** the ruler's banner, flown at the gate once the wall reaches level 20 (null: none) */
+  banner?: FlagDesign | null;
 }
 
 let gl: boolean | null = null;
@@ -69,6 +72,7 @@ export function Village3D(p: Props) {
       r.current.setTroops(p.units ?? {});
       r.current.setSupport(p.support ?? []);
       r.current.setFestive(!!p.festive);
+      r.current.setBanner(p.banner ?? null);
       if (import.meta.env.DEV) (window as unknown as { __vr: VillageRenderer }).__vr = r.current;
     } catch {
       setFailed(true);
@@ -121,6 +125,11 @@ export function Village3D(p: Props) {
   useEffect(() => {
     r.current?.setNight(p.night);
   }, [p.night]);
+
+  const b = p.banner;
+  useEffect(() => {
+    r.current?.setBanner(b ?? null);
+  }, [b?.shape, b?.pattern, b?.charge, b?.field, b?.accent, b?.chargeColor, !!b]);
 
   useEffect(() => {
     r.current?.resetView();

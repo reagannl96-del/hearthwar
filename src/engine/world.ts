@@ -143,6 +143,8 @@ export function migrateWorld(w: World): void {
     }
   }
   const cap = protectionEnd(w);
+  // the market recruits horse merchants now: every village needs its queue
+  for (const id in w.villages) w.villages[id].recruit.market ??= [];
   normalizeTribes(w);
   for (const id in w.villages) {
     const v = w.villages[id];
@@ -717,6 +719,7 @@ export function restartPlayer(w: World, pid: number, villageNameText: string): V
     delete v.units.druid;
     delete v.units.goblin;
     delete v.units.necromancer;
+    delete v.units.orc;
     delete v.units.militia;
   }
   news(w, `${p.name} abandoned their lands to the barbarians and set out to start anew.`, 'player');

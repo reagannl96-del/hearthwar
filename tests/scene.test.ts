@@ -100,7 +100,7 @@ describe('village layout', () => {
 
   it('every building still fits in every hero theme', () => {
     const bad: string[] = [];
-    for (const theme of ['paladin', 'sorcerer', 'druid', 'goblin', 'necromancer'] as const) {
+    for (const theme of ['paladin', 'sorcerer', 'druid', 'goblin', 'necromancer', 'orc'] as const) {
       setTheme(theme);
       const th = new Map<BuildingId, P[][]>(IDS.map((id) => [id, tierLevels(id).map((l) => footprint(id, l))]));
       setTheme('classic');
@@ -276,7 +276,7 @@ describe('village layout', () => {
     const ctx = new Proxy({}, { get: () => () => ({ addColorStop() {} }), set: () => true });
     if (!hadDoc) (globalThis as Record<string, unknown>).document = { createElement: () => ({ getContext: () => ctx }) };
     try {
-      for (const theme of ['classic', 'paladin', 'sorcerer', 'druid', 'goblin', 'necromancer'] as const) {
+      for (const theme of ['classic', 'paladin', 'sorcerer', 'druid', 'goblin', 'necromancer', 'orc'] as const) {
         setTheme(theme);
         for (const id of IDS) for (const l of tierLevels(id)) if (inside(footprint(id, l), [fx, fz], R)) { bad.push(`${theme}: in the ${id} (level ${l})`); break; }
         const sc = buildScenery();

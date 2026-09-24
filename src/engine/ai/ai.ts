@@ -538,12 +538,12 @@ export function traitsOf(w: World, p: Player): AITraits {
 
 /** Which heroes each temperament likes (weights). */
 const HERO_TASTE: Record<P, Partial<Record<UnitId, number>>> = {
-  warlord: { goblin: 3, necromancer: 3, paladin: 2, sorcerer: 1, druid: 0.5 },
-  expander: { paladin: 3, necromancer: 2, sorcerer: 2, goblin: 1, druid: 1 },
-  farmer: { goblin: 4, paladin: 1.5, druid: 1, sorcerer: 0.5, necromancer: 0.5 },
-  turtle: { druid: 3, sorcerer: 3, paladin: 2, necromancer: 0.5, goblin: 0.3 },
-  opportunist: { goblin: 3, necromancer: 3, sorcerer: 1, paladin: 1, druid: 0.5 },
-  guardian: { paladin: 3, druid: 3, sorcerer: 2, necromancer: 0.5, goblin: 0.3 },
+  warlord: { goblin: 3, necromancer: 3, orc: 3.5, paladin: 2, sorcerer: 1, druid: 0.5 },
+  expander: { paladin: 3, necromancer: 2, sorcerer: 2, orc: 2, goblin: 1, druid: 1 },
+  farmer: { goblin: 4, paladin: 1.5, orc: 1.2, druid: 1, sorcerer: 0.5, necromancer: 0.5 },
+  turtle: { druid: 3, sorcerer: 3, paladin: 2, necromancer: 0.5, orc: 0.5, goblin: 0.3 },
+  opportunist: { goblin: 3, necromancer: 3, orc: 3, sorcerer: 1, paladin: 1, druid: 0.5 },
+  guardian: { paladin: 3, druid: 3, sorcerer: 2, orc: 1, necromancer: 0.5, goblin: 0.3 },
 };
 
 function pickHero(w: World, p: Player): UnitId {
@@ -574,7 +574,7 @@ function hero(w: World, p: Player, v: Village): void {
 }
 
 /** Heroes who do their best work on the attack go along with a real one. */
-const ATTACK_HEROES: UnitId[] = ['goblin', 'necromancer'];
+const ATTACK_HEROES: UnitId[] = ['goblin', 'necromancer', 'orc'];
 function attackHero(v: Village): UnitId | null {
   for (const h of ATTACK_HEROES) if ((v.units[h] ?? 0) > 0) return h;
   return null;
@@ -1413,7 +1413,7 @@ function strike(w: World, p: Player, v: Village, target: Village, army: Units): 
   const send = { ...army };
   if (wall === 0) delete send.ram;
   const cat = (send.catapult ?? 0) > 0 ? pickCatTarget(intel.buildings) : undefined;
-  // a hero who fights best on the attack (the goblin chief, the necromancer) rides with a real attack
+  // a hero who fights best on the attack (the goblin chief, the necromancer, the orc king) rides with a real attack
   const h = attackHero(v);
   if (h) send[h] = 1;
   // is a plain attack worth it? loot we can carry and troops we'd destroy, against what we'd lose

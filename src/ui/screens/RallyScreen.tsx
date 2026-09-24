@@ -1,5 +1,6 @@
 import type { VillageTheme } from '../../engine/data/themes';
 import type { ComponentChildren } from 'preact';
+import { signal } from '@preact/signals';
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { BUILDINGS, BUILDING_ORDER } from '../../engine/data/buildings';
 import { ARMY_ORDER, UNITS, UNIT_ORDER, HEROES } from '../../engine/data/units';
@@ -56,6 +57,9 @@ export function RallyScreen({ tab }: { tab?: string }) {
   );
 }
 
+/** The target typed on the rally point, shared by Send troops and Noble train so it carries over between the tabs. */
+const draftTarget = signal('');
+
 // ---------- send ----------
 
 const sendable = (u: UnitId) => u !== 'militia';
@@ -65,7 +69,9 @@ function SendTroops({ v }: { v: VillageView }) {
   const h = host.value!;
   const pv = view.value!;
   const pre = rallyTarget.value;
-  const [target, setTarget] = useState(pre ? coords(pre.x, pre.y) : '');
+  if (pre) draftTarget.value = coords(pre.x, pre.y);
+  const target = draftTarget.value;
+  const setTarget = (t: string) => { draftTarget.value = t; };
   const [units, setUnits] = useState<Units>((pre?.units as Units) ?? {});
   const [cat, setCat] = useState<BuildingId | ''>('');
   useEffect(() => {
@@ -194,8 +200,11 @@ const ESCORT_UNITS: UnitId[] = ['axe', 'light', 'heavy', 'spear', 'sword', 'marc
 function NobleTrain({ v }: { v: VillageView }) {
   const h = host.value!;
   const pre = rallyTarget.value;
-  const [target, setTarget] = useState(pre ? coords(pre.x, pre.y) : '');
+  if (pre) draftTarget.value = coords(pre.x, pre.y);
+  const target = draftTarget.value;
+  const setTarget = (t: string) => { draftTarget.value = t; };
   const [clear, setClear] = useState<Units>({});
+  useEffect(() => { if (pre) rallyTarget.value = null; }, [pre]);
   const [nobles, setNobles] = useState(Math.min(4, v.units.noble ?? 0));
   const [escortUnit, setEscortUnit] = useState<UnitId>('axe');
   const [escort, setEscort] = useState<number | ''>(50);
@@ -414,7 +423,7 @@ export function CommandRow({ c, compact }: { c: CommandView; compact?: boolean }
   } else if (c.kind === 'return') {
     text = <>Return from {c.originName ?? c.toName}</>;
   } else if (c.kind === 'tradeback') {
-    text = <>Merchants returning to {c.fromName}</>;
+    text = <>{(c.units?.trader ?? 0) > 0 ? unitName('trader', true, c.theme) : 'Merchants'} returning to {c.fromName}</>;
   } else if (c.kind === 'trade') {
     text = <>Transport to {c.toName}</>;
   } else {

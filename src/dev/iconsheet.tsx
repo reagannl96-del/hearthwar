@@ -3,9 +3,9 @@ import { Icon, themedUnitIcon } from '../ui/art/icons';
 import type { UnitId } from '../engine/types';
 
 const q = new URLSearchParams(location.search);
-const units = (q.get('u')?.split(',') ?? ['spear', 'sword', 'axe', 'archer', 'scout', 'light', 'marcher', 'heavy', 'ram', 'catapult', 'noble', 'militia', 'paladin', 'sorcerer', 'druid', 'goblin', 'necromancer']) as UnitId[];
+const units = (q.get('u')?.split(',') ?? ['spear', 'sword', 'axe', 'archer', 'scout', 'light', 'marcher', 'heavy', 'ram', 'catapult', 'noble', 'militia', 'paladin', 'sorcerer', 'druid', 'goblin', 'necromancer', 'orc', 'trader']) as UnitId[];
 const big = Number(q.get('s') ?? 44);
-const themes = ['classic', 'sorcerer', 'druid', 'goblin', 'necromancer'] as const;
+const themes = ['classic', 'paladin', 'sorcerer', 'druid', 'goblin', 'necromancer', 'orc'] as const;
 render(
   <table>
     <tr><th></th>{units.map((u) => <th>{u}</th>)}</tr>

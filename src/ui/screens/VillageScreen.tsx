@@ -1,4 +1,5 @@
 import { BUILDINGS } from '../../engine/data/buildings';
+import { DEFAULT_FLAG } from '../../engine/data/flags';
 import { themeOfHero } from '../../engine/data/themes';
 import type { BuildingId, RecruitBuilding } from '../../engine/types';
 import { Icon } from '../art/icons';
@@ -36,7 +37,7 @@ export function VillageScreen() {
   const moves = [...pv.incoming.filter((c) => c.toVid === v.id), ...pv.commands.filter((c) => c.fromVid === v.id || c.toVid === v.id)]
     .sort((a, b) => a.arrive - b.arrive)
     .slice(0, 6);
-  const recruiting = (['barracks', 'stable', 'workshop', 'academy', 'statue'] as RecruitBuilding[]).filter((b) => v.recruit[b].length > 0);
+  const recruiting = (['barracks', 'stable', 'workshop', 'market', 'academy', 'statue'] as RecruitBuilding[]).filter((b) => v.recruit[b].length > 0);
   const supportTotal = v.support.length;
   // attacks on this village, and what happened when they landed, for the scene to act out
   const t = now.value;
@@ -74,6 +75,7 @@ export function VillageScreen() {
             villageId={v.id}
             winter={winter}
             festive={festive}
+            banner={pv.me.flag ?? DEFAULT_FLAG}
             volcanic={isVolcanic(v.x, v.y, pv.config.size)}
             quality={sceneQuality(prefs.value)}
             night={night}

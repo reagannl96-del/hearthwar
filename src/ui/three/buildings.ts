@@ -6,13 +6,15 @@ import type { BuildingId } from '../../engine/types';
 import { BUILDINGS as BUILDINGS_DATA } from '../../engine/data/buildings';
 import { addMastery } from './mastery';
 import {
-  ARC, ARC_EMIT, C, GLASS, STAR, STAR_EMIT, VIO, VIO_EMIT, arcaneLamp, blob, box, cone, cyl, darker, extrude, floatingCrystal, floatingIsle,
-  getTheme, heraldry, house, lancet, mat, merlonRing, mesh, orbitRing, rng, roundTower, runeRing, witchHat, type Theme,
+  ARC, ARC_EMIT, C, GLASS, STAR, STAR_EMIT, VIO, VIO_EMIT, arcaneLamp, blob, box, leafCluster, cone, cyl, darker, extrude, floatingCrystal, floatingIsle,
+  getTheme, heraldry, house, lancet, mat, merlonRing, mesh, orbitRing, rng, roundTower, runeRing, spiralGlyph, witchHat, type Theme,
 } from './kit';
 import {
   anvil, banner, barrel, hqCrown, campfire, cart, catapult, crate, dummy, fence, hayBale, horse, logPile, pumpkin, ram, rock,
   stall, stump, tree, weaponRack, wheatField, windmill,
 } from './props';
+import { druidHall, druidWatchtower, leafTotem, toadstools } from './grove';
+import { beastSkull, boarPen, brazier, orcDress, orcModel, orcPost } from './warcamp';
 
 export interface Built {
   obj: THREE.Group;
@@ -51,6 +53,11 @@ export function buildModel(id: BuildingId, level: number, color: number): Built 
 
 function baseModel(id: BuildingId, t: number, color: number): Built {
   const r = rng(id.length * 131 + t * 17);
+  if (getTheme() === 'orc') {
+    // the Horde builds most things its own way
+    const o = orcModel(id, t, color, r);
+    if (o) return o;
+  }
   switch (id) {
     case 'main': {
       const th = getTheme();
@@ -416,6 +423,7 @@ function themePost(h: number): THREE.Group {
     case 'druid': return antlerPole(h);
     case 'goblin': return skullOnPole(h);
     case 'necromancer': return gravePost(h);
+    case 'orc': return orcPost(h);
     default: {
       const g = new THREE.Group();
       g.add(cyl(0.07, 0.09, h, C.woodDark, 5));
@@ -618,7 +626,7 @@ function timberCamp(t: number, r: () => number): Built {
   if (th === 'druid') {
     // saplings planted in rows where the old trees came down
     for (let i = 0; i < 3 + t; i++) {
-      const sp = tree('oak', r, 0.28 + r() * 0.08);
+      const sp = tree('oak', r, 0.28 + r() * 0.08, 0);
       sp.position.set(-5 + (i % 5) * 1.6, 0, -3.8 - Math.floor(i / 5) * 1.5);
       g.add(sp);
     }
@@ -639,6 +647,22 @@ function timberCamp(t: number, r: () => number): Built {
     const sk = skull(0.5);
     sk.position.set(-0.4, 0.3, 6.1);
     g.add(sk);
+  }
+  if (th === 'orc') {
+    // the logs are cut to stakes for the palisade: bundles of them sharpened and leaning on a rack
+    const rack = new THREE.Group();
+    rack.add(box(3.4, 0.14, 0.14, C.timber, 0, 1.3, -0.4));
+    for (const x of [-1.6, 1.6]) rack.add(box(0.14, 1.4, 0.14, C.timber, x, 0, -0.4));
+    for (let i = 0; i < 4 + t; i++) {
+      const st = cone(0.12, 2.2, i % 2 ? C.wood : C.logEnd, 5, -1.4 + (i * 2.8) / (3 + t), 0, 0.15);
+      st.rotation.x = -0.3;
+      rack.add(st);
+    }
+    rack.position.set(-1.2, 0, 6.6);
+    g.add(rack);
+    const bk = brazier(0.8, false, 0.7);
+    bk.position.set(1.4, 0, 1.6);
+    g.add(bk);
   }
   return { obj: g, h: 6 + (t >= 5 ? 1.5 : 0), w: 10, d: 10 };
 }
@@ -724,6 +748,14 @@ function clayPit(t: number, r: () => number): Built {
   if (th === 'goblin') { g.add(barrel(-4.4, 5.8), barrel(-3.8, 6.6)); for (let i = 0; i < 3; i++) g.add(blob(0.7, C.clayDark, -1 + i * 1.3, 0.1, -pr - 1.4, 1, 0.3, 1)); }
   if (th === 'paladin') { const b = banner(0x2c56b0, 3.2); b.position.set(-2.6, 0, 7); g.add(b); }
   if (th === 'necromancer') for (let i = 0; i < 3; i++) { const sk = skull(0.42); sk.position.set(6.6 + i * 0.5, 0.82, -3.4 + (i % 2) * 0.4); g.add(sk); }
+  if (th === 'orc') {
+    // a slave-driver's post over the pit: a brazier and a stake hung with skulls
+    const bk = brazier(0.9, false, 0.8);
+    bk.position.set(-2.8, 0, 6.8);
+    g.add(bk);
+    for (let i = 0; i < 2; i++) { const sk = skull(0.4); sk.position.set(-4.4 + i * 0.5, 1.9 - i * 0.5, 6.4); g.add(sk); }
+    g.add(cyl(0.07, 0.09, 2.4, C.timber, 5, -4.2, 0, 6.4));
+  }
   return { obj: g, h: 4 + (t >= 7 ? 5 : t >= 4 ? 2 : 0), w: 12, d: 10 };
 }
 
@@ -843,7 +875,7 @@ function ironMine(t: number, r: () => number): Built {
   }
   if (th === 'druid') {
     // roots and moss overgrow the workings
-    for (let i = 0; i < 6; i++) g.add(blob(0.8, i % 2 ? 0x5e7d32 : 0x6f9a3a, -5 + i * 2, 2.4 + r() * 1.2, -3 - r() * 3, 1.3, 0.4, 1.1));
+    for (let i = 0; i < 6; i++) g.add(leafCluster(0.8, i % 2 ? 'deep' : 'mid', -5 + i * 2, 2.4 + r() * 1.2, -3 - r() * 3, 1.3, 0.45, 1.1, 0, i));
     for (const s2 of [-1, 1]) { const root = cyl(0.12, 0.2, 3.2, 0x5a3f28, 5, s2 * 1.6, 0, 1.2); root.rotation.z = s2 * 0.2; g.add(root); }
   }
   if (th === 'goblin') { const sk = skull(0.8); sk.position.set(0, 3.3, 1.95); g.add(sk); g.add(box(1.2, 0.6, 0.05, 0x6f9a2a, 1.6, 2.4, 1.9)); }
@@ -854,6 +886,13 @@ function ironMine(t: number, r: () => number): Built {
     g.add(sk);
     g.add(glowBit(new THREE.BoxGeometry(2.2, 2.2, 0.1), GHOST, GHOST_EMIT).translateY(1.2).translateZ(1.78));
   }
+  if (th === 'orc') {
+    // the adit is the mouth of a great beast's skull, embers burning in its sockets
+    const sk = beastSkull(1.05);
+    sk.position.set(0, 3.9, 1.1);
+    g.add(sk);
+    g.add(glowBit(new THREE.BoxGeometry(2.0, 0.5, 0.1), 0xff8a3a, 0xa03a0a).translateY(0.05).translateZ(1.82));
+  }
   return { obj: g, h: 8 + (t >= 4 ? 1 : 0), w: 12, d: 12 };
 }
 
@@ -861,7 +900,7 @@ function ironMine(t: number, r: () => number): Built {
 function barn(w: number, d: number, h: number): THREE.Group {
   const g = new THREE.Group();
   const th = getTheme();
-  const wall = th === 'paladin' ? 0xf3eee2 : th === 'necromancer' ? 0x4a4450 : th === 'sorcerer' ? 0x5a4a7a : 0x9a3a28;
+  const wall = th === 'paladin' ? 0xf3eee2 : th === 'necromancer' ? 0x4a4450 : th === 'sorcerer' ? 0x5a4a7a : th === 'orc' ? 0x5a4030 : 0x9a3a28;
   const roof = C.tile;
   g.add(extrude([[-w / 2, 0], [w / 2, 0], [w / 2, h], [w * 0.3, h + h * 0.45], [0, h + h * 0.62], [-w * 0.3, h + h * 0.45], [-w / 2, h]], d, wall));
   // the roof planes over the gambrel
@@ -915,6 +954,7 @@ function farm(t: number, r: () => number): Built {
     if (th === 'goblin' && i % 3 === 1) return shroomField(6.5, 5, r);
     if (th === 'druid' && i % 3 === 1) return flowerField(6.5, 5, r);
     if (th === 'paladin' && i % 3 === 1) return sunflowerField(6.5, 5, r);
+    if (th === 'orc' && i % 3 === 1) return boarPen(6.5, 5, r);
     if (i % 4 === 3) return pumpkinPatch(6.5, 5, r, false);
     return wheatField(6.5, 5, r, i % 3 !== 2);
   };
@@ -953,7 +993,7 @@ function farm(t: number, r: () => number): Built {
       fe.rotation.y = rot;
       pad.add(fe);
     }
-    for (let i = 0; i < 4; i++) pad.add(cow(i % 2 ? 0xf2efe6 : 0x6b4a32).translateX(-2 + i * 1.3).translateZ((i % 2 ? 1 : -1) * 0.8).rotateY(r() * 6));
+    for (let i = 0; i < 4; i++) pad.add((th === 'orc' ? pig() : cow(i % 2 ? 0xf2efe6 : 0x6b4a32)).translateX(-2 + i * 1.3).translateZ((i % 2 ? 1 : -1) * 0.8).rotateY(r() * 6));
     pad.position.set(-7.5, 0, 7.5);
     g.add(pad);
   }
@@ -984,6 +1024,23 @@ function farm(t: number, r: () => number): Built {
   }
   if (th === 'druid') for (let i = 0; i < 3; i++) g.add(beehive().translateX(11 + i * 1.1).translateZ(7.5));
   if (th === 'goblin') g.add(blob(1.6, 0x55462f, 11, 0.02, 8.5, 1.4, 0.08, 1), pig().translateX(10.4).translateZ(8.2), pig().translateX(11.8).translateZ(9.1).rotateY(2));
+  if (th === 'orc') {
+    // a smoking rack of meat by the yard, and a skull-scarecrow over the fields
+    const rack = new THREE.Group();
+    for (const x of [-1, 1]) rack.add(box(0.12, 2.0, 0.12, C.timber, x, 0, 0));
+    rack.add(box(2.3, 0.1, 0.1, C.timber, 0, 1.9, 0));
+    for (let i = 0; i < 4; i++) rack.add(box(0.26, 0.5, 0.14, 0x8a3a24, -0.75 + i * 0.5, 1.3, 0));
+    rack.add(brazier(0.2, false, 0.6));
+    rack.position.set(11.4, 0, 7.8);
+    g.add(rack);
+    const sc = new THREE.Group();
+    sc.add(box(0.12, 2.6, 0.12, C.timber), box(1.6, 0.1, 0.1, C.timber, 0, 1.9, 0), box(0.5, 0.9, 0.06, C.red, 0, 1.1, 0.06));
+    const sk = skull(0.45);
+    sk.position.set(0, 2.55, 0);
+    sc.add(sk);
+    sc.position.set(0, 0, -12);
+    g.add(sc);
+  }
   return { obj: g, h: 6 + (t >= 4 ? 2 : 0), w: 8, d: 8 };
 }
 
@@ -1074,9 +1131,6 @@ function sunflowerField(w: number, d: number, r: () => number): THREE.Group {
 
 // ---------- hero headquarters ----------
 
-const MOSS = 0x5e7d32, MOSS_DK = 0x445c24, BARK = 0x5a3f28, BARK_DK = 0x3f2c1c, LEAF = 0x4f7a2e, LEAF_LT = 0x6f9a3a, MENHIR = 0x8e9a80;
-
-/** A round window that glows at night. */
 // ---------- the Radiant Order: the paladin's headquarters grows from a chapel into a cathedral ----------
 
 const ROYAL = 0x2c56b0, SUNGOLD = 0xffd35a, SUN_EMIT = 0x8a5a10;
@@ -1885,174 +1939,6 @@ function glowWindow(x: number, y: number, z: number, ry = 0): THREE.Group {
   return g;
 }
 
-/**
- * The druids' Great Tree Hall: a stump hut that grows into a hollow tree home,
- * then a great tree with platforms and huts, and at last a towering world-tree
- * ringed by standing stones.
- */
-function druidHall(t: number): Built {
-  const g = new THREE.Group();
-  const r = rng(71 + t);
-  const AMBER = 0xffc25a, AMBER_E = 0xb0661a, FIREFLY = 0xe8ff8a, FIREFLY_E = 0x8ab020;
-  const lantern = (x: number, y: number, z: number) => {
-    g.add(box(0.04, 0.5, 0.04, 0x3a2a18, x, y, z));
-    const l = mesh(new THREE.IcosahedronGeometry(0.2, 0), AMBER, { emissive: AMBER_E });
-    l.position.set(x, y - 0.15, z);
-    l.userData.window = true;
-    g.add(l);
-  };
-  const fireflies = (n: number, rad: number, y: number) => {
-    const ff = new THREE.Group();
-    for (let i = 0; i < n; i++) {
-      const a = r() * Math.PI * 2, d = rad * (0.4 + r() * 0.6);
-      ff.add(mesh(new THREE.OctahedronGeometry(0.09, 0), FIREFLY, { emissive: FIREFLY_E }).translateX(Math.cos(a) * d).translateY(r() * 3).translateZ(Math.sin(a) * d));
-    }
-    ff.userData.dynamic = true;
-    ff.userData.orbit = 0.25;
-    ff.userData.bob = 0.6;
-    ff.position.y = y;
-    g.add(ff);
-  };
-  if (t === 1) {
-    // a sacred grove: a ring of mossy standing stones round a young oak, an altar stone before it
-    for (let i = 0; i < 7; i++) {
-      const a = (i / 7) * Math.PI * 2 + 0.2;
-      if (Math.sin(a) > 0.8) continue;
-      const st = box(0.6, 1.7 + r() * 0.7, 0.45, MENHIR, Math.cos(a) * 3.4, 0, Math.sin(a) * 3.4);
-      st.rotation.y = -a;
-      g.add(st);
-      g.add(blob(0.3, MOSS, Math.cos(a) * 3.4, 1.9, Math.sin(a) * 3.4, 1, 0.4, 1));
-    }
-    g.add(cyl(0.25, 0.35, 2.4, BARK, 6));
-    for (let i = 0; i < 4; i++) g.add(blob(0.9, i % 2 ? LEAF : LEAF_LT, (r() - 0.5) * 1.2, 2.6 + r() * 0.8, (r() - 0.5) * 1.2, 1, 0.8, 1));
-    g.add(box(1.6, 0.6, 0.9, MENHIR, 0, 0, 2.2));
-    g.add(mushrooms(6, r, 2.6));
-    fireflies(8, 3, 0.8);
-    return { obj: g, h: 5.5, w: 8, d: 8 };
-  }
-  if (t === 2) {
-    // a young oak with a round treehouse in its arms, a ladder up to it
-    g.add(cyl(1.0, 1.5, 5.2, BARK, 9));
-    for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2; const root = box(0.5, 0.7, 1.6, BARK_DK, Math.cos(a) * 1.4, 0, Math.sin(a) * 1.4); root.rotation.y = -a + Math.PI / 2; g.add(root); }
-    g.add(cyl(2.8, 2.8, 0.25, C.timberLight, 12, 0, 3.6));
-    g.add(cyl(2.0, 2.0, 1.8, 0xc9a56a, 10, 0, 3.85));
-    g.add(cone(2.6, 1.8, MOSS, 10, 0, 5.65));
-    g.add(glowWindow(0, 4.6, 2.02), glowWindow(1.6, 4.6, 1.2, 0.9));
-    const lad = new THREE.Group();
-    for (const x of [-0.3, 0.3]) lad.add(box(0.08, 3.8, 0.08, C.timber, x, 0, 0));
-    for (let y = 0.4; y < 3.6; y += 0.5) lad.add(box(0.6, 0.06, 0.06, C.timber, 0, y, 0));
-    lad.rotation.x = -0.2;
-    lad.position.set(0.8, 0, 3.3);
-    g.add(lad);
-    for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2; g.add(blob(1.6, i % 2 ? LEAF : LEAF_LT, Math.cos(a) * 2.4, 7 + r(), Math.sin(a) * 2.2, 1, 0.75, 1)); }
-    g.add(blob(2.2, LEAF, 0, 8.4, 0, 1, 0.7, 1));
-    lantern(2.6, 3.6, 0.6);
-    fireflies(10, 4, 1.2);
-    return { obj: g, h: 10.5, w: 9, d: 9 };
-  }
-  // the World Tree: three trunks grown into one, roots arching over the earth, a stair winding up it,
-  // platforms and lanterns in its boughs, an amber heart glowing in the bark
-  const R = [0, 0, 0, 2.3, 2.8, 3.1][t];
-  const H = [0, 0, 0, 7, 8.6, 10][t];
-  for (let i = 0; i < 3; i++) {
-    const a = (i / 3) * Math.PI * 2;
-    const tr = cyl(R * 0.55, R * 0.7, H, i === 1 ? BARK_DK : BARK, 8);
-    tr.position.set(Math.cos(a) * R * 0.38, 0, Math.sin(a) * R * 0.38);
-    tr.rotation.set(Math.sin(a) * 0.05, 0, -Math.cos(a) * 0.05);
-    g.add(tr);
-  }
-  // arching roots
-  for (let i = 0; i < 7; i++) {
-    const a = (i / 7) * Math.PI * 2 + 0.35;
-    if (Math.sin(a) > 0.85) continue; // the doorway
-    const pts = [0, 1, 2, 3].map((k) => new THREE.Vector3(Math.cos(a) * (R * 0.8 + k * 0.85), 1.6 - k * 0.55 + (k === 1 ? 0.35 : 0), Math.sin(a) * (R * 0.8 + k * 0.85)));
-    for (let k = 0; k < 3; k++) g.add(boneSeg(pts[k], pts[k + 1], 0.42 - k * 0.1, BARK_DK));
-  }
-  // the door in the roots, the amber heart above it
-  g.add(box(1.2, 2.0, 0.4, C.door, 0, 0, R * 0.95));
-  g.add(blob(0.7, BARK_DK, 0, 2.05, R * 0.92, 1, 0.5, 0.4));
-  if (t >= 4) {
-    const heart = mesh(new THREE.IcosahedronGeometry(0.55, 0), AMBER, { emissive: AMBER_E });
-    heart.scale.set(1, 1.4, 0.6);
-    heart.position.set(0, H * 0.55, R * 0.92);
-    heart.userData.window = true;
-    g.add(heart);
-    g.add(mesh(new THREE.TorusGeometry(0.75, 0.1, 5, 12), BARK_DK).translateY(H * 0.55).translateZ(R * 0.9));
-  }
-  // a stair of planks winding up round the trunk
-  const steps = 16 + t * 4;
-  for (let i = 0; i < steps; i++) {
-    const a = (i / steps) * Math.PI * 2 * 1.4 + 1.2;
-    const y = 0.4 + (i / steps) * (H * 0.8);
-    const st = box(1.1, 0.12, 0.5, C.timberLight, 0, 0, 0);
-    st.position.set(Math.cos(a) * (R + 0.55), y, Math.sin(a) * (R + 0.55));
-    st.rotation.y = -a;
-    g.add(st);
-  }
-  // platforms and their lanterns
-  for (let k = 0; k < t - 2; k++) {
-    const y = 3.4 + k * 2.7;
-    g.add(cyl(R + 1.4, R + 1.3, 0.25, C.timberLight, 14, 0, y));
-    for (let i = 0; i < 10; i++) { const a = (i / 10) * Math.PI * 2; g.add(box(0.1, 0.7, 0.1, C.timber, Math.cos(a) * (R + 1.3), y + 0.25, Math.sin(a) * (R + 1.3))); }
-    lantern(R + 1.3, y + 1.6, 0.4);
-    lantern(-(R + 1.3), y + 1.6, -0.4);
-  }
-  // the crown: great tiers of leaves
-  const crown = [0, 0, 0, 4.4, 5.4, 6.2][t];
-  const tiers = t - 1;
-  for (let k = 0; k < tiers; k++) {
-    // wide, flat layers of leaves: broad at the bottom, a dome on top
-    const y = H + k * crown * 0.26;
-    const rad = crown * (1.15 - k * 0.3);
-    const n = 7 + t;
-    for (let i = 0; i < n; i++) {
-      const a = (i / n) * Math.PI * 2 + k * 0.4;
-      g.add(blob(rad * 0.4, (i + k) % 2 ? LEAF : LEAF_LT, Math.cos(a) * rad * 0.72, y + r() * 0.6, Math.sin(a) * rad * 0.62, 1, 0.55, 1, 1));
-    }
-  }
-  g.add(blob(crown * 0.62, LEAF_LT, 0, H + tiers * crown * 0.26 + 0.2, 0, 1, 0.5, 1, 1));
-  // boughs reaching out under the leaves
-  for (let i = 0; i < 5; i++) {
-    const a = (i / 5) * Math.PI * 2 + 0.6;
-    g.add(boneSeg(new THREE.Vector3(0, H - 0.5, 0), new THREE.Vector3(Math.cos(a) * crown * 0.75, H + 1.2, Math.sin(a) * crown * 0.6), 0.45, BARK));
-  }
-  if (t >= 4) {
-    // a little tree beside it with its own platform, joined by a rope bridge
-    const sx = -4.6, sz = 3.4, sy = 4.0;
-    g.add(cyl(0.45, 0.65, sy + 1.6, BARK, 7, sx, 0, sz));
-    g.add(cyl(1.3, 1.3, 0.2, C.timberLight, 10, sx, sy, sz));
-    g.add(blob(1.6, LEAF_LT, sx, sy + 2.6, sz, 1, 0.75, 1));
-    const a0 = new THREE.Vector3(sx + 1.1, sy + 0.1, sz - 0.4), a1 = new THREE.Vector3(-R * 0.8, 3.5, R * 0.3);
-    const n = 9;
-    for (let i = 0; i <= n; i++) {
-      const k = i / n;
-      const p = a0.clone().lerp(a1, k);
-      p.y -= Math.sin(k * Math.PI) * 0.6;
-      const plank = box(0.9, 0.08, 0.3, C.timberLight, p.x, p.y, p.z);
-      plank.rotation.y = -Math.atan2(a1.z - a0.z, a1.x - a0.x) + Math.PI / 2;
-      g.add(plank);
-    }
-    lantern(sx, sy + 1.5, sz + 1.2);
-    // vines hanging from the boughs
-    for (let i = 0; i < 12; i++) {
-      const a = (i / 12) * Math.PI * 2;
-      const len = 1.5 + r() * 2.5;
-      g.add(box(0.07, len, 0.07, MOSS_DK, Math.cos(a) * crown * 0.65, H + 0.6 - len, Math.sin(a) * crown * 0.5));
-      if (i % 3 === 0) g.add(blob(0.12, 0xe88aa6, Math.cos(a) * crown * 0.65, H + 0.6 - len, Math.sin(a) * crown * 0.5));
-    }
-  }
-  if (t === 5) {
-    // a spring at its roots, glowing faintly, and the stones of the old grove
-    g.add(cyl(1.5, 1.5, 0.08, 0x4aa0a8, 12, 3.4, 0.04, 3.2).translateY(0));
-    g.add(mesh(new THREE.CylinderGeometry(1.1, 1.1, 0.04, 12), 0x9ff0e0, { emissive: 0x2a8a7a, opacity: 0.6 }).translateX(3.4).translateY(0.1).translateZ(3.2));
-    for (let i = 0; i < 5; i++) { const a = (i / 5) * Math.PI * 2; g.add(box(0.5, 0.4, 0.4, MENHIR, 3.4 + Math.cos(a) * 1.8, 0, 3.2 + Math.sin(a) * 1.8)); }
-    for (let i = 0; i < 6; i++) { const a = -Math.PI * 0.2 - i * 0.45; const st = box(0.6, 2 + r() * 0.8, 0.45, MENHIR, Math.cos(a) * 5.6, 0, Math.sin(a) * 5.0 - 1); st.rotation.y = -a; g.add(st); }
-  }
-  fireflies(10 + t * 4, crown, 2);
-  const h = H + tiers * crown * 0.26 + crown * 0.5;
-  return { obj: g, h, w: 14, d: 14 };
-}
-
 const HIDE = 0x8a6a3e, HIDE_DK = 0x6b4f2c, RAG = 0x6f9a2a, RUST = 0x8a4b24, RUST_DK = 0x5f3218, JUNK_WOOD = 0x4e3620, BONE = 0xe8dfc8;
 
 function goblinTent(size: number, r: () => number): THREE.Group {
@@ -2337,13 +2223,7 @@ function herbs(n: number, r: () => number): THREE.Group {
 }
 
 function mushrooms(n: number, r: () => number, spread: number): THREE.Group {
-  const g = new THREE.Group();
-  for (let i = 0; i < n; i++) {
-    const x = (r() - 0.5) * spread, z = (r() - 0.5) * spread;
-    g.add(cyl(0.07, 0.09, 0.35, 0xefe6d0, 5, x, 0, z));
-    g.add(blob(0.2, r() < 0.5 ? 0xc0392b : 0xd98b2b, x, 0.38, z, 1, 0.5, 1));
-  }
-  return g;
+  return toadstools(n, r, spread / 2, false, 0.3);
 }
 
 function skullOnPole(h: number): THREE.Group {
@@ -2369,19 +2249,9 @@ function gravePost(h: number): THREE.Group {
   return g;
 }
 
+/** The druids' mark: a carved totem with a leaf crown, antlers and a glowing spiral. */
 function antlerPole(h: number): THREE.Group {
-  const g = new THREE.Group();
-  g.add(cyl(0.08, 0.11, h, C.timber, 5));
-  for (const s of [-1, 1]) {
-    const a = box(0.08, 0.9, 0.08, 0xd9cfae, s * 0.3, h - 0.1, 0);
-    a.rotation.z = -s * 0.6;
-    g.add(a);
-    const b = box(0.06, 0.45, 0.06, 0xd9cfae, s * 0.55, h + 0.45, 0);
-    b.rotation.z = -s * 0.2;
-    g.add(b);
-  }
-  g.add(blob(0.25, 0x6f9a3a, 0, h - 0.5, 0.12));
-  return g;
+  return leafTotem(h, rng(Math.round(h * 17)));
 }
 
 /** A white post carrying the Order's shield, with a lantern: the paladin's mark at a doorstep. */
@@ -2569,7 +2439,14 @@ function themedStatue(theme: Theme): Built {
       a.rotation.z = -s * 0.6;
       fig.add(a);
     }
-    fig.add(blob(0.35, 0x6f9a3a, -0.8, 3.2, 0.1));
+    fig.add(leafCluster(0.38, 'sun', -0.8, 3.25, 0.1, 1.1, 0.8, 1.1, 0, 5));
+    fig.add(glowBit(new THREE.IcosahedronGeometry(0.14, 0), 0xf4ff9a, 0x7a9a20).translateX(-0.8).translateY(3.62).translateZ(0.1));
+    // ivy over the plinth, a spiral glowing in its face and wildflowers round its foot
+    for (const [x, z] of [[-1.1, 1.1], [1.1, 1.1], [-1.1, -1.1], [1.1, -1.1]]) g.add(leafCluster(0.45, x < 0 ? 'deep' : 'mid', x, 1.2, z, 0.9, 1.4, 0.9, 0, x * 3 + z));
+    const sp = spiralGlyph(1.2);
+    sp.position.set(0, 1.2, 1.12);
+    g.add(sp);
+    for (let i = 0; i < 10; i++) { const a = (i / 10) * Math.PI * 2; g.add(blob(0.12, [0xf2e46a, 0xf4f1e6, 0xb58cd8, 0xe88aa6][i % 4], Math.cos(a) * 2.05, 0.45, Math.sin(a) * 2.05)); }
   } else if (theme === 'necromancer') {
     // a hooded figure of dark bronze, a skull-topped staff burning green
     fig.add(cyl(0.45, 0.8, 2.1, 0x3a3440, 8));
@@ -2613,7 +2490,8 @@ function themedStatue(theme: Theme): Built {
 function themed(id: BuildingId, t: number, b: Built): Built {
   const theme = getTheme();
   if (theme === 'classic' || id === 'main') return b;
-  if (id === 'watchtower') return themedWatchtower(t, theme);
+  if (theme === 'orc') return orcDress(id, t, b, rng(id.length * 31 + t));
+  if (id === 'watchtower') return theme === 'druid' ? druidWatchtower(t) : themedWatchtower(t, theme);
   if (id === 'statue') return themedStatue(theme);
   const r = rng(id.length * 31 + t);
   const g = b.obj;
@@ -2655,7 +2533,7 @@ function themed(id: BuildingId, t: number, b: Built): Built {
     case 'workshop':
       if (theme === 'paladin') { const p = shieldPost(3.2); p.position.set(-3.9, 0, 2.6); g.add(p); }
       if (theme === 'sorcerer') { const rc = runeCircle(2.2); rc.position.set(0.5, 0, 0.2); g.add(rc); }
-      if (theme === 'druid') for (const [x, z] of [[-3.5, -2], [3.5, -2], [-3.5, 2], [3.5, 2]]) g.add(blob(0.55, 0x6f9a3a, x, 3.5, z, 1, 0.7, 1));
+      if (theme === 'druid') for (const [x, z] of [[-3.5, -2], [3.5, -2], [-3.5, 2], [3.5, 2]]) g.add(leafCluster(0.6, x < 0 ? 'deep' : 'mid', x, 3.55, z, 1.2, 0.6, 1.1, 0, x + z * 3), leafCluster(0.28, 'sun', x * 0.9, 3.95, z * 0.9, 1, 0.8, 1, 0, x * z));
       if (theme === 'goblin') { const s = skullOnPole(3.4); s.position.set(-3.9, 0, 2.6); g.add(s); }
       if (theme === 'necromancer') { const p = gravePost(3.4); p.position.set(-3.9, 0, 2.6); g.add(p); }
       break;
@@ -2738,6 +2616,16 @@ function plaque(theme: Theme): THREE.Group {
     g.add(d);
     const rim = mesh(new THREE.TorusGeometry(0.6, 0.05, 4, 6), 0xd8d0bc);
     g.add(rim);
+  } else if (theme === 'orc') {
+    // a hide stretched on two crossed sticks, a bone knotted at each corner
+    g.add(box(1.15, 1.0, 0.06, 0x8a6440, 0, -0.5, 0));
+    for (const s of [-1, 1]) {
+      const st = box(0.08, 1.7, 0.08, 0x33241a, 0, 0, -0.05);
+      st.geometry.translate(0, -0.85, 0);
+      st.rotation.z = s * 0.72;
+      g.add(st);
+    }
+    for (const [x, y] of [[-0.55, 0.45], [0.55, 0.45], [-0.55, -0.45], [0.55, -0.45]]) g.add(blob(0.07, 0xe3d8bf, x, y - 0.05, 0.05));
   } else if (theme === 'goblin') {
     const p = box(1.2, 1.0, 0.08, 0x8a4b24, 0, -0.5, 0);
     p.rotation.z = 0.08;
@@ -2786,6 +2674,18 @@ function signEmblem(kind: SignKind, theme: Theme): THREE.Group {
       }
       g.add(blob(0.2, 0xe8dfc8, 0, 0, 0.2));
       g.add(box(0.06, 0.06, 0.04, 0x1a1a1a, -0.07, 0.02, 0.38), box(0.06, 0.06, 0.04, 0x1a1a1a, 0.07, 0.02, 0.38));
+    } else if (theme === 'orc') {
+      // crossed cleavers behind a tusked skull
+      for (const s of [-1, 1]) {
+        g.add(bar(1.2, 0.08, 0x33241a, s * -0.45, 0.45, s * X));
+        const bl = box(0.3, 0.38, 0.05, 0x5e5a56, s * -0.38, 0.22, 0.13);
+        bl.rotation.z = s * X;
+        g.add(bl);
+      }
+      const sk = skull(0.4);
+      sk.position.set(0, 0.0, 0.22);
+      g.add(sk);
+      for (const s of [-1, 1]) g.add(cone(0.03, 0.14, 0xe3d8bf, 4, s * 0.07, -0.18, 0.36));
     } else {
       for (const s of [-1, 1]) {
         g.add(bar(1.35, 0.07, 0xc9d2d8, s * -0.47, 0.5, s * X));
@@ -2798,15 +2698,16 @@ function signEmblem(kind: SignKind, theme: Theme): THREE.Group {
       g.add(sh);
     }
   } else if (kind === 'smithy') {
-    const metal = theme === 'goblin' ? 0x5c554a : theme === 'sorcerer' ? 0xb58cff : 0xa7b3bb;
+    const metal = theme === 'goblin' || theme === 'orc' ? 0x5c554a : theme === 'sorcerer' ? 0xb58cff : 0xa7b3bb;
     g.add(bar(1.1, 0.08, theme === 'druid' ? 0x5a3f28 : 0x6e4a2a, -0.25, 0.42, 0.55));
     const head = box(0.5, 0.26, 0.16, metal, -0.02, 0.28, 0.14);
     head.rotation.z = 0.55;
     g.add(head);
     g.add(box(0.7, 0.14, 0.14, 0x4c555d, 0, -0.42, 0.12), box(0.3, 0.2, 0.14, 0x4c555d, 0, -0.34, 0.12));
     if (theme === 'druid') g.add(blob(0.14, 0x6f9a3a, 0.35, 0.3, 0.16));
+    if (theme === 'orc') g.add(mesh(new THREE.BoxGeometry(0.4, 0.08, 0.06), 0xffb24a, { emissive: 0xc8600a }).translateY(-0.28).translateZ(0.2));
   } else if (kind === 'stable') {
-    const col = theme === 'sorcerer' ? C.gold : theme === 'druid' ? 0x8b5a2b : theme === 'goblin' ? 0x8a4b24 : 0xa7b3bb;
+    const col = theme === 'sorcerer' ? C.gold : theme === 'druid' ? 0x8b5a2b : theme === 'goblin' ? 0x8a4b24 : theme === 'orc' ? 0xe3d8bf : 0xa7b3bb;
     const shoe = mesh(new THREE.TorusGeometry(0.3, 0.07, 4, 12, Math.PI * 1.35), col);
     shoe.rotation.z = -Math.PI * 0.18 + Math.PI;
     shoe.position.set(0, 0.02, 0.14);

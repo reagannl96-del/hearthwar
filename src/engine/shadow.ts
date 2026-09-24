@@ -39,7 +39,7 @@ function publicVillage(v: Village, now: number): Village {
   return {
     id: v.id, name: v.name, x: v.x, y: v.y, ownerId: v.ownerId, points: v.points, bonus: v.bonus,
     buildings: emptyBuildings(), res: { wood: 0, clay: 0, iron: 0 }, resAt: now, loyalty: 100, loyaltyAt: now,
-    units: {}, support: [], buildQueue: [], recruit: { barracks: [], stable: [], workshop: [], academy: [], statue: [] },
+    units: {}, support: [], buildQueue: [], recruit: { barracks: [], stable: [], workshop: [], academy: [], statue: [], market: [] },
     research: [], tech: {}, scavengeUnlocked: 0, scavenge: [null, null, null, null], foundedAt: v.foundedAt, outPop: 0,
     merchantsOut: 0,
     heroKind: v.heroKind,
@@ -55,6 +55,7 @@ function publicPlayer(p: Player): Player {
     createdAt: p.createdAt, history: p.history.slice(-120), notes: {}, eliminated: p.eliminated,
     ai: p.ai ? ({ personality: p.ai.personality } as Player['ai']) : undefined,
     dailyAwards: p.dailyAwards,
+    flag: p.flag,
   };
 }
 

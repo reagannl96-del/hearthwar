@@ -11,6 +11,7 @@ import { OverviewsScreen } from './screens/OverviewsScreen';
 import { QuestsScreen } from './screens/QuestsScreen';
 import { RankingScreen } from './screens/RankingScreen';
 import { RealmScreen } from './screens/RealmScreen';
+import { BannerScreen } from './screens/BannerScreen';
 import { ReportsScreen } from './screens/ReportsScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { TitleScreen } from './screens/TitleScreen';
@@ -114,6 +115,7 @@ function PaneView() {
       {r.name === 'settings' && <SettingsScreen />}
       {r.name === 'news' && <NewsScreen />}
       {r.name === 'realm' && <RealmScreen />}
+      {r.name === 'banner' && <BannerScreen />}
       {r.name === 'tribe' && <TribeScreen id={r.id} tab={r.tab} />}
     </>
   );

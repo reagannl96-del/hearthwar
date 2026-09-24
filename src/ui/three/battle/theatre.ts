@@ -214,10 +214,10 @@ interface Walker {
 const ORIGIN: Partial<Record<UnitId, BuildingId>> = {
   spear: 'barracks', sword: 'barracks', axe: 'barracks', archer: 'barracks', scout: 'main', militia: 'farm',
   light: 'stable', marcher: 'stable', heavy: 'stable',
-  paladin: 'statue', sorcerer: 'statue', druid: 'statue', goblin: 'statue', necromancer: 'statue',
+  paladin: 'statue', sorcerer: 'statue', druid: 'statue', goblin: 'statue', necromancer: 'statue', orc: 'statue',
 };
 
-const THEME_COLOR: Record<Theme, number> = { classic: 0xb3332a, paladin: 0x2c56b0, sorcerer: 0x6a3fa0, druid: 0x4f7a2e, goblin: 0x6f9a2a, necromancer: 0x2f7a4a };
+const THEME_COLOR: Record<Theme, number> = { classic: 0xb3332a, paladin: 0x2c56b0, sorcerer: 0x6a3fa0, druid: 0x4f7a2e, goblin: 0x6f9a2a, necromancer: 0x2f7a4a, orc: 0xa3261a };
 const WALL_COLOR = (level: number) => (level >= 10 ? 0xb9b09c : 0x8a5a30);
 const wallTier = (l: number) => (l <= 0 ? 0 : l < 5 ? 1 : l < 10 ? 2 : l < 15 ? 3 : 4);
 const wallHeight = (l: number) => (l <= 0 ? 0 : l < 5 ? 2.9 : l < 10 ? 3.8 : l < 15 ? 3.6 : 4.8);
@@ -661,7 +661,7 @@ export class BattleTheatre {
         ? new THREE.Vector3(x, (h + 0.3) * sc, z)
         : new THREE.Vector3(
           x + Math.cos(army.theta) * 1.62 * sc,
-          ((v.theme === 'sorcerer' ? h * 0.82 : v.theme === 'druid' ? h - 0.6 : h * 0.9) + 0.11) * sc,
+          ((v.theme === 'sorcerer' ? h * 0.82 : v.theme === 'druid' ? h - 0.6 : v.theme === 'orc' ? h + 0.19 : h * 0.9) + 0.11) * sc,
           z + Math.sin(army.theta) * 1.62 * sc,
         );
       f.g.position.copy(p);
@@ -1204,6 +1204,18 @@ export class BattleTheatre {
     const fx = plan.effects;
     if (fx.includes('thornwall')) this.at(battle, 0.4, () => this.growThorns(P, v));
     if (fx.includes('sneak')) this.at(battle, 1.0, () => { const p = P.clone(); p.y = 0.6; this.fx.dust(p, 16, 0x7a6a4a); this.fx.debris(p, 8, 0x6a5a3a); this.sfx('thud', 0.2); });
+    // the Orc King's warcry: a roar that shakes the dust up in a ring around him
+    if (fx.includes('warcry')) this.at(battle, 0.6, () => {
+      const k = atts.find((a) => a.unit === 'orc' && !a.fallen) ?? atts[0];
+      if (!k) return;
+      const c = k.pos.clone();
+      this.fx.flash(c.clone().setY(c.y + 1.6), 4, 0xff5a2a, 0.6);
+      for (let i = 0; i < 12; i++) {
+        const ang = (i / 12) * Math.PI * 2;
+        this.fx.dust(c.clone().add(new THREE.Vector3(Math.cos(ang) * 2.4, 0.3, Math.sin(ang) * 2.4)), 3, 0x8a7a5a);
+      }
+      this.sfx('horn', 0.3);
+    });
     if (fx.includes('ward')) this.at(battle, 0.5, () => { for (const d of defs) this.fx.magic(d.pos.clone().setY(d.pos.y + 1.5), 3, 0x8fd0ff); });
     for (const side of ['att', 'def'] as Side[]) {
       if (!fx.includes(`dread-${side}`)) continue;

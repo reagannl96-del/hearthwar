@@ -4,6 +4,7 @@
 
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { BattleData, Buildings, Report } from '../../engine/types';
+import { DEFAULT_FLAG } from '../../engine/data/flags';
 import { isVolcanic, isWinter } from '../../engine/world';
 import { Btn } from '../components/common';
 import { host, isNightAt, now, prefs, sceneQuality, view } from '../store';
@@ -60,6 +61,9 @@ export function AttackViewer({ r, onClose }: { r: Report; onClose: () => void })
     const buildings = targetBuildings(b);
     r3.update(buildings, {}, 0xb3332a, host.value?.villageInfo(b.defender.vid)?.points ?? 800);
     r3.setTroops({});
+    // the defender's banner flies at the gate if the wall still stands at level 20 (barbarians fly none)
+    const owner = b.defender.playerId;
+    r3.setBanner(owner != null ? host.value?.world.players[owner]?.flag ?? DEFAULT_FLAG : null);
     r3.setBattle({
       now: r.t, rate: 0, incoming: [], reports: [],
       village: {

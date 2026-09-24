@@ -7,7 +7,7 @@
 
 import * as THREE from 'three';
 import type { BuildingId } from '../../engine/types';
-import { C, blob, box, cone, cyl, getTheme, mesh, type Theme } from './kit';
+import { BLOOD, BONE_W, C, EMBER, EMBER_E, IRON_BK, blob, box, cone, cyl, getTheme, hornPair, leafCluster, mesh, orcSkull, swarm, type Theme } from './kit';
 
 const GOLD = 0xe9b83a, GOLD_E = 0x6a4a10;
 
@@ -21,6 +21,7 @@ const LOOK: Record<Theme, { main: number; glow: number; glowE: number; accent: n
   druid: { main: 0xe8c86a, glow: 0xf4ff9a, glowE: 0x7a9a20, accent: 0x4f7a2e },
   goblin: { main: GOLD, glow: 0x9aff3a, glowE: 0x4a9a10, accent: 0x6f9a2a },
   necromancer: { main: 0xe6dfcc, glow: 0x5cff9a, glowE: 0x1f9a4a, accent: 0x2f7a4a },
+  orc: { main: BONE_W, glow: EMBER, glowE: EMBER_E, accent: BLOOD },
 };
 
 const glowMesh = (geo: THREE.BufferGeometry, c: number, e: number) => mesh(geo, c, { emissive: e });
@@ -43,9 +44,11 @@ function standard(th: Theme, h: number): THREE.Group {
       break;
     }
     case 'druid': {
+      // a living staff: ivy wound up it, a leaf crown and a glowing seed at its tip
       g.add(cyl(0.1, 0.16, h, 0x5a3f28, 5));
-      for (let i = 0; i < 4; i++) g.add(blob(0.32, i % 2 ? 0x4f7a2e : 0x6f9a3a, Math.cos(i * 1.6) * 0.3, h * (0.45 + i * 0.15), Math.sin(i * 1.6) * 0.3));
-      g.add(glowMesh(new THREE.IcosahedronGeometry(0.16, 0), L.glow, L.glowE).translateY(h + 0.2));
+      for (let i = 0; i < 4; i++) g.add(leafCluster(0.3, i % 2 ? 'deep' : 'mid', Math.cos(i * 1.6) * 0.3, h * (0.4 + i * 0.15), Math.sin(i * 1.6) * 0.3, 1, 0.8, 1, 0, i));
+      g.add(leafCluster(0.34, 'sun', 0, h + 0.05, 0, 1.2, 0.6, 1.2, 0, 7));
+      g.add(glowMesh(new THREE.IcosahedronGeometry(0.16, 0), L.glow, L.glowE).translateY(h + 0.42));
       g.add(blob(0.13, 0xe88aa6, 0.25, h * 0.7, 0.2), blob(0.13, 0xf4f1e6, -0.2, h * 0.85, 0.15));
       break;
     }
@@ -54,6 +57,20 @@ function standard(th: Theme, h: number): THREE.Group {
       g.add(blob(0.3, 0xe6dfcc, 0, h + 0.2, 0, 1, 0.9, 1));
       g.add(cyl(0.2, 0.2, 0.06, GOLD, 6, 0, h + 0.46, 0));
       const rag = box(0.8, 0.55, 0.05, L.accent, 0.45, h - 0.7, 0);
+      rag.userData.flag = true;
+      g.add(rag);
+      break;
+    }
+    case 'orc': {
+      // a war pike: a horned skull on top, a blood-red rag, a fire basket glowing under the skull
+      g.add(cyl(0.07, 0.1, h, C.timber, 5));
+      g.add(cyl(0.26, 0.16, 0.26, IRON_BK, 6, 0, h - 0.9));
+      g.add(glowMesh(new THREE.CylinderGeometry(0.22, 0.22, 0.06, 6), L.glow, L.glowE).translateY(h - 0.64));
+      const sk = orcSkull(0.4, true);
+      sk.position.y = h + 0.2;
+      g.add(sk);
+      g.add(hornPair(0.16, h + 0.3, 0, 0.3, 0.5, 0.05, 0.06));
+      const rag = box(0.5, 0.8, 0.04, L.accent, 0.3, h - 1.8, 0);
       rag.userData.flag = true;
       g.add(rag);
       break;
@@ -115,14 +132,12 @@ function crown(th: Theme, s: number): THREE.Group {
       break;
     }
     case 'druid': {
-      g.add(blob(0.55 * s, 0x6f9a3a, 0, 0, 0, 1, 0.6, 1));
+      // a crown of blossom, and fireflies circling it (merged into one mesh)
+      g.add(leafCluster(0.55 * s, 'mid', 0, 0, 0, 1, 0.6, 1, 1, 11));
       for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2; g.add(blob(0.14 * s, i % 2 ? 0xe88aa6 : 0xf4f1e6, Math.cos(a) * 0.45 * s, 0.25 * s, Math.sin(a) * 0.45 * s)); }
-      const ff = new THREE.Group();
-      for (let i = 0; i < 6; i++) ff.add(glowMesh(new THREE.OctahedronGeometry(0.07, 0), L.glow, L.glowE).translateX(Math.cos(i) * 1.3 * s).translateY((i % 3) * 0.4).translateZ(Math.sin(i) * 1.3 * s));
-      ff.userData.dynamic = true;
-      ff.userData.orbit = 0.4;
-      ff.userData.bob = 0.3;
-      g.add(ff);
+      const parts = new THREE.Group();
+      for (let i = 0; i < 6; i++) parts.add(glowMesh(new THREE.OctahedronGeometry(0.09, 0), L.glow, L.glowE).translateX(Math.cos(i) * 1.3 * s).translateY((i % 3) * 0.4).translateZ(Math.sin(i) * 1.3 * s));
+      g.add(swarm(parts, { orbit: 0.4, bob: 0.3 }));
       break;
     }
     case 'goblin': {
@@ -135,6 +150,17 @@ function crown(th: Theme, s: number): THREE.Group {
       coin.position.y = 0.7 * s;
       g.add(coin);
       g.add(cyl(0.05, 0.05, 0.7 * s, C.timber, 4));
+      break;
+    }
+    case 'orc': {
+      // a great horned skull, embers for eyes, and sparks drifting up about it
+      const sk = orcSkull(0.6 * s, true);
+      sk.position.y = 0.45 * s;
+      g.add(sk);
+      g.add(hornPair(0.25 * s, 0.6 * s, 0, 0.55 * s, 0.9 * s, 0.1 * s, 0.1 * s));
+      const parts = new THREE.Group();
+      for (let i = 0; i < 7; i++) parts.add(glowMesh(new THREE.OctahedronGeometry(0.08, 0), i % 2 ? L.glow : 0xffc060, i % 2 ? L.glowE : 0xd07a20).translateX(Math.cos(i * 0.9) * 0.9 * s).translateY((i % 4) * 0.35).translateZ(Math.sin(i * 0.9) * 0.9 * s));
+      g.add(swarm(parts, { orbit: 0.3, bob: 0.4 }));
       break;
     }
     case 'necromancer': {
@@ -173,7 +199,7 @@ function apron(th: Theme, b: Box2): THREE.Group {
   const L = LOOK[th];
   const w = b.w + 0.2, d = b.d + 0.2;
   const cx = (b.x0 + b.x1) / 2, cz = (b.z0 + b.z1) / 2;
-  const edge = th === 'druid' ? 0x6f9a3a : th === 'goblin' ? 0x7a5a2a : th === 'necromancer' ? 0x3a3440 : C.stoneLight;
+  const edge = th === 'druid' ? 0x6f9a3a : th === 'goblin' ? 0x7a5a2a : th === 'necromancer' ? 0x3a3440 : th === 'orc' ? 0x33241a : C.stoneLight;
   for (const [x, z, ww, dd] of [[cx, b.z1, w, 0.18], [cx, b.z0, w, 0.18], [b.x0, cz, 0.18, d], [b.x1, cz, 0.18, d]] as [number, number, number, number][]) {
     g.add(box(ww, 0.08, dd, edge, x, 0.02, z));
     g.add(box(Math.max(0.06, ww - 0.1), 0.03, Math.max(0.06, dd - 0.1), L.main, x, 0.1, z));
@@ -247,7 +273,8 @@ function trade(id: BuildingId, th: Theme, b: Box2): THREE.Object3D | null {
     case 'watchtower': {
       // a beacon burning on the very top
       g.add(cyl(0.4, 0.3, 0.3, C.iron, 7));
-      const f = glowMesh(new THREE.ConeGeometry(0.35, 1.0, 6).translate(0, 0.5, 0), th === 'necromancer' || th === 'goblin' || th === 'sorcerer' || th === 'druid' ? L.glow : 0xffa53a, th === 'necromancer' || th === 'goblin' || th === 'sorcerer' || th === 'druid' ? L.glowE : 0xd0501a);
+      const own = th === 'necromancer' || th === 'goblin' || th === 'sorcerer' || th === 'druid' || th === 'orc';
+      const f = glowMesh(new THREE.ConeGeometry(0.35, 1.0, 6).translate(0, 0.5, 0), own ? L.glow : 0xffa53a, own ? L.glowE : 0xd0501a);
       f.position.y = 0.25;
       f.userData.dynamic = true;
       f.userData.fire = true;

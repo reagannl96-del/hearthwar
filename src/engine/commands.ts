@@ -4,7 +4,7 @@ import { bumpDaily } from './awards';
 import { themeOfHero, unitNameAt } from './data/themes';
 import { computeLoot, resolveBattle, type DefStackInput } from './combat';
 import { BUILDINGS, BUILDING_ORDER } from './data/buildings';
-import { HEROES, HERO_POWERS, ITEM_BY_ID, ITEM_POWERS, MERCHANT_CARRY, MERCHANT_SPEED, OWN_SHIPMENT_SPEED, UNITS, isHero, type ItemDef } from './data/units';
+import { HEROES, HERO_POWERS, ITEM_BY_ID, ITEM_POWERS, MERCHANT_CARRY, MERCHANT_SPEED, OWN_SHIPMENT_SPEED, TRADER_CARRY, TRADER_SPEEDUP, UNITS, isHero, type ItemDef } from './data/units';
 import { pushEvent } from './events';
 import { addCommand, commandsFrom, commandsOf, removeCommand } from './cmdindex';
 import {
@@ -76,6 +76,14 @@ export function travelTime(w: World, from: Village, to: Village, units: Units, o
  * One-way merchant trip. Hauling between two of your own villages is much
  * slower, so a fresh conquest cannot simply be fed from home.
  */
+/** Horse merchants keep out of battles: they are traders, not soldiers. */
+function withoutTraders(u: Units): Units {
+  if (!u.trader) return u;
+  const out = { ...u };
+  delete out.trader;
+  return out;
+}
+
 export function merchantTime(w: World, from: Village, to: Village): number {
   const own = from.ownerId !== null && from.ownerId === to.ownerId ? OWN_SHIPMENT_SPEED : 1;
   return Math.max(1000, Math.round((distance(from.x, from.y, to.x, to.y) * MERCHANT_SPEED * MINUTE) / (w.config.unitSpeed * own)));
@@ -116,6 +124,7 @@ export function sendTroops(w: World, o: SendOpts): ActionResult {
     const n = Math.floor(o.units[u] ?? 0);
     if (n <= 0) continue;
     if (u === 'militia') return { ok: false, error: 'Militia never leave the village.' };
+    if (u === 'trader') return { ok: false, error: 'Horse merchants carry goods, not arms: send them from the market.' };
     if ((from.units[u] ?? 0) < n) return { ok: false, error: `Not enough ${unitNameAt(from, u, true).toLowerCase()} at home.` };
     units[u] = n;
   }
@@ -240,7 +249,7 @@ export function withdrawSupport(w: World, playerId: number, hostVid: number, fro
   return { ok: true };
 }
 
-export function sendResources(w: World, playerId: number, fromVid: number, toVid: number, goods: Res): ActionResult {
+export function sendResources(w: World, playerId: number, fromVid: number, toVid: number, goods: Res, horses = false): ActionResult {
   const from = w.villages[fromVid];
   const to = w.villages[toVid];
   if (!from || from.ownerId !== playerId) return { ok: false, error: 'That is not your village.' };
@@ -254,16 +263,32 @@ export function sendResources(w: World, playerId: number, fromVid: number, toVid
   }
   const total = resSum(amount);
   if (total <= 0) return { ok: false, error: 'Enter an amount to send.' };
-  const needed = Math.ceil(total / MERCHANT_CARRY);
-  const free = merchantCount(from.buildings.market, from.bonus) - from.merchantsOut;
-  if (needed > free) return { ok: false, error: `You need ${needed} merchants but only ${free} are available.` };
-  for (const k of RES_KEYS) from.res[k] -= amount[k];
-  from.merchantsOut += needed;
-  const dur = merchantTime(w, from, to);
-  const c: Command = {
-    id: w.nextId++, kind: 'trade', ownerId: playerId, fromVid, toVid, units: {}, res: amount, merchants: needed,
-    depart: w.now, arrive: w.now + dur,
-  };
+  let c: Command;
+  if (horses) {
+    // horse merchants: 20,000 each, five times as fast, and they eat at home the whole way
+    const needed = Math.ceil(total / TRADER_CARRY);
+    const have = from.units.trader ?? 0;
+    if (needed > have) return { ok: false, error: `You need ${needed} horse merchant${needed === 1 ? '' : 's'} but only ${have} ${have === 1 ? 'is' : 'are'} at home.` };
+    for (const k of RES_KEYS) from.res[k] -= amount[k];
+    from.units.trader = have - needed;
+    from.outPop += needed * UNITS.trader.pop;
+    const dur = Math.max(1000, Math.round(merchantTime(w, from, to) / TRADER_SPEEDUP));
+    c = {
+      id: w.nextId++, kind: 'trade', ownerId: playerId, fromVid, toVid, units: { trader: needed }, res: amount, merchants: 0,
+      depart: w.now, arrive: w.now + dur,
+    };
+  } else {
+    const needed = Math.ceil(total / MERCHANT_CARRY);
+    const free = merchantCount(from.buildings.market, from.bonus) - from.merchantsOut;
+    if (needed > free) return { ok: false, error: `You need ${needed} merchants but only ${free} are available.` };
+    for (const k of RES_KEYS) from.res[k] -= amount[k];
+    from.merchantsOut += needed;
+    const dur = merchantTime(w, from, to);
+    c = {
+      id: w.nextId++, kind: 'trade', ownerId: playerId, fromVid, toVid, units: {}, res: amount, merchants: needed,
+      depart: w.now, arrive: w.now + dur,
+    };
+  }
   addCommand(w, c);
   pushEvent(w, 'arrive', c.arrive, c.id);
   return { ok: true };
@@ -282,7 +307,16 @@ export function handleArrival(w: World, cid: number, hooks: ArrivalHooks): void 
     case 'trade': arriveTrade(w, c); break;
     case 'tradeback': {
       const home = w.villages[c.fromVid];
-      if (home) home.merchantsOut = Math.max(0, home.merchantsOut - (c.merchants ?? 0));
+      if (home) {
+        home.merchantsOut = Math.max(0, home.merchantsOut - (c.merchants ?? 0));
+        // horse merchants come home to a village still ours (or are lost with it)
+        const n = c.units.trader ?? 0;
+        if (n > 0 && home.ownerId === c.ownerId) {
+          updateVillage(w, home, w.now);
+          home.units.trader = (home.units.trader ?? 0) + n;
+          home.outPop = Math.max(0, home.outPop - n * UNITS.trader.pop);
+        }
+      }
       break;
     }
   }
@@ -377,7 +411,7 @@ function arriveTrade(w: World, c: Command): void {
     // the way home takes as long as the way out (slow own-village hauls included)
     const back: Command = {
       id: w.nextId++, kind: 'tradeback', ownerId: c.ownerId, fromVid: c.fromVid, toVid: c.fromVid, origin: c.toVid,
-      units: {}, merchants: c.merchants, depart: w.now, arrive: w.now + (c.arrive - c.depart),
+      units: { ...c.units }, merchants: c.merchants, depart: w.now, arrive: w.now + (c.arrive - c.depart),
     };
     addCommand(w, back);
     pushEvent(w, 'arrive', back.arrive, back.id);
@@ -458,7 +492,7 @@ function resolveAttack(w: World, c: Command, hooks: ArrivalHooks): void {
     att: c.units,
     attTech: home?.tech ?? {},
     attItem,
-    defStacks: stacks.map((s): DefStackInput => ({ units: s.units, tech: s.tech })),
+    defStacks: stacks.map((s): DefStackInput => ({ units: withoutTraders(s.units), tech: s.tech })),
     defItems,
     wall: wallBefore,
     luck,

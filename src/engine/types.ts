@@ -12,12 +12,12 @@ export type BuildingId =
 
 export type UnitId =
   | 'spear' | 'sword' | 'axe' | 'archer' | 'scout' | 'light' | 'marcher'
-  | 'heavy' | 'ram' | 'catapult' | 'paladin' | 'sorcerer' | 'druid' | 'goblin' | 'necromancer' | 'noble' | 'militia';
+  | 'heavy' | 'ram' | 'catapult' | 'paladin' | 'sorcerer' | 'druid' | 'goblin' | 'necromancer' | 'orc' | 'noble' | 'militia' | 'trader';
 
 export type Units = { [K in UnitId]?: number };
 export type Buildings = Record<BuildingId, number>;
 
-export type RecruitBuilding = 'barracks' | 'stable' | 'workshop' | 'academy' | 'statue';
+export type RecruitBuilding = 'barracks' | 'stable' | 'workshop' | 'academy' | 'statue' | 'market';
 
 export type BonusType = 'wood' | 'clay' | 'iron' | 'all' | 'farm' | 'storage' | 'recruit';
 
@@ -154,7 +154,7 @@ export type ReportColor = 'green' | 'yellow' | 'red' | 'blue' | 'grey';
 
 export interface SideInfo {
   /** the village's look, so reports can name its troops (goblin, sorcerer, druid or classic) */
-  theme?: 'classic' | 'paladin' | 'sorcerer' | 'druid' | 'goblin' | 'necromancer';
+  theme?: 'classic' | 'paladin' | 'sorcerer' | 'druid' | 'goblin' | 'necromancer' | 'orc';
   playerId: number | null;
   playerName: string;
   vid: number;
@@ -418,6 +418,8 @@ export interface Player {
   dailyAwards?: DailyAward[];
   /** tribe forum: thread id -> last post id this ruler has read */
   forumSeen?: Record<number, number>;
+  /** the banner flown at the gates of this ruler's villages with a level 20 wall */
+  flag?: import('./data/flags').FlagDesign;
   /** when a tribe of computer rulers last invited this person (they hear from one only now and then) */
   aiInviteAt?: number;
   /** the village manager: build and army templates, and which village follows which */

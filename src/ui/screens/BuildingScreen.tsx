@@ -14,6 +14,7 @@ import { Bar, Btn, Cost, Countdown, Empty, NumInput, Progress, Section, UnitList
 import { fmt, fmtDur } from '../format';
 import { act, host, liveRes, now, view, warp, usePane } from '../store';
 import { MarketPanel } from './MarketScreen';
+import { RecruitQueue } from '../components/RecruitQueue';
 import { buildingThumb } from '../three/thumbs';
 import { RallyScreen } from './RallyScreen';
 
@@ -186,32 +187,6 @@ function HQPanel({ v }: { v: VillageView }) {
 }
 
 // ---------- recruitment ----------
-
-function RecruitQueue({ v, b }: { v: VillageView; b: RecruitBuilding }) {
-  const q = v.recruit[b];
-  if (q.length === 0) return null;
-  return (
-    <Section title="In training">
-      <ul class="queue">
-        {q.map((j, i) => {
-          const end = j.start + j.count * j.per;
-          return (
-            <li class="queue-item">
-              <UnitIcon u={j.unit} size={18} />
-              <span class="grow">
-                {fmt(j.count - j.done)} {unitName(j.unit, true)}
-                {i === 0 && <Progress from={j.start + j.done * j.per} to={j.start + (j.done + 1) * j.per} />}
-              </span>
-              <span class="muted small">next in <Countdown until={j.start + (j.done + 1) * j.per} /></span>
-              <Countdown until={end} />
-              <Btn small variant="ghost" onClick={() => act({ type: 'cancelRecruit', vid: v.id, building: b, job: j.id })}>Cancel</Btn>
-            </li>
-          );
-        })}
-      </ul>
-    </Section>
-  );
-}
 
 function RecruitPanel({ v, b }: { v: VillageView; b: RecruitBuilding }) {
   const h = host.value!;
@@ -595,7 +570,7 @@ function WarehousePanel({ v }: { v: VillageView }) {
 
 function FarmPanel({ v }: { v: VillageView }) {
   const home = unitsPop(v.units);
-  const queued = (['barracks', 'stable', 'workshop', 'academy', 'statue'] as RecruitBuilding[])
+  const queued = (['barracks', 'stable', 'workshop', 'market', 'academy', 'statue'] as RecruitBuilding[])
     .reduce((s, b) => s + v.recruit[b].reduce((a, j) => a + (j.count - j.done) * UNITS[j.unit].pop, 0), 0);
   const troopsTotal = v.popUsed;
   const militiaActive = v.militiaUntil !== undefined && v.militiaUntil > now.value;

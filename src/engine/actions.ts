@@ -17,6 +17,7 @@ import {
   canBuildReq, farmMax, popFree, queuedLevel, rechainRecruit, recruitQueueEnd, storageOf, unitAvailable, updateVillage,
 } from './village';
 import { claimQuest } from './quests';
+import { sanitizeFlag } from './data/flags';
 import { exchangeQuote } from './market';
 import { restartPlayer } from './world';
 import { MANAGER_MIN_VILLAGES, managerUnlocked, setManager } from './manager';
@@ -41,7 +42,8 @@ export type Action =
   /** stop every repeating raid, or only those from one village and/or on one target */
   | { type: 'stopRepeats'; vid?: number; target?: number }
   | { type: 'withdraw'; host: number; from: number; units?: Units }
-  | { type: 'trade'; vid: number; target: number; res: Res }
+  | { type: 'trade'; vid: number; target: number; res: Res; horses?: boolean }
+  | { type: 'setFlag'; flag: unknown }
   | { type: 'exchange'; vid: number; give: keyof Res; get: keyof Res; amount: number }
   | { type: 'mintCoin'; vid: number; count: number }
   | { type: 'militia'; vid: number }
@@ -508,7 +510,13 @@ export function applyAction(w: World, pid: number, a: Action): ActionResult {
       return n > 0 ? { ok: true, data: n } : fail('No raids are repeating.');
     }
     case 'withdraw': return withdrawSupport(w, pid, a.host, a.from, a.units);
-    case 'trade': return sendResources(w, pid, a.vid, a.target, a.res);
+    case 'trade': return sendResources(w, pid, a.vid, a.target, a.res, !!a.horses);
+    case 'setFlag': {
+      const p = w.players[pid];
+      if (!p) return fail('Unknown player.');
+      p.flag = sanitizeFlag(a.flag);
+      return { ok: true };
+    }
     case 'exchange': return exchange(w, pid, a.vid, a.give, a.get, a.amount);
     case 'mintCoin': return mintCoin(w, pid, a.vid, a.count);
     case 'militia': return callMilitia(w, pid, a.vid);

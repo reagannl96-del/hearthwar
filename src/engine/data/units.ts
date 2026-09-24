@@ -120,11 +120,23 @@ export const UNITS: Record<UnitId, UnitDef> = {
     cost: r(50, 40, 50), pop: 10, attack: 150, def: [200, 150, 200], speed: 12, carry: 0, time: 21600,
     cls: 'inf', building: 'statue', req: { statue: 1 }, research: false, smithy: 0,
   },
+  orc: {
+    id: 'orc', name: 'Orc King', plural: 'Orc Kings',
+    description: 'A hero of the statue. The warlord of the clans: his warcry sends rams and rock-hurlers crashing through walls, and his warband eats and grows where he rules.',
+    cost: r(50, 40, 40), pop: 10, attack: 180, def: [220, 180, 150], speed: 11, carry: 60, time: 21600,
+    cls: 'inf', building: 'statue', req: { statue: 1 }, research: false, smithy: 0,
+  },
   noble: {
     id: 'noble', name: 'Nobleman', plural: 'Noblemen',
     description: 'Lowers the loyalty of a village. At zero loyalty the village is yours.',
     cost: r(40000, 50000, 50000), pop: 100, attack: 30, def: [100, 50, 100], speed: 35, carry: 0, time: 18000,
     cls: 'inf', building: 'academy', req: { academy: 1 }, research: false, smithy: 0,
+  },
+  trader: {
+    id: 'trader', name: 'Horse Merchant', plural: 'Horse Merchants',
+    description: 'A merchant with a string of horses: carries 20,000 resources and travels five times as fast as a merchant on foot, but he and his horses eat like a hundred men. He trades, never fights.',
+    cost: r(10000, 10000, 10000), pop: 100, attack: 0, def: [0, 0, 0], speed: 0, carry: 20000, time: 7200,
+    cls: 'cav', building: 'market', req: { market: 5 }, research: false, smithy: 0,
   },
   militia: {
     id: 'militia', name: 'Militia', plural: 'Militia',
@@ -135,11 +147,11 @@ export const UNITS: Record<UnitId, UnitDef> = {
 };
 
 export const UNIT_ORDER: UnitId[] = [
-  'spear', 'sword', 'axe', 'archer', 'scout', 'light', 'marcher', 'heavy', 'ram', 'catapult', 'paladin', 'sorcerer', 'druid', 'goblin', 'necromancer', 'noble',
+  'spear', 'sword', 'axe', 'archer', 'scout', 'light', 'marcher', 'heavy', 'ram', 'catapult', 'paladin', 'sorcerer', 'druid', 'goblin', 'necromancer', 'orc', 'noble',
 ];
 
 /** Heroes of the statue: each village may keep one. */
-export const HEROES: UnitId[] = ['paladin', 'sorcerer', 'druid', 'goblin', 'necromancer'];
+export const HEROES: UnitId[] = ['paladin', 'sorcerer', 'druid', 'goblin', 'necromancer', 'orc'];
 export const isHero = (u: UnitId) => HEROES.includes(u);
 
 export interface HeroInfo {
@@ -171,6 +183,12 @@ export const HERO_POWERS = {
   dread: 0.14,
   /** the necromancer raises this share of the enemy's fallen foot soldiers */
   raise: 0.1,
+  /** the Orc King's warcry: rams and catapults in the army he leads strike this much harder */
+  warcry: 0.5,
+  /** the Orc King's bloodlust: every attacker in the army he leads fights this much harder */
+  bloodlust: 0.1,
+  /** the horde: a village sworn to the Orc King feeds this much more population */
+  horde: 0.1,
 };
 
 export const HERO_VS_BONUS = 0.25;
@@ -192,6 +210,10 @@ export const HERO_INFO: Record<string, HeroInfo> = {
     vsLabel: 'Raiding', ability: 'Sneak In',
     perks: ['Sneak in: attacking, his goblins slip over 4 levels of the enemy wall', 'Plunder: the army he leads carries 40% more loot'],
   },
+  orc: {
+    vs: 'arc', vsBonus: 0.2, vsLabel: 'Archers', ability: 'Warcry',
+    perks: ['Warcry: rams and rock-hurlers in the army he leads strike 50% harder at walls and buildings', 'Bloodlust: every attacker in the warband he leads fights 10% harder', 'The Horde: a village sworn to him feeds 10% more population', 'Beastbane: +20% strength against archers'],
+  },
   necromancer: {
     vsLabel: 'Infantry and the fallen', ability: 'Dread',
     perks: ['Dread: enemy infantry fights 14% weaker against him, in attack and defense', 'Raise the dead: when his side wins, one in ten enemy foot soldiers who fell rise as skeleton spearmen in his army'],
@@ -204,6 +226,9 @@ export const MERCHANT_SPEED = 12; // minutes per field
 /** Shipments between two of your own villages crawl at this share of merchant speed. */
 export const OWN_SHIPMENT_SPEED = 0.15;
 export const MERCHANT_CARRY = 1000;
+/** A horse merchant: what he carries, and how much faster than a merchant on foot he travels. */
+export const TRADER_CARRY = 20000;
+export const TRADER_SPEEDUP = 5;
 
 /** Research level bonuses (attack & defense multipliers). */
 export const TECH_BONUS = [0, 0, 0.05, 0.1];
@@ -283,6 +308,14 @@ export const ITEMS: ItemDef[] = [
   { id: 'sneakglass', hero: 'goblin', name: 'Sneaky Spyglass', description: 'Goblin sneaks fight 6% harder.', unit: 'scout', special: 'scout' },
   { id: 'bossbonnet', hero: 'goblin', name: "Boss's Big Hat", description: 'Goblin bosses lower loyalty by 1.5 extra points.', unit: 'noble', special: 'loyalty' },
   { id: 'boomlog', hero: 'goblin', name: 'Boom-Log', description: 'Log bashers hit walls 5% harder.', unit: 'ram', special: 'ramx2' },
+  // the orc king's
+  { id: 'clanhorn', hero: 'orc', name: 'War Horn of the Clans', description: 'Battering tusks hit walls 5% harder.', unit: 'ram', special: 'ramx2' },
+  // (the paladin already owns 'bloodaxe': every item id must be unique)
+  { id: 'gorehewer', hero: 'orc', name: 'Gorehewer', description: 'Berserkers attack with 9% more strength (and defend 3% better).', unit: 'axe', att: AA, def: AD },
+  { id: 'wargcollar', hero: 'orc', name: "Warg-Mother's Collar", description: 'Warg riders attack with 9% more strength (and defend 3% better).', unit: 'light', att: AA, def: AD },
+  { id: 'boarplate', hero: 'orc', name: 'Boar-Hide Plate', description: 'Boar riders fight 8% harder in attack and defense.', unit: 'heavy', att: T, def: T },
+  { id: 'skullcrown', hero: 'orc', name: 'Crown of Tusks', description: 'Warchiefs lower loyalty by 1.5 extra points.', unit: 'noble', special: 'loyalty' },
+  { id: 'wardrum', hero: 'orc', name: 'Drum of the Warpath', description: 'Rock-hurlers deal 5% more building damage.', unit: 'catapult', special: 'catx2' },
   // the necromancer's
   { id: 'soullantern', hero: 'necromancer', name: 'Soul Lantern', description: 'More of the fallen rise again after a won battle: 10.8 in 100 instead of 10.', special: 'raise' },
   { id: 'bonescythe', hero: 'necromancer', name: 'Bone Scythe', description: 'Grave reavers attack with 9% more strength (and defend 3% better).', unit: 'axe', att: AA, def: AD },

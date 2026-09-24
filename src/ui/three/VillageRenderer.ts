@@ -20,6 +20,8 @@ import { buildCamp, campPlan, headcount, mainUnit, withTheme } from './camp';
 import { LAYOUT, OUTSIDE, WALL_R, buildScenery, buildTerrain, buildWall, buildingScale, heightAt } from './scene';
 import { BattleTheatre, type TheatreInput, type TheatreReport } from './battle/theatre';
 import { battleSfx } from '../sound';
+import type { FlagDesign } from '../../engine/data/flags';
+import { BANNER_WALL, buildGateBanners, disposeBanners, waveBanners } from './flags3d';
 
 /** An army leaving or coming home, as far as the village scene cares. */
 export interface MarchInfo {
@@ -55,7 +57,7 @@ interface Slot {
 
 const ALL: BuildingId[] = ['main', 'barracks', 'stable', 'workshop', 'academy', 'smithy', 'rally', 'statue', 'market', 'warehouse', 'hiding', 'watchtower', 'timber', 'claypit', 'ironmine', 'farm', 'wall'];
 
-const TROOP_KINDS: TroopModel[] = ['spear', 'sword', 'axe', 'archer', 'scout', 'light', 'marcher', 'heavy', 'paladin', 'sorcerer', 'druid', 'goblin', 'necromancer', 'noble'];
+const TROOP_KINDS: TroopModel[] = ['spear', 'sword', 'axe', 'archer', 'scout', 'light', 'marcher', 'heavy', 'paladin', 'sorcerer', 'druid', 'goblin', 'necromancer', 'orc', 'noble'];
 const TUNICS = [0x8e3a1f, 0x2f5d99, 0x6f7c35, 0xc98f2e, 0x5a3a22, 0x7a2f4a, 0xd9c7a0];
 
 /** default camera: polar angle, azimuth, distance */
@@ -135,6 +137,10 @@ export class VillageRenderer {
   private nightLights: THREE.PointLight[] = [];
   private nightSky: THREE.Texture | null = null;
   private lastBuildings: Buildings | null = null;
+  /** the ruler's banner, flown either side of the gate once the wall reaches level 20 (null: none, as for barbarians) */
+  private bannerDesign: FlagDesign | null = null;
+  private banners: THREE.Group | null = null;
+  private bannerKey = '';
   private season: Season = 'fall';
   private night = false;
   private hemi!: THREE.HemisphereLight;
@@ -345,11 +351,30 @@ export class VillageRenderer {
     for (const id of ALL) this.updateSlot(id, b[id], constructing[id] !== undefined);
     this.updatePeople(points);
     this.lastBuildings = { ...b };
+    this.syncBanners();
     this.updateGuards();
     this.updateAura();
     this.updateLabels(b, constructing);
     this.updateBuilders(constructing);
     this.placeNightLights();
+  }
+
+  /** The ruler's banner for the gate (it flies once the wall reaches BANNER_WALL); null for none, as for barbarians. */
+  setBanner(design: FlagDesign | null): void {
+    this.bannerDesign = design;
+    this.syncBanners();
+  }
+
+  private syncBanners(): void {
+    const d = this.bannerDesign;
+    const on = !!d && (this.lastBuildings?.wall ?? 0) >= BANNER_WALL;
+    const key = d && on ? `${d.shape},${d.pattern},${d.charge},${d.field},${d.accent},${d.chargeColor}` : '';
+    if (key === this.bannerKey) return;
+    this.bannerKey = key;
+    if (this.banners) { this.scene.remove(this.banners); disposeBanners(this.banners); this.banners = null; }
+    if (!d || !on) return;
+    this.banners = buildGateBanners(d, this.opts.theme ?? 'classic');
+    this.scene.add(this.banners);
   }
 
   /** The attacks on this village, their reports, and the clock: acted out in the scene. */
@@ -506,6 +531,7 @@ export class VillageRenderer {
     this.aura?.dispose();
     this.barrier?.traverse((o) => { if (o instanceof THREE.Mesh) (o.material as THREE.Material).dispose(); });
     if (this.festival) { this.scene.remove(this.festival); disposeFestival(this.festival); this.festival = null; }
+    if (this.banners) { this.scene.remove(this.banners); disposeBanners(this.banners); this.banners = null; }
     this.disposed = true;
     cancelAnimationFrame(this.raf);
     this.ro.disconnect();
@@ -687,7 +713,7 @@ export class VillageRenderer {
     for (const k of TROOP_KINDS) {
       const n = units[k] ?? 0;
       if (n > 0) want.push(k);
-      if (n >= 100 && !['paladin', 'sorcerer', 'druid', 'goblin', 'necromancer', 'noble'].includes(k)) want.push(k);
+      if (n >= 100 && !['paladin', 'sorcerer', 'druid', 'goblin', 'necromancer', 'orc', 'noble'].includes(k)) want.push(k);
     }
     const key = want.join(',');
     if (key === this.troopKey) return;
@@ -768,7 +794,7 @@ export class VillageRenderer {
 
   /** The hero at home leaves his mark on the village. */
   private updateAura(): void {
-    const hero = (['paladin', 'sorcerer', 'druid', 'goblin', 'necromancer'] as AuraHero[]).find((h) => (this.units[h] ?? 0) > 0) ?? null;
+    const hero = (['paladin', 'sorcerer', 'druid', 'goblin', 'necromancer', 'orc'] as AuraHero[]).find((h) => (this.units[h] ?? 0) > 0) ?? null;
     const wall = this.lastBuildings?.wall ?? 0;
     const tier = wall <= 0 ? 0 : wall < 5 ? 1 : wall < 10 ? 2 : wall < 15 ? 3 : 4;
     const key = hero ? `${hero}:${hero === 'druid' ? tier : ''}` : '';
@@ -1014,7 +1040,9 @@ export class VillageRenderer {
     this.leaves = new THREE.InstancedMesh(geo, m, n);
     this.leaves.castShadow = false;
     const ash = this.season === 'volcanic';
-    const cols = snow ? [0xffffff, 0xf2f6fb, 0xe6eef7] : ash ? [0x8a8480, 0x6e6864, 0xa09a94, 0xff7a2a] : [C.leafOrange, C.leafRed, C.leafYellow, C.leafGold];
+    // (a druid grove sheds green leaves and blossom petals, a gold leaf here and there, rather than autumn's reds)
+    const grove = this.opts.theme === 'druid';
+    const cols = snow ? [0xffffff, 0xf2f6fb, 0xe6eef7] : ash ? [0x8a8480, 0x6e6864, 0xa09a94, 0xff7a2a] : grove ? [0x78a843, 0xa6c552, 0xf3a9c4, 0x5e9a3a, 0xfaf0ee, 0xe8c65a] : [C.leafOrange, C.leafRed, C.leafYellow, C.leafGold];
     const r = rng(99);
     const col = new THREE.Color();
     for (let i = 0; i < n; i++) {
@@ -1169,6 +1197,7 @@ export class VillageRenderer {
     // hover ring pulse
     if (this.ring.visible) (this.ring.material as THREE.MeshBasicMaterial).opacity = 0.55 + Math.sin(t * 5) * 0.3;
     this.theatre?.step(dt, t);
+    if (this.banners) waveBanners(this.banners, t);
     this.barrierFlash.value = Math.max(0, this.barrierFlash.value - dt * 2.2);
     for (const p of this.people) p.g.visible = !this.quiet;
     for (const p of this.troops) p.g.visible = !this.quiet;
@@ -1212,7 +1241,7 @@ export class VillageRenderer {
     // smoke puffs
     for (const s of this.smoke) {
       if (s.puffs.length < 7 && Math.random() < dt * 2.2) {
-        const m = new THREE.Mesh(PUFF_GEO, new THREE.MeshLambertMaterial({ color: this.opts.theme === 'necromancer' ? 0x1a171c : this.opts.theme === 'goblin' ? 0x8a9a6a : 0xcfc6b8, transparent: true, opacity: this.opts.theme === 'necromancer' ? 0.78 : 0.6, flatShading: true }));
+        const m = new THREE.Mesh(PUFF_GEO, new THREE.MeshLambertMaterial({ color: this.opts.theme === 'necromancer' ? 0x1a171c : this.opts.theme === 'goblin' ? 0x8a9a6a : this.opts.theme === 'orc' ? 0x5a524c : 0xcfc6b8, transparent: true, opacity: this.opts.theme === 'necromancer' ? 0.78 : 0.6, flatShading: true }));
         s.src.getWorldPosition(m.position);
         this.scene.add(m);
         s.puffs.push({ m, age: 0, life: 3 + Math.random() * 1.5 });
@@ -1284,7 +1313,7 @@ const MARCH_ROAD: [number, number][] = [[0, 11], [0, 44], [0, 72], [-5, 84], [-1
 function marchFigures(units: Units): TroopModel[] {
   const map: Partial<Record<keyof Units, TroopModel>> = {
     spear: 'spear', sword: 'sword', axe: 'axe', archer: 'archer', scout: 'scout', light: 'light', marcher: 'marcher',
-    heavy: 'heavy', paladin: 'paladin', sorcerer: 'sorcerer', druid: 'druid', goblin: 'goblin', noble: 'noble', ram: 'axe', catapult: 'axe',
+    heavy: 'heavy', paladin: 'paladin', sorcerer: 'sorcerer', druid: 'druid', goblin: 'goblin', orc: 'orc', noble: 'noble', ram: 'axe', catapult: 'axe',
   };
   const kinds = (Object.entries(units) as [keyof Units, number][]).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]);
   const total = kinds.reduce((a, [, n]) => a + n, 0);
@@ -1296,7 +1325,7 @@ function marchFigures(units: Units): TroopModel[] {
     if (i > 20) break;
   }
   // the heroes and noblemen always ride along if present
-  for (const [k] of kinds) { const m = map[k]; if (m && ['paladin', 'sorcerer', 'druid', 'goblin', 'necromancer', 'noble'].includes(m) && !out.includes(m)) out.push(m); }
+  for (const [k] of kinds) { const m = map[k]; if (m && ['paladin', 'sorcerer', 'druid', 'goblin', 'necromancer', 'orc', 'noble'].includes(m) && !out.includes(m)) out.push(m); }
   return out;
 }
 

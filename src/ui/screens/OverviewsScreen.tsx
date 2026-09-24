@@ -18,7 +18,7 @@ export function OverviewsScreen() {
     const r = liveRes(v);
     return { wood: s.wood + r.wood, clay: s.clay + r.clay, iron: s.iron + r.iron, rate: s.rate + v.rates.wood + v.rates.clay + v.rates.iron };
   }, { wood: 0, clay: 0, iron: 0, rate: 0 });
-  const unitCols = ARMY_ORDER.filter((u) => pv.villages.some((v) => (v.units[u] ?? 0) > 0));
+  const unitCols = [...ARMY_ORDER, 'trader' as UnitId].filter((u) => pv.villages.some((v) => (v.units[u] ?? 0) > 0));
   return (
     <div class="stack">
       <div class="page-head">

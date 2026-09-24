@@ -91,10 +91,11 @@ const VOLCANIC: Record<number, number> = {
 };
 
 /** Each statue hero gives the village its own look. */
-export type Theme = 'classic' | 'paladin' | 'sorcerer' | 'druid' | 'goblin' | 'necromancer';
+export type Theme = 'classic' | 'paladin' | 'sorcerer' | 'druid' | 'goblin' | 'necromancer' | 'orc';
 let theme: Theme = 'classic';
 export function setTheme(t: Theme) {
-  theme = t;
+  // a look the 3D village doesn't know yet (a hero whose village is still being raised) is drawn plain
+  theme = t in THEMES ? t : 'classic';
 }
 export function getTheme(): Theme {
   return theme;
@@ -152,6 +153,17 @@ const THEMES: Record<Theme, Record<number, number>> = {
     [C.grass]: 0x5b6838, [C.grassLight]: 0x677640, [C.grassDark]: 0x46522e, [C.grassRust]: 0x6a5a34,
     [C.dirt]: 0x6e5a3c, [C.dirtDark]: 0x55462f, [C.water]: 0x24403c,
     0x97a24e: 0x6a7440, 0x7f8d43: 0x56603a, 0x8b984a: 0x626b3d,
+  },
+  // the Horde: smoked-hide roofs, raw logs and charred timber, dark rough stone, blood-red war cloth
+  orc: {
+    [C.tile]: 0x4a3326, [C.tileDark]: 0x35241a, [C.tileWarm]: 0x5c3e2a, [C.thatch]: 0x7a5a3a, [C.thatchDark]: 0x5a4028,
+    [C.plaster]: 0x7e6e5a, [C.plasterWarm]: 0x6e604e, [C.timber]: 0x33241a, [C.timberLight]: 0x5e4430,
+    [C.stone]: 0x625c55, [C.stoneDark]: 0x47433e, [C.stoneLight]: 0x7c766d, [C.red]: 0xa3261a, [C.slate]: 0x3a3532, [C.door]: 0x24170e,
+    // the ground turns to trampled, ash-dark earth; the woods keep a duller autumn
+    [C.grass]: 0x6b6a3a, [C.grassLight]: 0x7a7642, [C.grassDark]: 0x55552f, [C.grassRust]: 0x7a5c36,
+    [C.dirt]: 0x6e5a44, [C.dirtDark]: 0x574634, [C.water]: 0x3c5656,
+    [C.leafOrange]: 0xa85a28, [C.leafRed]: 0x8a3322, [C.leafYellow]: 0xae8e38, [C.leafGold]: 0x9a7430, [C.leafGreen]: 0x5e6a32,
+    0x97a24e: 0x77743f, 0x7f8d43: 0x605d35, 0x8b984a: 0x6c693a,
   },
 };
 
@@ -248,6 +260,7 @@ export function house(o: {
   if (theme === 'druid') return druidHouse(o);
   if (theme === 'goblin') return goblinHouse(o);
   if (theme === 'necromancer') return necroHouse(o);
+  if (theme === 'orc') return orcHouse(o);
   return baseHouse(o);
 }
 
@@ -341,6 +354,7 @@ export function roundTower(r: number, h: number, o: TowerOpts = {}): THREE.Group
   if (theme === 'druid') return druidTower(r, h, o);
   if (theme === 'goblin') return goblinTower(r, h, o);
   if (theme === 'necromancer') return necroTower(r, h, o);
+  if (theme === 'orc') return orcTower(r, h, o);
   return baseTower(r, h, o);
 }
 
@@ -397,7 +411,8 @@ export function bake(root: THREE.Object3D, tag?: Record<string, unknown>): THREE
     for (const g of geos) g.dispose();
     if (!merged) continue;
     const mm = new THREE.Mesh(merged, m);
-    mm.castShadow = true;
+    // tiny bright details (blossom, glow-berries, lantern glass, glowing runes) cast no shadow
+    mm.castShadow = !m.userData.noShadow;
     mm.receiveShadow = true;
     if (tag) Object.assign(mm.userData, tag);
     out.add(mm);
@@ -644,27 +659,54 @@ function sorcererHouse(o: HouseOpts): THREE.Group {
   return g;
 }
 
-/** Druid: a rounded cottage of daub and timber under a mossy turf dome, roots at its feet. */
+/** Druid: a rounded cottage of daub and timber on a stone footing under a faceted turf dome, leafy tufts
+ *  and wildflowers along the eaves, a sapling growing from the top, ivy up the walls, roots at its feet,
+ *  flowers by the door and a lantern hung beside it. */
 function druidHouse(o: HouseOpts): THREE.Group {
   const g = new THREE.Group();
   const { w, d, h } = o;
+  const rand = rng(Math.round(w * 31 + d * 17 + h * 7));
   const body = cyl(0.5, 0.52, h, o.stone ? C.stone : C.plaster, 12);
   body.scale.set(w, 1, d);
   g.add(body);
+  const foot = cyl(0.5, 0.52, 0.35, C.stoneDark, 12);
+  foot.scale.set(w + 0.16, 1, d + 0.16);
+  g.add(foot);
   // timber ribs around the wall
   for (let i = 0; i < 8; i++) {
     const a = (i / 8) * Math.PI * 2;
     g.add(box(0.18, h, 0.18, C.timber, Math.cos(a) * w * 0.5, 0, Math.sin(a) * d * 0.5));
   }
-  // the turf dome, with a skirt of moss hanging over the eaves
-  const dome = blob(0.5, C.tile, 0, h, 0, w + 0.7, o.roofH * 2.2, d + 0.7, 1);
-  g.add(dome);
+  // the turf dome: faceted, its crown in the sun and its eaves in shade (snowed over in winter)
+  g.add(leafCluster(0.5, { top: C.tileWarm, mid: C.tile, under: C.tileDark }, 0, h, 0, (w + 0.6) / 1.1, o.roofH * 2.1, (d + 0.6) / 1.1, 1, Math.round(w * 10 + d)));
   const skirt = cyl(0.5, 0.5, 0.35, C.tileDark, 12, 0, h - 0.1, 0);
   skirt.scale.set(w + 0.8, 1, d + 0.8);
   g.add(skirt);
-  for (let i = 0; i < 5; i++) {
-    const a = (i / 5) * Math.PI * 2 + 0.4;
-    g.add(blob(0.3, 0x7ea64a, Math.cos(a) * w * 0.3, h + o.roofH * 0.9, Math.sin(a) * d * 0.3));
+  // leafy tufts all along the eaves, wildflowers in the turf
+  const nt = Math.round((w + d) * 0.9);
+  for (let i = 0; i < nt; i++) {
+    const a = (i / nt) * Math.PI * 2 + rand() * 0.3;
+    g.add(leafCluster(0.3 + rand() * 0.12, i % 3 ? 'deep' : 'mid', Math.cos(a) * (w + 0.6) * 0.41, h + 0.12 + rand() * 0.2, Math.sin(a) * (d + 0.6) * 0.41, 1.2, 0.7, 1.2, 0, i + nt));
+  }
+  if (season !== 'winter') {
+    for (let i = 0; i < 6; i++) {
+      const a = rand() * Math.PI * 2, k = 0.25 + rand() * 0.3;
+      const f = mesh(new THREE.OctahedronGeometry(0.13, 0), [BLOSSOM, 0xf2e46a, BLOSSOM_W, 0xb58cd8][i % 4]);
+      f.position.set(Math.cos(a) * w * k, h + o.roofH * (0.95 - k * 0.9), Math.sin(a) * d * k);
+      g.add(f);
+    }
+  }
+  // a sapling growing from the top of the bigger roofs
+  if (w > 4.2) {
+    const top = h + o.roofH * 1.0;
+    g.add(cyl(0.07, 0.11, 0.9, BARK_C, 5, w * 0.08, top - 0.2, -d * 0.05));
+    g.add(leafCluster(0.42, 'sun', w * 0.08, top + 0.85, -d * 0.05, 1, 0.9, 1, 0, Math.round(w)));
+  }
+  // ivy climbing the walls
+  for (const a of [Math.PI * 0.95, Math.PI * 1.7, Math.PI * 0.2]) {
+    const x = Math.cos(a) * w * 0.51, z = Math.sin(a) * d * 0.51;
+    g.add(box(0.06, h * 0.85, 0.06, MOSS_DK_C, x, 0.1, z));
+    for (let k = 0; k < 4; k++) g.add(mesh(new THREE.OctahedronGeometry(0.16, 0), k % 2 ? LEAF_MID : LEAF_DEEP).translateX(x + (k % 2 ? 0.1 : -0.1)).translateY(0.4 + (k / 4) * h * 0.8).translateZ(z));
   }
   // roots at the base
   for (let i = 0; i < 6; i++) {
@@ -675,8 +717,19 @@ function druidHouse(o: HouseOpts): THREE.Group {
     g.add(root);
   }
   if (o.door !== false) {
-    g.add(box(Math.min(1.2, w * 0.22), Math.min(1.9, h * 0.66), 0.25, C.door, 0, 0, d / 2 - 0.02));
-    g.add(blob(0.62, C.timber, 0, Math.min(1.9, h * 0.66), d / 2 - 0.02, 1, 0.45, 0.3));
+    const dw = Math.min(1.2, w * 0.22), dh = Math.min(1.9, h * 0.66);
+    g.add(box(dw, dh, 0.25, C.door, 0, 0, d / 2 - 0.02));
+    g.add(blob(0.62, C.timber, 0, dh, d / 2 - 0.02, 1, 0.45, 0.3));
+    // flowers either side of the door, a lantern hung by it
+    for (const s of [-1, 1]) {
+      g.add(leafCluster(0.26, 'deep', s * (dw / 2 + 0.4), 0.2, d / 2 + 0.05, 1.2, 0.8, 0.9, 0, s + 3));
+      if (season !== 'winter') for (let k = 0; k < 3; k++) g.add(mesh(new THREE.OctahedronGeometry(0.1, 0), k % 2 ? 0xf2e46a : BLOSSOM).translateX(s * (dw / 2 + 0.28 + k * 0.12)).translateY(0.42 + (k % 2) * 0.08).translateZ(d / 2 + 0.2));
+    }
+    if (h > 2.2) {
+      const l = hangingLantern(0.22, 0.75);
+      l.position.set(dw / 2 + 0.35, dh + 0.25, d / 2 + 0.22);
+      g.add(l, box(0.05, 0.05, 0.4, C.timber, dw / 2 + 0.35, dh + 0.22, d / 2 + 0.05));
+    }
   }
   const nw = Math.min(2, o.windows ?? 1);
   for (let i = 0; i < nw; i++) {
@@ -946,28 +999,290 @@ function sorcererTower(r: number, h: number, o: TowerOpts): THREE.Group {
   return g;
 }
 
-/** Druid tower: a living trunk with a lookout platform in its leafy crown. */
+/** Druid tower: a gnarled living trunk on buttress roots, ivy up its bark, a lit knot-window and a
+ *  lookout ringed with a wattle rail under a layered crown of leaves, lanterns hanging from its boughs. */
 function druidTower(r: number, h: number, o: TowerOpts): THREE.Group {
   const g = new THREE.Group();
-  g.add(cyl(r * 0.8, r * 1.1, h, C.timber, 9));
-  g.add(cyl(r * 1.1, r * 1.1, 0.3, C.timberLight, 10, 0, h - 0.2));
+  const rand = rng(Math.round(r * 97 + h * 13));
+  g.add(gnarledTrunk(r * 0.6, r * 0.88, h, rand, { roots: 5, rootR: r * 0.26, spread: 1.5 }));
+  // a wattle lookout ring at the top of the trunk
+  g.add(cyl(r * 1.22, r * 1.12, 0.26, C.timberLight, 12, 0, h - 0.25));
+  g.add(mesh(new THREE.TorusGeometry(r * 1.18, 0.07, 4, 16).rotateX(Math.PI / 2), C.timber).translateY(h + 0.55));
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    g.add(box(0.09, 0.62, 0.09, C.timber, Math.cos(a) * r * 1.18, h, Math.sin(a) * r * 1.18));
+  }
+  // boughs spreading up into the crown
   for (let i = 0; i < 4; i++) {
-    const a = (i / 4) * Math.PI * 2 + 0.3;
-    g.add(blob(r * 0.7, i % 2 ? 0x4f7a2e : 0x6f9a3a, Math.cos(a) * r * 0.55, h + r * 0.7, Math.sin(a) * r * 0.55, 1, 0.8, 1));
+    const a = (i / 4) * Math.PI * 2 + 0.5;
+    g.add(branch(new THREE.Vector3(Math.cos(a) * r * 0.3, h - 0.3, Math.sin(a) * r * 0.3), new THREE.Vector3(Math.cos(a) * r * 0.95, h + r * 0.95, Math.sin(a) * r * 0.95), r * 0.2, BARK_C));
   }
-  g.add(blob(r * 0.8, 0x4f7a2e, 0, h + r * 1.3, 0, 1, 0.8, 1));
-  for (let i = 0; i < 3; i++) {
-    const a = (i / 3) * Math.PI * 2;
-    g.add(box(0.1, h * 0.6, 0.1, 0x445c24, Math.cos(a) * r * 0.85, h * 0.35, Math.sin(a) * r * 0.85));
-  }
-  const s = windowAt(0, h * 0.55, r * 0.95, true);
+  const crownY = h + r * 0.55;
+  const can = druidCanopy({ r: r * 1.5, h: r * 1.45, rand, droop: 6, blossom: 5, vines: 6, lanterns: r > 2 ? 2 : 1, dense: 0.72 });
+  can.position.y = crownY;
+  g.add(can);
+  // a lit knot-hole window in the trunk
+  const s = windowAt(0, h * 0.55, r * 0.93, true);
   g.add(s);
+  g.add(mesh(new THREE.TorusGeometry(0.42, 0.09, 4, 10), BARK_DK_C).translateY(h * 0.55).translateZ(r * 0.95));
   if (o.banner !== undefined) {
     const flag = box(1.2, 0.7, 0.05, o.banner, r + 0.5, h * 0.75, 0);
     flag.userData.flag = true;
     g.add(flag);
   }
   return g;
+}
+
+// ---------- the Grove (druid): layered, faceted foliage ----------
+
+export const BARK_C = 0x5a3f28, BARK_DK_C = 0x3f2c1c, MOSS_C = 0x5e7d32, MOSS_DK_C = 0x445c24;
+export const LEAF_UNDER = 0x284a1e, LEAF_DEEP = 0x355f27, LEAF_MID = 0x4c8232, LEAF_SUN = 0x78a843, LEAF_LIME = 0xa6c552;
+export const BLOSSOM = 0xf3a9c4, BLOSSOM_W = 0xfaf0ee, AMBER = 0xffc76a, AMBER_E = 0xd8842a, FIREFLY = 0xecff9a, FIREFLY_E = 0x9cbc26;
+export const SPIRIT = 0xbff7e6, SPIRIT_E = 0x2a8a70, RUNE_G = 0xcdf38a, RUNE_G_E = 0x4f8a14;
+const SNOW = 0xf3f7fa;
+
+export type LeafTone = 'deep' | 'mid' | 'sun' | 'gold';
+export interface LeafPal { top: number; mid: number; under: number }
+
+/** The three colours of a leaf mass (sunlit top, body, shaded underside), by tone and season:
+ *  the grove stays green all year; winter lays snow on the tops, the ash dulls it. */
+export function leafPal(tone: LeafTone): LeafPal {
+  if (season === 'winter') {
+    return tone === 'deep' ? { top: SNOW, mid: 0x2c5230, under: 0x1f3d24 } : { top: SNOW, mid: 0x3a6a36, under: 0x2c5230 };
+  }
+  if (season === 'volcanic') {
+    return tone === 'sun' ? { top: 0x7c8650, mid: 0x5d6a3e, under: 0x414b2e } : { top: 0x5d6a3e, mid: 0x4a5634, under: 0x343d26 };
+  }
+  switch (tone) {
+    case 'deep': return { top: LEAF_MID, mid: LEAF_DEEP, under: LEAF_UNDER };
+    case 'sun': return { top: LEAF_LIME, mid: LEAF_SUN, under: LEAF_MID };
+    case 'gold': return { top: 0xe8c65a, mid: 0xcf9a38, under: 0x8a6428 };
+    default: return { top: LEAF_SUN, mid: LEAF_MID, under: LEAF_DEEP };
+  }
+}
+
+/** Moss and turf: snowed over in winter. */
+export function mossPal(): LeafPal {
+  return season === 'winter' ? { top: SNOW, mid: 0x55703e, under: 0x3d5230 } : { top: 0x7ea64a, mid: MOSS_C, under: MOSS_DK_C };
+}
+
+function hash3(x: number, y: number, z: number, s: number): number {
+  const v = Math.sin(Math.round(x * 997) * 0.0129898 + Math.round(y * 991) * 0.078233 + Math.round(z * 983) * 0.037719 + s * 1.618) * 43758.5453;
+  return v - Math.floor(v);
+}
+
+/**
+ * A mass of leaves: a faceted, lumpy ball (squashed by sx/sy/sz), its facets sorted by which way
+ * they face so the top catches the sun, the body is leaf-green and the underside falls into shade
+ * (snow on the tops in winter). Three meshes at most, all of shared materials, so it bakes cheaply.
+ */
+export function leafCluster(r: number, tone: LeafTone | LeafPal, x = 0, y = 0, z = 0, sx = 1, sy = 0.78, sz = 1, detail = 1, seed = 0): THREE.Group {
+  const pal = typeof tone === 'string' ? leafPal(tone) : tone;
+  const src = new THREE.IcosahedronGeometry(r, detail);
+  const p = src.attributes.position as THREE.BufferAttribute;
+  const v = new THREE.Vector3();
+  for (let i = 0; i < p.count; i++) {
+    v.fromBufferAttribute(p, i);
+    const h1 = hash3(v.x, v.y, v.z, seed), h2 = hash3(v.z, v.x, v.y, seed + 7);
+    v.multiplyScalar(0.82 + h1 * 0.32);
+    v.y += (h2 - 0.5) * r * 0.16;
+    p.setXYZ(i, v.x * sx, v.y * sy, v.z * sz);
+  }
+  const buckets: number[][] = [[], [], []];
+  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), e1 = new THREE.Vector3(), e2 = new THREE.Vector3();
+  const topT = season === 'winter' ? 0.5 : 0.34;
+  for (let i = 0; i < p.count; i += 3) {
+    a.fromBufferAttribute(p, i); b.fromBufferAttribute(p, i + 1); c.fromBufferAttribute(p, i + 2);
+    e1.subVectors(b, a); e2.subVectors(c, a);
+    const n = e1.cross(e2).normalize();
+    const k = n.y > topT ? 0 : n.y < -0.3 ? 2 : 1;
+    buckets[k].push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z);
+  }
+  src.dispose();
+  const g = new THREE.Group();
+  [pal.top, pal.mid, pal.under].forEach((col, k) => {
+    if (!buckets[k].length) return;
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(buckets[k], 3));
+    geo.computeVertexNormals();
+    g.add(mesh(geo, col));
+  });
+  g.position.set(x, y, z);
+  return g;
+}
+
+/** A limb of wood from a to b, tapering (a bough, a root, a vine-thick branch). */
+export function branch(a: THREE.Vector3, b: THREE.Vector3, r: number, color = BARK_C, seg = 6): THREE.Mesh {
+  const d = b.clone().sub(a);
+  const m = mesh(new THREE.CylinderGeometry(r * 0.55, r, d.length(), seg), color);
+  m.position.copy(a).addScaledVector(d, 0.5);
+  m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize());
+  return m;
+}
+
+/** A gnarled trunk: tapering, a little twisted, ridged bark, buttress roots flaring into the ground and moss at its foot. */
+export function gnarledTrunk(rTop: number, rBot: number, h: number, rand: () => number, o: { roots?: number; rootR?: number; spread?: number; color?: number; moss?: boolean; door?: boolean } = {}): THREE.Group {
+  const g = new THREE.Group();
+  const color = o.color ?? BARK_C;
+  const geo = new THREE.CylinderGeometry(rTop, rBot, h, 9, 3);
+  const p = geo.attributes.position as THREE.BufferAttribute;
+  for (let i = 0; i < p.count; i++) {
+    const y = p.getY(i) / h + 0.5, x = p.getX(i), z = p.getZ(i);
+    const tw = y * 0.5, k = 1 + (hash3(Math.round(x * 3), Math.round(y * 6), Math.round(z * 3), 3) - 0.5) * 0.14;
+    p.setXYZ(i, (x * Math.cos(tw) - z * Math.sin(tw)) * k, p.getY(i), (x * Math.sin(tw) + z * Math.cos(tw)) * k);
+  }
+  geo.translate(0, h / 2, 0);
+  g.add(mesh(geo, color));
+  // ridges of darker bark running up it
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2 + 0.4;
+    const rr = (rTop + rBot) / 2;
+    g.add(branch(new THREE.Vector3(Math.cos(a) * rBot * 0.96, 0, Math.sin(a) * rBot * 0.96), new THREE.Vector3(Math.cos(a + 0.5) * rTop * 0.96, h * (0.55 + rand() * 0.35), Math.sin(a + 0.5) * rTop * 0.96), rr * 0.14, BARK_DK_C, 4));
+  }
+  const roots = o.roots ?? 5, rootR = o.rootR ?? rBot * 0.35;
+  for (let i = 0; i < roots; i++) {
+    const a = (i / roots) * Math.PI * 2 + rand() * 0.5;
+    if (o.door && Math.sin(a) > 0.72) continue; // keep the way to the door clear
+    const out = rBot * ((o.spread ?? 1.9) + rand() * 0.4);
+    const mid = new THREE.Vector3(Math.cos(a) * rBot * 1.15, h * 0.06 + rootR * 0.6, Math.sin(a) * rBot * 1.15);
+    g.add(branch(new THREE.Vector3(Math.cos(a) * rBot * 0.55, h * 0.16 + rootR, Math.sin(a) * rBot * 0.55), mid, rootR, color, 5));
+    g.add(branch(mid, new THREE.Vector3(Math.cos(a) * out, -0.1, Math.sin(a) * out), rootR * 0.8, i % 2 ? color : BARK_DK_C, 5));
+  }
+  if (o.moss !== false) {
+    for (let i = 0; i < 3; i++) {
+      const a = (i / 3) * Math.PI * 2 + rand();
+      g.add(leafCluster(rBot * 0.45, mossPal(), Math.cos(a) * rBot * 0.9, rBot * 0.25, Math.sin(a) * rBot * 0.9, 1.2, 0.45, 1.2, 0, i + 1));
+    }
+  }
+  return g;
+}
+
+/** A lantern of bark and amber glass hanging on a cord (its top at the origin). */
+export function hangingLantern(cord = 0.6, s = 1): THREE.Group {
+  const g = new THREE.Group();
+  g.add(box(0.03, cord, 0.03, 0x3a2a18, 0, -cord, 0));
+  g.add(cone(0.2 * s, 0.16 * s, BARK_DK_C, 6, 0, -cord - 0.02 * s));
+  const glass = new THREE.Mesh(new THREE.CylinderGeometry(0.16 * s, 0.12 * s, 0.32 * s, 6), detailMat(AMBER, { emissive: AMBER_E }));
+  glass.position.y = -cord - 0.18 * s;
+  g.add(glass);
+  g.add(cyl(0.13 * s, 0.15 * s, 0.05 * s, BARK_DK_C, 6, 0, -cord - 0.39 * s));
+  return g;
+}
+
+/**
+ * A druid crown of leaves, its underside at the origin: a broad, drooping lower ring of deep green,
+ * a fuller middle, a sunlit top; branch tips hanging below the rim, willow strands and vines, a
+ * scatter of blossom, a few gold leaves in autumn, and lanterns hung in the boughs.
+ */
+export function druidCanopy(o: { r: number; h?: number; rand: () => number; droop?: number; blossom?: number; vines?: number; lanterns?: number; gold?: number; detail?: number; dense?: number; glow?: number }): THREE.Group {
+  const g = new THREE.Group();
+  const { r, rand } = o;
+  const h = o.h ?? r * 0.9;
+  const det = o.detail ?? 1;
+  const autumn = season === 'fall';
+  const pickGold = (t: LeafTone): LeafTone => (autumn && rand() < (o.gold ?? 0) ? 'gold' : t);
+  const n0 = Math.round((5 + r * 1.1) * (o.dense ?? 1)), n1 = Math.max(3, n0 - 2);
+  const seed = Math.floor(rand() * 1000);
+  // the broad lower ring, heavy and dark
+  for (let i = 0; i < n0; i++) {
+    const a = (i / n0) * Math.PI * 2 + rand() * 0.4;
+    const d = r * (0.62 + rand() * 0.14);
+    g.add(leafCluster(r * (0.36 + rand() * 0.08), i % 3 === 0 ? 'mid' : 'deep', Math.cos(a) * d, h * (0.16 + rand() * 0.1), Math.sin(a) * d, 1.15, 0.62, 1.15, det, seed + i));
+  }
+  // the fuller middle
+  for (let i = 0; i < n1; i++) {
+    const a = (i / n1) * Math.PI * 2 + 0.5 + rand() * 0.4;
+    const d = r * (0.34 + rand() * 0.12);
+    g.add(leafCluster(r * (0.36 + rand() * 0.06), pickGold(i % 2 ? 'sun' : 'mid'), Math.cos(a) * d, h * (0.48 + rand() * 0.1), Math.sin(a) * d, 1.05, 0.72, 1.05, det, seed + 40 + i));
+  }
+  // the sunlit top
+  g.add(leafCluster(r * 0.4, 'sun', (rand() - 0.5) * r * 0.2, h * 0.78, (rand() - 0.5) * r * 0.2, 1, 0.72, 1, det, seed + 80));
+  if (r > 2.2) g.add(leafCluster(r * 0.26, 'sun', r * 0.22, h * 0.94, -r * 0.12, 1, 0.8, 1, det, seed + 81));
+  // branch tips drooping below the rim
+  const droop = o.droop ?? 0;
+  for (let i = 0; i < droop; i++) {
+    const a = (i / droop) * Math.PI * 2 + rand() * 0.6;
+    const d = r * (0.8 + rand() * 0.12);
+    g.add(leafCluster(r * 0.17, 'deep', Math.cos(a) * d, -r * 0.02, Math.sin(a) * d, 0.9, 1.35, 0.9, 0, seed + 100 + i));
+  }
+  // willow strands and vines hanging from the rim, a leaf at every tip
+  const vines = o.vines ?? 0;
+  for (let i = 0; i < vines; i++) {
+    const a = (i / vines) * Math.PI * 2 + rand() * 0.5;
+    const d = r * (0.55 + rand() * 0.3);
+    const len = r * (0.35 + rand() * 0.5);
+    const x = Math.cos(a) * d, z = Math.sin(a) * d;
+    g.add(box(0.06, len, 0.06, season === 'winter' ? 0x3a5a36 : MOSS_DK_C, x, h * 0.1 - len, z));
+    g.add(new THREE.Mesh(new THREE.OctahedronGeometry(0.13, 0), detailMat(season === 'winter' ? 0x3b6b37 : 0x7aab46)).translateX(x).translateY(h * 0.1 - len).translateZ(z));
+  }
+  // blossom on the sunny top (not in winter)
+  const bl = season === 'winter' ? 0 : o.blossom ?? 0;
+  for (let i = 0; i < bl; i++) {
+    const a = rand() * Math.PI * 2, el = 0.35 + rand() * 0.8;
+    const d = r * 0.75 * Math.cos(el);
+    const f = new THREE.Mesh(new THREE.OctahedronGeometry(Math.max(0.12, r * 0.05), 0), detailMat(i % 3 ? BLOSSOM : BLOSSOM_W));
+    f.position.set(Math.cos(a) * d, h * (0.3 + Math.sin(el) * 0.62), Math.sin(a) * d);
+    g.add(f);
+  }
+  // lanterns hung from the boughs
+  const lan = o.lanterns ?? 0;
+  for (let i = 0; i < lan; i++) {
+    const a = (i / lan) * Math.PI * 2 + 0.9;
+    const d = r * 0.86;
+    const l = hangingLantern(0.5 + rand() * 0.5, Math.min(1.5, 0.9 + r * 0.1));
+    l.position.set(Math.cos(a) * d, h * 0.04, Math.sin(a) * d);
+    g.add(l);
+  }
+  // glow-berries: tiny soft lights among the leaves, that come into their own at night
+  const glow = o.glow ?? 0;
+  for (let i = 0; i < glow; i++) {
+    const a = rand() * Math.PI * 2, el = rand() * 1.1;
+    const d = r * (0.72 + rand() * 0.12) * Math.cos(el);
+    const m = new THREE.Mesh(new THREE.OctahedronGeometry(0.11 + r * 0.012, 0), detailMat(FIREFLY, { emissive: FIREFLY_E }));
+    m.position.set(Math.cos(a) * d, h * (0.22 + Math.sin(el) * 0.62), Math.sin(a) * d);
+    g.add(m);
+  }
+  return g;
+}
+
+/** A material for small bright details that need cast no shadow (see bake). */
+export function detailMat(color: number, opts?: Parameters<typeof mat>[1]): THREE.MeshLambertMaterial {
+  const m = mat(color, opts);
+  m.userData.noShadow = true;
+  return m;
+}
+
+/** A spiral carved into stone and glowing faintly (lies in the XY plane, facing +Z). */
+export function spiralGlyph(s = 1, color = RUNE_G, emissive = RUNE_G_E): THREE.Mesh {
+  const pts: THREE.Vector3[] = [];
+  for (let i = 0; i <= 18; i++) {
+    const k = i / 18, a = k * Math.PI * 4.2;
+    pts.push(new THREE.Vector3(Math.cos(a) * k * 0.32 * s, Math.sin(a) * k * 0.32 * s, 0));
+  }
+  const m = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 18, 0.035 * s, 3, false), detailMat(color, { emissive }));
+  m.castShadow = false;
+  return m;
+}
+
+/** A swarm (fireflies, wisps, petals) merged into one mesh per material so it moves as one and costs one draw. */
+export function swarm(parts: THREE.Group, flags: Record<string, unknown>): THREE.Group {
+  const g = bake(parts);
+  g.traverse((o) => { if (o instanceof THREE.Mesh) o.castShadow = false; });
+  Object.assign(g.userData, { dynamic: true }, flags);
+  return g;
+}
+
+/** Fireflies drifting about a spot: n motes merged into one mesh, turning slowly and bobbing. */
+export function fireflies(n: number, rad: number, height: number, rand: () => number, spirit = false): THREE.Group {
+  const parts = new THREE.Group();
+  for (let i = 0; i < n; i++) {
+    const a = rand() * Math.PI * 2, d = rad * (0.35 + rand() * 0.65);
+    const big = spirit && i % 3 === 0;
+    const m = mesh(big ? new THREE.IcosahedronGeometry(0.24, 0) : new THREE.OctahedronGeometry(0.12, 0), big ? SPIRIT : FIREFLY, { emissive: big ? SPIRIT_E : FIREFLY_E });
+    m.position.set(Math.cos(a) * d, rand() * height, Math.sin(a) * d);
+    parts.add(m);
+  }
+  return swarm(parts, { orbit: 0.22 + rand() * 0.1, bob: 0.45 });
 }
 
 /** Goblin tower: crates and planks stacked ever higher, capped with rust and spikes. */
@@ -994,6 +1309,228 @@ function goblinTower(r: number, h: number, o: TowerOpts): THREE.Group {
     const flag = box(1.1, 0.7, 0.05, o.banner, r + 0.5, h * 0.8, 0);
     flag.userData.flag = true;
     g.add(flag);
+  }
+  return g;
+}
+
+// ---------- the Horde (orc): a warlord's stronghold of raw logs, smoked hides, dark stone and bone ----------
+
+/** The Horde's own colours (none is a palette key, so no season or theme repaints them). */
+export const ORC_SKIN = 0x6f8a3a, ORC_SKIN_DK = 0x566f2c, BONE_W = 0xe3d8bf, BONE_SH = 0xb5a88b, IRON_BK = 0x4a4645,
+  HIDE_C = 0x8a6440, HIDE_DK = 0x5e4028, ROPE = 0xa8905f, BLOOD = 0xa3261a, SOCKET = 0x1c1410,
+  EMBER = 0xff8a3a, EMBER_E = 0xb8420c, MOLTEN = 0xffb24a, MOLTEN_E = 0xc8600a;
+
+const UP = new THREE.Vector3(0, 1, 0);
+
+/** A tapering pole from a to b (a log, a lashing pole, a segment of horn). */
+export function limb(a: THREE.Vector3, b: THREE.Vector3, rBot: number, rTop: number, color: number, seg = 5): THREE.Mesh {
+  const d = b.clone().sub(a);
+  const m = mesh(new THREE.CylinderGeometry(rTop, rBot, d.length(), seg), color);
+  m.position.copy(a).addScaledVector(d, 0.5);
+  m.quaternion.setFromUnitVectors(UP, d.normalize());
+  return m;
+}
+
+/** A horn or a tusk: a curve from a (its root, r thick) bending by c to its point at b. */
+export function horn(a: THREE.Vector3, c: THREE.Vector3, b: THREE.Vector3, r: number, color = BONE_W, segs = 4): THREE.Group {
+  const g = new THREE.Group();
+  const q = new THREE.QuadraticBezierCurve3(a, c, b);
+  let prev = a.clone();
+  for (let i = 1; i <= segs; i++) {
+    const p = q.getPoint(i / segs);
+    // each piece runs a little past the last one's end, so the bend shows no gap
+    const from = prev.clone().addScaledVector(p.clone().sub(prev).normalize(), -r * 0.25);
+    g.add(limb(from, p, r * (1 - (i - 1) / segs) + 0.012, r * (1 - i / segs) + 0.012, color, 5));
+    prev = p;
+  }
+  return g;
+}
+
+/** A pair of horns (or tusks) either side of x = 0, sweeping out by `out`, up by `up` and forward by `fwd`. */
+export function hornPair(x: number, y: number, z: number, out: number, up: number, fwd: number, r: number, color = BONE_W, inward = false): THREE.Group {
+  const g = new THREE.Group();
+  for (const s of [-1, 1]) {
+    const a = new THREE.Vector3(s * x, y, z);
+    const c = new THREE.Vector3(s * (x + out), y + up * 0.35, z + fwd * 0.3);
+    const b = new THREE.Vector3(s * (x + (inward ? out * 0.25 : out * 0.8)), y + up, z + fwd);
+    g.add(horn(a, c, b, r, color));
+  }
+  return g;
+}
+
+/** A skull (an orc's, tusks and all): bone, dark sockets, or embers burning in them. */
+export function orcSkull(s = 1, glow = false): THREE.Group {
+  const g = new THREE.Group();
+  g.add(blob(0.5 * s, BONE_W, 0, 0, 0, 1, 0.88, 1.05));
+  g.add(box(0.44 * s, 0.24 * s, 0.36 * s, BONE_SH, 0, -0.5 * s, 0.12 * s));
+  for (const x of [-1, 1]) {
+    g.add(cone(0.06 * s, 0.26 * s, BONE_W, 4, x * 0.17 * s, -0.4 * s, 0.3 * s));
+    if (glow) g.add(new THREE.Mesh(new THREE.OctahedronGeometry(0.1 * s, 0), detailMat(EMBER, { emissive: EMBER_E })).translateX(x * 0.17 * s).translateY(0.02 * s).translateZ(0.44 * s));
+    else g.add(box(0.16 * s, 0.14 * s, 0.08 * s, SOCKET, x * 0.17 * s, -0.04 * s, 0.46 * s));
+  }
+  return g;
+}
+
+/** A cone of sharpened stake leaning outward from the centre (at angle a) by `lean`. */
+export function stake(x: number, y: number, z: number, h: number, r: number, a: number, lean: number, color: number = C.timber): THREE.Mesh {
+  const st = cone(r, h, color, 5, x, y, z);
+  st.rotation.z = -Math.cos(a) * lean;
+  st.rotation.x = Math.sin(a) * lean;
+  return st;
+}
+
+/**
+ * Orc house: a longhouse of upright raw logs on a footing of dark stone, a steep roof of smoked hides
+ * lashed down with poles, the gable poles crossed high over the ridge and tipped with bone, tusks
+ * framing the door, a skull over it, a blood-red war cloth by it and narrow slits of firelight.
+ */
+function orcHouse(o: HouseOpts): THREE.Group {
+  const g = new THREE.Group();
+  const { w, d, h } = o;
+  const roofH = o.roofH * 1.2;
+  const top = h + roofH;
+  const wall = o.wall ?? (o.stone ? C.stone : C.timberLight);
+  g.add(box(w + 0.3, 0.5, d + 0.3, C.stoneDark));
+  g.add(extrude([[-w / 2, 0], [w / 2, 0], [w / 2, h], [0, top], [-w / 2, h]], d, wall));
+  const dw = Math.min(1.3, w * 0.22), dh = Math.min(2.1, h * 0.64);
+  const n = Math.max(3, Math.round(w / 0.62)), lr = (w / n) * 0.5;
+  const face = o.stone ? 0.04 : lr;
+  if (o.stone) {
+    // a timber hoarding (an overhanging gallery) round the top of the stone walls
+    g.add(box(w + 0.36, 0.85, d + 0.36, C.timber, 0, h - 0.9, 0));
+    for (const z of [d / 2 + 0.19, -d / 2 - 0.19]) for (let i = 0; i < n; i += 2) g.add(box(0.12, 0.9, 0.06, C.timberLight, -w / 2 + (i + 0.5) * (w / n), h - 0.92, z));
+  } else {
+    // upright logs on the front and back walls (a gap in them for the door)
+    for (const z of [d / 2, -d / 2]) for (let i = 0; i < n; i++) {
+      const x = -w / 2 + (i + 0.5) * (w / n);
+      if (z > 0 && o.door !== false && Math.abs(x) < dw / 2 + lr * 0.4) continue;
+      g.add(cyl(lr, lr * 1.05, h, i % 3 === 1 ? C.timber : C.timberLight, 5, x, 0, z));
+    }
+  }
+  // thick corner posts, sharpened where they stand proud of the eaves
+  for (const x of [-w / 2, w / 2]) for (const z of [-d / 2, d / 2]) {
+    g.add(cyl(0.22, 0.27, h + 0.5, C.timber, 6, x, 0, z));
+    g.add(cone(0.22, 0.5, C.timber, 6, x, h + 0.5, z));
+  }
+  // the hide roof, with patches stitched over it and poles laid across to hold it down
+  const roofC = o.roof ?? C.thatch;
+  const patch = roofC === C.thatch ? C.thatchDark : C.tileDark;
+  const half = w / 2 + 0.5, theta = Math.atan2(roofH, w / 2), len = half / Math.cos(theta) + 0.2;
+  for (const side of [-1, 1]) {
+    const s = new THREE.Group();
+    s.add(box(len, 0.3, d + 1.0, roofC, 0, 0, 0));
+    s.add(box(len * 0.4, 0.06, d * 0.32, patch, side * len * 0.18, 0.3, d * 0.22 * side));
+    s.add(box(len * 0.3, 0.06, d * 0.24, patch, -side * len * 0.2, 0.3, -d * 0.26 * side));
+    for (const z of [-d * 0.36, d * 0.36]) s.add(box(len + 0.1, 0.12, 0.12, C.timber, 0, 0.32, z));
+    s.rotation.z = -side * theta;
+    s.position.set(side * (half / 2), top - (half / 2) * Math.tan(theta), 0);
+    g.add(s);
+  }
+  g.add(box(0.34, 0.32, d + 1.1, C.timber, 0, top + 0.12, 0));
+  // the gable poles crossed high over the ridge, tipped with bone
+  for (const z of [d / 2 + 0.52, -d / 2 - 0.52]) for (const side of [-1, 1]) {
+    const a = new THREE.Vector3(side * (half - 0.1), top - (half - 0.1) * Math.tan(theta) + 0.36, z);
+    const dir = new THREE.Vector3(-side, Math.tan(theta), 0).normalize();
+    const b = new THREE.Vector3(-side * 0.8, top + 0.36 + 0.8 * Math.tan(theta), z);
+    g.add(limb(a, b, 0.1, 0.09, C.timber));
+    if (z > 0) g.add(limb(b, b.clone().addScaledVector(dir, 0.7).add(new THREE.Vector3(0, 0.25, 0)), 0.1, 0.012, BONE_W));
+  }
+  if (o.door !== false) {
+    const dz = d / 2 + 0.12;
+    g.add(box(dw, dh, 0.22, C.door, 0, 0, dz));
+    for (const y of [dh * 0.3, dh * 0.72]) g.add(box(dw + 0.04, 0.09, 0.06, IRON_BK, 0, y, dz + 0.12));
+    const sk = orcSkull(0.42);
+    sk.position.set(0, dh + 0.42, d / 2 + face + 0.12);
+    g.add(sk);
+    // tusks framing the door on the bigger houses
+    if (w > 4.5) g.add(hornPair(dw / 2 + 0.28, 0.1, d / 2 + face + 0.3, 0.45, dh + 0.3, 0.25, 0.14, BONE_W, true));
+    // a war cloth hung from the eaves beside it
+    if (w > 3.5) {
+      const cx = -w * 0.32;
+      g.add(box(0.1, 0.1, 0.1, C.timber, cx, h - 0.2, d / 2 + face + 0.05));
+      g.add(box(0.7, Math.min(1.4, h * 0.45), 0.05, C.red, cx, h - 0.25 - Math.min(1.4, h * 0.45), d / 2 + face + 0.08));
+      g.add(box(0.22, 0.22, 0.06, BONE_W, cx, h - 0.25 - Math.min(1.4, h * 0.45) * 0.55, d / 2 + face + 0.1));
+    }
+  }
+  const nw = o.windows ?? Math.max(0, Math.floor(w / 2.4));
+  for (let i = 0; i < nw; i++) {
+    const x = -w / 2 + ((i + 1) * w) / (nw + 1);
+    if (Math.abs(x) < 1 && o.door !== false) continue;
+    if (w > 3.5 && Math.abs(x + w * 0.32) < 0.5) continue;
+    const win = box(0.3, 0.64, 0.12, C.window, x, h * 0.52, d / 2 + face + 0.04);
+    win.userData.window = true;
+    g.add(win);
+  }
+  if (o.chimney) {
+    g.add(cyl(0.42, 0.52, roofH + 1.3, C.stoneDark, 6, w * 0.22, h, -d * 0.2));
+    g.add(cyl(0.48, 0.48, 0.14, IRON_BK, 6, w * 0.22, h + roofH + 0.9, -d * 0.2));
+  }
+  return g;
+}
+
+/**
+ * Orc tower: a squat base of rough dark stone, boulders heaped at its foot, a stage of upright logs
+ * lashed with rope above it, a jutting deck bristling with sharpened stakes, and on top a steep hide
+ * roof with bone horns at its peak, or (open) a skull and a great pair of horns.
+ */
+function orcTower(r: number, h: number, o: TowerOpts): THREE.Group {
+  const g = new THREE.Group();
+  const color = o.color ?? C.stone;
+  const sh = h * 0.5;
+  g.add(cyl(r * 0.9, r * 1.12, sh, color, 7));
+  for (let i = 0; i < 5; i++) {
+    const a = i * 1.26 + 0.3;
+    g.add(blob(r * 0.3, C.stoneDark, Math.cos(a) * r * 1.02, r * 0.1, Math.sin(a) * r * 1.02, 1.2, 0.7, 1.1));
+  }
+  g.add(cyl(r * 0.98, r * 0.92, h - sh, C.timberLight, 8, 0, sh));
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2 + 0.2;
+    g.add(cyl(r * 0.13, r * 0.14, h - sh + 0.25, C.timber, 5, Math.cos(a) * r * 0.97, sh - 0.2, Math.sin(a) * r * 0.97));
+  }
+  for (const y of [sh + 0.35, h - 0.45]) g.add(mesh(new THREE.TorusGeometry(r * 1.02, 0.06, 3, 12).rotateX(Math.PI / 2), ROPE).translateY(y));
+  // arrow slits, lit at night
+  for (const a of [Math.PI / 2, Math.PI / 2 + 2.1]) {
+    const s = box(0.26, 0.7, 0.12, C.window, Math.cos(a) * r * 0.97, sh + (h - sh) * 0.3, Math.sin(a) * r * 0.97);
+    s.rotation.y = -a + Math.PI / 2;
+    s.userData.window = true;
+    g.add(s);
+  }
+  // the fighting deck, bristling with stakes
+  g.add(cyl(r * 1.26, r * 1.16, 0.32, C.timber, 8, 0, h));
+  const ns = Math.max(8, Math.round(r * 5));
+  for (let i = 0; i < ns; i++) {
+    const a = (i / ns) * Math.PI * 2;
+    g.add(stake(Math.cos(a) * r * 1.18, h + 0.25, Math.sin(a) * r * 1.18, 0.95 + (i % 2) * 0.35, 0.1, a, 0.35));
+  }
+  if (o.roof === null) {
+    // open: a skull staring out and a great pair of horns
+    const sk = orcSkull(r * 0.32);
+    sk.position.set(0, h + 0.75, r * 1.12);
+    g.add(sk);
+    g.add(hornPair(r * 0.62, h + 0.3, -r * 0.2, r * 0.75, r * 1.25, r * 0.3, r * 0.14));
+  } else {
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+      g.add(cyl(0.09, 0.1, 1.2, C.timber, 4, Math.cos(a) * r * 0.9, h + 0.3, Math.sin(a) * r * 0.9));
+    }
+    const rh = r * 1.7;
+    g.add(cone(r * 1.42, rh, o.roof ?? C.thatch, 7, 0, h + 1.35));
+    for (let i = 0; i < 3; i++) {
+      const a = (i / 3) * Math.PI * 2;
+      g.add(stake(Math.cos(a) * 0.18, h + 1.35 + rh * 0.8, Math.sin(a) * 0.18, rh * 0.45, 0.06, a, 0.3));
+    }
+    g.add(hornPair(0.16, h + 1.35 + rh * 0.72, 0, r * 0.45, r * 0.7, 0, r * 0.09));
+  }
+  if (o.banner !== undefined) {
+    // a long war banner down the tower's face, a skull painted on it
+    const bw = r * 0.62, bh = h * 0.28;
+    const f = new THREE.Group();
+    f.add(box(bw + 0.3, 0.1, 0.1, C.timber, 0, 0, 0));
+    f.add(box(bw, bh, 0.05, o.banner, 0, -bh, 0.02));
+    f.add(cone(bw * 0.5, bh * 0.22, o.banner, 3, 0, -bh - bh * 0.2, 0.02).rotateZ(Math.PI));
+    f.add(blob(bw * 0.2, BONE_W, 0, -bh * 0.42, 0.06, 1, 1, 0.3));
+    f.position.set(0, h - 0.15, r * 1.02);
+    g.add(f);
   }
   return g;
 }

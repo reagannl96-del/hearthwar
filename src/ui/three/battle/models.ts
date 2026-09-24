@@ -8,7 +8,7 @@
 
 import * as THREE from 'three';
 import type { UnitId } from '../../../engine/types';
-import { C, bake, blob, box, cone, cyl, getTheme, mat, mesh, setTheme, type Theme } from '../kit';
+import { C, bake, blob, box, cone, cyl, getTheme, hornPair, mat, mesh, orcSkull, setTheme, type Theme } from '../kit';
 import { militiaman, person, troop, type TroopModel } from '../props';
 
 export interface Figure {
@@ -28,7 +28,7 @@ export const FIG_SCALE = 1.3;
 
 const TROOP: Partial<Record<UnitId, TroopModel>> = {
   spear: 'spear', sword: 'sword', axe: 'axe', archer: 'archer', scout: 'scout', noble: 'noble', light: 'light', marcher: 'marcher',
-  heavy: 'heavy', paladin: 'paladin', sorcerer: 'sorcerer', druid: 'druid', goblin: 'goblin', necromancer: 'necromancer',
+  heavy: 'heavy', paladin: 'paladin', sorcerer: 'sorcerer', druid: 'druid', goblin: 'goblin', necromancer: 'necromancer', orc: 'orc',
 };
 
 const templates = new Map<string, { root: THREE.Group; mounted: boolean; flyer: boolean }>();
@@ -79,7 +79,7 @@ function template(unit: UnitId, theme: Theme): { root: THREE.Group; mounted: boo
       const kind = TROOP[unit] ?? 'axe';
       raw = troop(kind);
       mounted = kind === 'light' || kind === 'marcher' || kind === 'heavy' || kind === 'paladin';
-      flyer = kind === 'scout' && theme !== 'classic' && theme !== 'goblin';
+      flyer = kind === 'scout' && theme !== 'classic' && theme !== 'goblin' && theme !== 'orc';
     }
     if (!flyer) pivotWeapon(raw, mounted ? new THREE.Vector3(0.34, 1.7, 0) : new THREE.Vector3(0.3, 1.0, 0));
     const root = bake(raw);
@@ -191,6 +191,7 @@ function siegeLook(theme: Theme) {
     case 'sorcerer': return { wood: 0x4a3a6a, dark: 0x2a1d40, roof: 0x5b3596, head: 0xb58cff, accent: 0x8fe0ff };
     case 'druid': return { wood: 0x7a5a38, dark: 0x4e3820, roof: 0x4f7a2e, head: 0xd6cdb0, accent: 0x8fbc50 };
     case 'necromancer': return { wood: 0x3a3230, dark: 0x221c1b, roof: 0x2e2a33, head: 0xe6dfcc, accent: 0x5cff9a };
+    case 'orc': return { wood: 0x5e4430, dark: 0x33241a, roof: 0x7a5a3a, head: 0xe3d8bf, accent: 0xa3261a };
     default: return { wood: 0xa0703c, dark: 0x6e4a2a, roof: 0xd4a441, head: 0x6d7782, accent: 0xb3332a };
   }
 }
@@ -225,6 +226,12 @@ export function makeRam(theme: Theme): Ram {
     frame.add(box(0.1, 0.5, 3.5, k.roof, -0.95, 2.1, 0), box(0.1, 0.5, 3.5, k.roof, 0.95, 2.1, 0));
     if (theme === 'goblin') for (let i = 0; i < 5; i++) frame.add(cone(0.1, 0.4, 0x978d74, 4, -0.6 + i * 0.3, 2.64, 1.5));
     if (theme === 'necromancer') frame.add(blob(0.3, 0xe6dfcc, 0, 2.8, 1.4));
+    if (theme === 'orc') {
+      // a battering tusk: the frame's front hung with a horned skull, stakes along its roof
+      frame.add(hornPair(0.5, 2.1, 1.75, 0.45, 0.9, 0.25, 0.1));
+      frame.add(orcSkull(0.4).translateY(2.55).translateZ(1.8));
+      for (let i = 0; i < 5; i++) frame.add(cone(0.08, 0.5, 0x33241a, 4, -0.6 + i * 0.3, 2.62, -1.2 + i * 0.1));
+    }
     const baked = bake(frame);
     const g = new THREE.Group();
     g.add(baked);
@@ -240,6 +247,13 @@ export function makeRam(theme: Theme): Ram {
     const head = theme === 'necromancer' ? blob(0.42, 0xe6dfcc, 0, 0, 2.05) : cone(0.36, 0.7, k.head, 6, 0, 0, 1.95);
     if (theme !== 'necromancer') head.rotation.x = Math.PI / 2;
     log.add(head);
+    if (theme === 'orc') {
+      // the log's head is a boar's skull with its tusks
+      const sk = orcSkull(0.5);
+      sk.position.set(0, 0.05, 1.85);
+      log.add(sk);
+      log.add(hornPair(0.2, -0.2, 2.0, 0.25, 0.45, 0.35, 0.07));
+    }
     if (theme === 'sorcerer') {
       const glow = mesh(new THREE.OctahedronGeometry(0.22, 0), 0xc9a6ff, { emissive: 0x7a4ad0 });
       glow.position.set(0, 0, 2.4);
@@ -260,7 +274,7 @@ export function makeRam(theme: Theme): Ram {
   });
 }
 
-export type Shot = 'fire' | 'barrel' | 'orb' | 'boulder' | 'skull' | 'holy';
+export type Shot = 'fire' | 'barrel' | 'orb' | 'boulder' | 'skull' | 'holy' | 'rock';
 
 export interface Catapult { g: THREE.Group; arm: THREE.Group; ammo: THREE.Object3D; shot: Shot; crew: Figure[]; wheels: THREE.Object3D[] }
 
@@ -293,7 +307,7 @@ export function makeCatapult(theme: Theme): Catapult {
     arm.add(beam);
     const cup = cyl(0.34, 0.24, 0.24, k.dark, 7, 0, 2.7, 0);
     arm.add(cup);
-    const shot: Shot = theme === 'paladin' ? 'holy' : theme === 'sorcerer' ? 'orb' : theme === 'necromancer' ? 'skull' : theme === 'goblin' ? 'barrel' : theme === 'druid' ? 'boulder' : 'fire';
+    const shot: Shot = theme === 'paladin' ? 'holy' : theme === 'sorcerer' ? 'orb' : theme === 'necromancer' ? 'skull' : theme === 'goblin' ? 'barrel' : theme === 'druid' ? 'boulder' : theme === 'orc' ? 'rock' : 'fire';
     const ammo = ammoMesh(shot);
     ammo.position.set(0, 3.1, 0);
     arm.add(ammo);
@@ -338,6 +352,12 @@ export function ammoMesh(shot: Shot): THREE.Object3D {
     case 'boulder':
       g.add(blob(0.42, 0x8e8a78, 0, 0, 0, 1, 0.9, 1.1));
       g.add(blob(0.2, 0x4f7a2e, 0.18, 0.22, 0.1));
+      break;
+    case 'rock':
+      // a jagged black rock, iron spikes driven into it, burning in the cracks
+      g.add(blob(0.46, 0x3e3a36, 0, 0, 0, 1.1, 0.9, 1));
+      for (let i = 0; i < 4; i++) { const a = (i / 4) * Math.PI * 2; g.add(cone(0.06, 0.3, 0x2e2b2a, 4, Math.cos(a) * 0.42, 0.1, Math.sin(a) * 0.42).rotateZ(-Math.cos(a) * 1.2).rotateX(Math.sin(a) * 1.2)); }
+      g.add(mesh(new THREE.IcosahedronGeometry(0.28, 0), 0xff8a3a, { emissive: 0xc0400a }).translateY(0.12));
       break;
     default:
       g.add(blob(0.4, 0x5a4a3a, 0, 0, 0));

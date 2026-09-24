@@ -12,7 +12,7 @@ export type Side = 'att' | 'def';
 /** How a unit fights on screen. */
 export type Role = 'melee' | 'shooter' | 'thrower' | 'caster' | 'ram' | 'catapult' | 'noble' | 'scout';
 
-export const HEROES: UnitId[] = ['paladin', 'sorcerer', 'druid', 'goblin', 'necromancer'];
+export const HEROES: UnitId[] = ['paladin', 'sorcerer', 'druid', 'goblin', 'necromancer', 'orc'];
 
 export function roleOf(u: UnitId): Role {
   switch (u) {
@@ -43,7 +43,7 @@ export function figuresFor(u: UnitId, n: number): number {
 }
 
 /** Front to back, the order an army marches in: horsemen, foot, archers, siege, then the nobles with the banner. */
-const MARCH_ORDER: UnitId[] = ['light', 'heavy', 'paladin', 'marcher', 'axe', 'sword', 'spear', 'militia', 'goblin', 'druid', 'archer', 'sorcerer', 'necromancer', 'scout', 'ram', 'catapult', 'noble'];
+const MARCH_ORDER: UnitId[] = ['light', 'heavy', 'paladin', 'marcher', 'axe', 'sword', 'spear', 'militia', 'orc', 'goblin', 'druid', 'archer', 'sorcerer', 'necromancer', 'scout', 'ram', 'catapult', 'noble'];
 
 /**
  * The figures to put on screen for an army, capped at `cap` in all (every kind

@@ -46,7 +46,7 @@ export interface CombatResult {
   effects?: HeroEffect[];
 }
 
-export type HeroEffect = 'barrier' | 'thornwall' | 'sneak' | 'dread-att' | 'dread-def' | 'ward';
+export type HeroEffect = 'barrier' | 'thornwall' | 'sneak' | 'dread-att' | 'dread-def' | 'ward' | 'warcry';
 
 const CLS_INDEX: Record<UnitClass, 0 | 1 | 2> = { inf: 0, cav: 1, arc: 2 };
 
@@ -152,16 +152,20 @@ export function resolveBattle(input: CombatInput): CombatResult {
     const vs = HERO_INFO[h]?.vs;
     if (vs && defPopTot > 0) attHeroMult += (HERO_INFO[h].vsBonus ?? HERO_VS_BONUS) * (defPop[CLS_INDEX[vs]] / defPopTot);
   }
+  // the Orc King's bloodlust: the whole warband he leads charges harder
+  if (attHeroes.includes('orc')) attHeroMult += HERO_POWERS.bloodlust;
   for (let i = 0; i < 3; i++) A[i] *= attHeroMult;
   const effects: HeroEffect[] = [];
+  if (attHeroes.includes('orc')) effects.push('warcry');
   // a defending necromancer fills the attacking infantry with dread
   if (defHeroes.includes('necromancer') && A[0] > 0) { A[0] *= 1 - HERO_POWERS.dread; effects.push('dread-def'); }
   const Atot = A[0] + A[1] + A[2];
 
-  const siegeMult = 1;
+  // the Orc King's warcry: the rams and rock-hurlers he leads strike much harder
+  const siegeMult = attHeroes.includes('orc') ? 1 + HERO_POWERS.warcry : 1;
   const ramMult = attItem?.special === 'ramx2' ? 1 + ITEM_POWERS.siege : 1;
   const ramsSent = main.ram ?? 0;
-  const ramPowerSent = ramsSent * ramMult * techMultiplier(attTech.ram);
+  const ramPowerSent = ramsSent * ramMult * siegeMult * techMultiplier(attTech.ram);
   let battleWall = Math.max(0, input.wall - Math.floor(ramDemolish(ramPowerSent, input.wall) / 2));
   // an attacking goblin chief's army slips over part of the wall
   if (attHeroes.includes('goblin') && battleWall > 0) { battleWall = Math.max(0, battleWall - HERO_POWERS.sneak); effects.push('sneak'); }
@@ -252,7 +256,7 @@ export function resolveBattle(input: CombatInput): CombatResult {
   const ramFactor = winner === 'attacker' ? 1 : defRatio;
   const ramsLeft = winner === 'attacker' ? attSurvivors.ram ?? 0 : ramsSent;
   if (ramsLeft > 0 && input.wall > 0) {
-    wallAfter -= ramDemolish(ramsLeft * ramMult * techMultiplier(attTech.ram) * ramFactor, input.wall);
+    wallAfter -= ramDemolish(ramsLeft * ramMult * siegeMult * techMultiplier(attTech.ram) * ramFactor, input.wall);
   }
 
   let catLevelsDestroyed = 0;

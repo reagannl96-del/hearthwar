@@ -8,7 +8,7 @@ import * as THREE from 'three';
 import { bake, blob, box, cone, cyl, mesh } from './kit';
 import { LAYOUT, WALL_R } from './scene';
 
-export type AuraHero = 'paladin' | 'sorcerer' | 'druid' | 'goblin' | 'necromancer';
+export type AuraHero = 'paladin' | 'sorcerer' | 'druid' | 'goblin' | 'necromancer' | 'orc';
 
 export interface Aura {
   group: THREE.Group;
@@ -237,6 +237,49 @@ function necromancerAura(r: () => number): Aura {
   };
 }
 
+/**
+ * The Orc King's warcry hangs over the village: a ring of war poles round his statue (horned skulls,
+ * blood-red rags), the ground inside them throbbing red to the beat of the war drums, and embers
+ * rising in a column over it all.
+ */
+function orcAura(r: () => number): Aura {
+  const g = new THREE.Group();
+  const [sx, sz] = LAYOUT.statue;
+  const poles = new THREE.Group();
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2 + 0.26;
+    const x = sx + Math.cos(a) * 3.9, z = sz + Math.sin(a) * 3.9;
+    poles.add(cyl(0.08, 0.11, 3.0, 0x33241a, 5, x, 0, z));
+    poles.add(blob(0.24, 0xe3d8bf, x, 3.2, z, 1, 0.9, 1));
+    for (const s of [-1, 1]) {
+      const h = cone(0.06, 0.45, 0xe3d8bf, 4, x + Math.sin(a) * s * 0.18, 3.3, z - Math.cos(a) * s * 0.18);
+      h.rotation.set(Math.cos(a) * s * 0.6, 0, Math.sin(a) * s * 0.6);
+      poles.add(h);
+    }
+    const rag = box(0.08, 0.9, 0.42, 0xa3261a, x, 1.9, z);
+    rag.rotation.y = -a;
+    poles.add(rag);
+  }
+  g.add(bake(poles));
+  const ringMat = new THREE.MeshBasicMaterial({ color: 0xff5a1a, transparent: true, opacity: 0.3, depthWrite: false, blending: THREE.AdditiveBlending });
+  const ring = new THREE.Mesh(new THREE.RingGeometry(3.3, 4.5, 48).rotateX(-Math.PI / 2), ringMat);
+  ring.position.set(sx, 0.07, sz);
+  g.add(ring);
+  const sparks = risingSparks(22, 0xffa040, 0xc04a10, sx, sz, 3.4, 11, r);
+  g.add(sparks.group);
+  return {
+    group: g,
+    step(dt, t) {
+      // two quick beats and a rest, like the drums
+      const p = (t * 1.1) % 1;
+      const beat = Math.max(0, 1 - Math.abs(p - 0.1) * 9) + Math.max(0, 1 - Math.abs(p - 0.3) * 9) * 0.8;
+      ringMat.opacity = 0.14 + beat * 0.34;
+      sparks.step(dt, t);
+    },
+    dispose() { disposeAll(g); },
+  };
+}
+
 function disposeAll(g: THREE.Object3D): void {
   g.traverse((o) => {
     if (o instanceof THREE.Mesh) {
@@ -256,5 +299,6 @@ export function heroAura(hero: AuraHero, wallLevel: number): Aura {
     case 'druid': return druidAura(r, wallLevel);
     case 'goblin': return goblinAura(r);
     case 'necromancer': return necromancerAura(r);
+    case 'orc': return orcAura(r);
   }
 }

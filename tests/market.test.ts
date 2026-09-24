@@ -67,3 +67,39 @@ describe('merchant travel', () => {
     expect(back.arrive - back.depart).toBe(trip);
   });
 });
+
+describe('horse merchants', () => {
+  it('are recruited at the market, carry 20,000 five times as fast, eat at home all the way, and come back', async () => {
+    const { createWorld, defaultConfig } = await import('../src/engine/world');
+    const { applyAction } = await import('../src/engine/actions');
+    const { advance } = await import('../src/engine/game');
+    const { removeEvents } = await import('../src/engine/events');
+    const { popUsed, updateVillage } = await import('../src/engine/village');
+    const { merchantTime, conquer } = await import('../src/engine/commands');
+    const w = createWorld({ worldName: 'H', playerName: 'P', villageName: 'Home', seed: 9, config: { ...defaultConfig(), aiCount: 2, size: 60 } });
+    removeEvents(w, (e) => e.type === 'barb');
+    const p = w.players[w.humanId];
+    const home = w.villages[p.villages[0]];
+    Object.assign(home.buildings, { market: 5, farm: 20, warehouse: 25, main: 10 });
+    home.res = { wood: 100_000, clay: 100_000, iron: 100_000 };
+    expect(applyAction(w, p.id, { type: 'recruit', vid: home.id, unit: 'trader', count: 2 }).ok).toBe(true);
+    advance(w, w.now + 3 * 3_600_000);
+    updateVillage(w, home, w.now);
+    expect(home.units.trader).toBe(2);
+    // they never march with an army
+    expect(applyAction(w, p.id, { type: 'send', vid: home.id, target: home.id + 1, kind: 'attack', units: { trader: 1 } }).ok).toBe(false);
+    // a second village of ours, a shipment of 30,000 needs both horse merchants
+    const other = Object.values(w.villages).find((v) => v.ownerId === null)!;
+    conquer(w, other, p.id);
+    home.res = { wood: 100_000, clay: 100_000, iron: 100_000 };
+    const before = popUsed(home);
+    expect(applyAction(w, p.id, { type: 'trade', vid: home.id, target: other.id, res: { wood: 10_000, clay: 10_000, iron: 10_000 }, horses: true }).ok).toBe(true);
+    expect(home.units.trader ?? 0).toBe(0);
+    expect(popUsed(home)).toBe(before);
+    const c = Object.values(w.commands).find((x) => x.kind === 'trade' && x.ownerId === p.id)!;
+    expect(c.arrive - c.depart).toBeCloseTo(merchantTime(w, home, other) / 5, -3);
+    advance(w, w.now + 10 * (c.arrive - c.depart) + 60_000);
+    updateVillage(w, home, w.now);
+    expect(home.units.trader).toBe(2);
+  });
+});

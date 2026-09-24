@@ -24,6 +24,7 @@ export type Route =
   | { name: 'settings' }
   | { name: 'news' }
   | { name: 'realm' }
+  | { name: 'banner' }
   | { name: 'tribe'; id?: number; tab?: string };
 
 export interface Toast {

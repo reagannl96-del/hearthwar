@@ -5,6 +5,7 @@ import { Sparkline } from '../components/Sparkline';
 import { QUADRANT_NAME, coords, fmt, quadrant, type Quadrant } from '../format';
 import { Growth, JoinButton, RecruitingPill } from './TribeScreen';
 import { host, view, usePane } from '../store';
+import { FlagBadge } from './BannerScreen';
 
 type Tab = 'players' | 'tribes' | 'continent' | 'oda' | 'odd';
 
@@ -175,6 +176,8 @@ function Profile({ pid }: { pid: number }) {
   const p = h.profile(pid);
   const me = view.value!.me.id;
   if (!p) return <Section><Empty>That ruler is gone.</Empty></Section>;
+  // the banner this ruler flies (yours as you saved it; others' as the realm last showed them)
+  const flag = p.id === me ? view.value!.me.flag : h.world.players[p.id]?.flag;
   return (
     <div class="stack">
       <div class="crumbs">
@@ -183,7 +186,8 @@ function Profile({ pid }: { pid: number }) {
         <span>{p.name}</span>
       </div>
       <div class="page-head">
-        <h1><i class="sw lg" style={{ background: p.id === me ? 'var(--me)' : p.color }} /> {p.name}</h1>
+        <h1><i class="sw lg" style={{ background: p.id === me ? 'var(--me)' : p.color }} /> {p.name} {flag && <FlagBadge flag={flag} w={36} h={24} title={`${p.name}'s banner`} />}</h1>
+        {p.id === me && <button type="button" class="link small" onClick={() => pane.go({ name: 'banner' })}>{flag ? 'Change your banner' : 'Design your banner'}</button>}
         {p.tribe && <button type="button" class="pill link" onClick={() => pane.go({ name: 'tribe', id: p.tribe!.id })}>[{p.tribe.tag}] {p.tribe.name}</button>}
       </div>
       <div class="grid-2">

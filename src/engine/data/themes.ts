@@ -8,10 +8,10 @@
 import type { UnitId } from '../types';
 import { UNITS } from './units';
 
-export type VillageTheme = 'classic' | 'paladin' | 'sorcerer' | 'druid' | 'goblin' | 'necromancer';
+export type VillageTheme = 'classic' | 'paladin' | 'sorcerer' | 'druid' | 'goblin' | 'necromancer' | 'orc';
 
 export function themeOfHero(hero: UnitId | null | undefined): VillageTheme {
-  return hero === 'paladin' || hero === 'sorcerer' || hero === 'druid' || hero === 'goblin' || hero === 'necromancer' ? hero : 'classic';
+  return hero === 'paladin' || hero === 'sorcerer' || hero === 'druid' || hero === 'goblin' || hero === 'necromancer' || hero === 'orc' ? hero : 'classic';
 }
 
 type Names = Partial<Record<UnitId, [name: string, plural: string]>>;
@@ -29,6 +29,7 @@ export const THEMED_UNITS: Record<Exclude<VillageTheme, 'classic'>, Names> = {
     ram: ['Siege Ram', 'Siege Rams'],
     catapult: ['Trebuchet', 'Trebuchets'],
     noble: ['Lord', 'Lords'],
+    trader: ['Royal Quartermaster', 'Royal Quartermasters'],
     militia: ['Yeomanry', 'Yeomanry'],
   },
   goblin: {
@@ -43,6 +44,7 @@ export const THEMED_UNITS: Record<Exclude<VillageTheme, 'classic'>, Names> = {
     ram: ['Log Basher', 'Log Bashers'],
     catapult: ['Junk Flinger', 'Junk Flingers'],
     noble: ['Goblin Boss', 'Goblin Bosses'],
+    trader: ['Loot Hauler', 'Loot Haulers'],
     militia: ['Goblin Rabble', 'Goblin Rabble'],
   },
   sorcerer: {
@@ -57,6 +59,7 @@ export const THEMED_UNITS: Record<Exclude<VillageTheme, 'classic'>, Names> = {
     ram: ['Arcane Ram', 'Arcane Rams'],
     catapult: ['Orb Thrower', 'Orb Throwers'],
     noble: ['Archmage Envoy', 'Archmage Envoys'],
+    trader: ['Spellbound Wagon', 'Spellbound Wagons'],
     militia: ['Apprentice Levy', 'Apprentice Levy'],
   },
   druid: {
@@ -71,7 +74,24 @@ export const THEMED_UNITS: Record<Exclude<VillageTheme, 'classic'>, Names> = {
     ram: ['Treant Ram', 'Treant Rams'],
     catapult: ['Boulder Treant', 'Boulder Treants'],
     noble: ['Elder', 'Elders'],
+    trader: ['Stag Courier', 'Stag Couriers'],
     militia: ['Grove Folk', 'Grove Folk'],
+  },
+  // the clans: green-skinned grunts in crude iron, wargs and war boars for horses
+  orc: {
+    spear: ['Spear Grunt', 'Spear Grunts'],
+    sword: ['Cleaver', 'Cleavers'],
+    axe: ['Berserker', 'Berserkers'],
+    archer: ['Bow Orc', 'Bow Orcs'],
+    scout: ['Warg Scout', 'Warg Scouts'],
+    light: ['Warg Rider', 'Warg Riders'],
+    marcher: ['Warg Archer', 'Warg Archers'],
+    heavy: ['Boar Rider', 'Boar Riders'],
+    ram: ['Battering Tusk', 'Battering Tusks'],
+    catapult: ['Rock Hurler', 'Rock Hurlers'],
+    noble: ['Warchief', 'Warchiefs'],
+    trader: ['Pack Boar', 'Pack Boars'],
+    militia: ['Clan Rabble', 'Clan Rabble'],
   },
   // the paladin's army, dug back up: skeletons in rusted mail, bats for eyes, bone horses
   necromancer: {
@@ -86,6 +106,7 @@ export const THEMED_UNITS: Record<Exclude<VillageTheme, 'classic'>, Names> = {
     ram: ['Bone Ram', 'Bone Rams'],
     catapult: ['Skull Catapult', 'Skull Catapults'],
     noble: ['Lich Lord', 'Lich Lords'],
+    trader: ['Bone Cart', 'Bone Carts'],
     militia: ['Risen Dead', 'Risen Dead'],
   },
 };

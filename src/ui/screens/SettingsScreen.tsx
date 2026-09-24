@@ -3,7 +3,8 @@ import { resetNavOrder } from '../navOrder';
 import { SPEED_PRESETS } from '../../engine/world';
 import { Btn, Modal, Section } from '../components/common';
 import { fmtDur } from '../format';
-import { host, paused, prefs, restartRealm, sceneQuality, setPaused, setPrefs, setWarp, leaveRealm, toast, view, warp } from '../store';
+import { host, paused, prefs, restartRealm, sceneQuality, setPaused, setPrefs, setWarp, leaveRealm, toast, view, warp, usePane } from '../store';
+import { BANNER_WALL, FlagBadge } from './BannerScreen';
 
 const QUALITY_NOTE = {
   auto: 'Picked for this device. Change it if the village feels slow or looks rough.',
@@ -14,6 +15,7 @@ const QUALITY_NOTE = {
 
 export function SettingsScreen() {
   const h = host.value!;
+  const pane = usePane();
   const pv = view.value!;
   const p = prefs.value;
   const [copied, setCopied] = useState(false);
@@ -43,6 +45,15 @@ export function SettingsScreen() {
     <div class="stack">
       <div class="page-head"><h1>Settings</h1></div>
       <div class="grid-2">
+        <Section title="Your banner">
+          <div class="banner-mini">
+            <FlagBadge flag={pv.me.flag} w={66} h={44} title="Your banner" />
+            <p class="muted small grow">Flown at the gate of every village whose wall reaches level {BANNER_WALL}, for every visitor to see.</p>
+          </div>
+          <div class="row gap wrap">
+            <Btn onClick={() => pane.go({ name: 'banner' })}>{pv.me.flag ? 'Change your banner' : 'Design your banner'}</Btn>
+          </div>
+        </Section>
         {!h.multiplayer && (
         <Section title="Time">
           <p class="muted">This is your realm, so you control its clock. Pausing stops everything, rival rulers included.</p>

@@ -2,10 +2,12 @@
 
 import * as THREE from 'three';
 import type { BuildingId } from '../../engine/types';
-import { ARC, ARC_EMIT, C, VIO, VIO_EMIT, arcaneLamp, bake, box, cone, cyl, darker, floatingCrystal, floatingIsle, getSeason, getTheme, mat, rng, roundTower, seasonal } from './kit';
+import { ARC, ARC_EMIT, BLOSSOM, C, VIO, VIO_EMIT, arcaneLamp, bake, box, branch, cone, cyl, darker, druidCanopy, fireflies, floatingCrystal, floatingIsle, getSeason, getTheme, gnarledTrunk, hangingLantern, leafCluster, mat, mossPal, rng, roundTower, seasonal, spiralGlyph } from './kit';
+import { leafTotem, runeStone, toadstools } from './grove';
 import { rock, tree, pumpkin, hayBale, barrel, crate, crystalSpire, greatTree, skullTotem, necroObelisk, gravestone, sunShrine, banner } from './props';
 import { blob, mesh } from './kit';
 import { distToPaths } from './paths';
+import { addWarcamp, orcGate, orcPalisade, orcWallDress, torchPost, warShrine } from './warcamp';
 
 export const WALL_R = 44;
 export const GATE_A = Math.PI / 2; // gate faces +Z (towards the viewer)
@@ -170,8 +172,9 @@ export function buildTerrain(seed = 7): THREE.Mesh {
       if (getTheme() === 'sorcerer' && patch > 0.72) c = rr > WALL_R ? 0x8a7aa8 : 0x7f86a8; // lavender heather
       else if (getTheme() === 'druid' && patch > 0.7) c = 0x3f6d2a; // deep moss
       else if (getTheme() === 'druid' && patch < 0.24) c = 0x86a84a; // sunlit clover
+      else if (getTheme() === 'orc' && patch > 0.74) c = rr > WALL_R ? 0x3e3630 : 0x4a4034; // scorched, trampled earth
     }
-    col.set(getTheme() !== 'classic' && (c === 0x8a7aa8 || c === 0x7f86a8 || c === 0x3f6d2a || c === 0x86a84a) ? c : seasonal(c));
+    col.set(getTheme() !== 'classic' && (c === 0x8a7aa8 || c === 0x7f86a8 || c === 0x3f6d2a || c === 0x86a84a || c === 0x3e3630 || c === 0x4a4034) ? c : seasonal(c));
     const v = 0.97 + r() * 0.05;
     for (let k = 0; k < 3; k++) {
       colors[(i + k) * 3] = col.r * v;
@@ -257,13 +260,13 @@ export function buildScenery(seed = 11): THREE.Group {
     // the tournament ground (paladin) and the stone circle (sorcerer) outside the gate are kept clear
     if (theme !== 'classic' && Math.hypot(it.x - 21, it.z - 57.5) < 13) continue;
     if (inside && theme !== 'classic' && (it.kind === 'oak' || it.kind === 'birch')) {
-      const lm = theme === 'paladin' ? sunShrine(r) : theme === 'sorcerer' ? crystalSpire() : theme === 'druid' ? greatTree(r) : theme === 'necromancer' ? necroObelisk(r) : skullTotem();
+      const lm = theme === 'paladin' ? sunShrine(r) : theme === 'sorcerer' ? crystalSpire() : theme === 'druid' ? greatTree(r) : theme === 'necromancer' ? necroObelisk(r) : theme === 'orc' ? warShrine(r) : skullTotem();
       if (theme === 'goblin') lm.scale.setScalar(1.5);
       lm.position.set(it.x, 0, it.z);
       lm.rotation.y = r() * Math.PI * 2;
       g.add(lm);
     } else if (it.kind === 'oak' || it.kind === 'pine' || it.kind === 'birch') {
-      const t = tree(it.kind, r, it.scale);
+      const t = tree(it.kind, r, it.scale, Math.hypot(it.x, it.z) < 72 ? 1 : 0);
       t.position.set(it.x, inside ? 0 : y - 0.1, it.z);
       g.add(t);
     } else if (it.kind === 'rock') {
@@ -281,6 +284,7 @@ export function buildScenery(seed = 11): THREE.Group {
   if (getTheme() === 'sorcerer') addArcane(g, r);
   if (getTheme() === 'druid') { addGlade(g, r); addSpring(g, r); }
   if (getTheme() === 'necromancer') addGraveyard(g, r);
+  if (getTheme() === 'orc') addWarcamp(g, r, { at: heightAt, free: freeForTree, motes, wallR: WALL_R });
   if (getSeason() === 'volcanic') addVolcanic(g, r);
   return bake(g);
 }
@@ -770,38 +774,93 @@ function addGlade(g: THREE.Group, r: () => number): void {
     g.add(f);
   };
   const shrooms = (x: number, z: number, y: number) => {
-    for (let i = 0; i < 7; i++) {
-      const a = (i / 7) * Math.PI * 2;
-      const mx = x + Math.cos(a) * 1.3, mz = z + Math.sin(a) * 1.3;
-      g.add(cyl(0.07, 0.09, 0.32, 0xefe6d0, 5, mx, y, mz));
-      g.add(blob(0.19, i % 3 === 0 ? 0xd96b3a : 0xc0392b, mx, y + 0.36, mz, 1, 0.5, 1));
+    // a fairy ring: toadstools in a circle, a few of them glowing
+    const ring = toadstools(9, r, 1.3, true, 0.4);
+    ring.position.set(x, y, z);
+    g.add(ring);
+  };
+  const hedge = (x: number, z: number, y: number) => {
+    // a flowering hedge: a short row of leaf masses starred with blossom
+    const hg = new THREE.Group();
+    const n = 3 + Math.floor(r() * 2);
+    for (let i = 0; i < n; i++) {
+      hg.add(leafCluster(0.55, i % 2 ? 'deep' : 'mid', i * 0.8, 0.4, (r() - 0.5) * 0.3, 1.1, 0.85, 1, 0, i + Math.floor(r() * 99)));
+      if (getSeason() !== 'winter') for (let k = 0; k < 2; k++) hg.add(mesh(new THREE.OctahedronGeometry(0.12, 0), r() < 0.5 ? BLOSSOM : 0xf4f1e6).translateX(i * 0.8 + (r() - 0.5) * 0.6).translateY(0.75 + r() * 0.15).translateZ((r() - 0.5) * 0.7));
     }
+    hg.position.set(x, y, z);
+    hg.rotation.y = r() * Math.PI;
+    g.add(hg);
   };
   let placed = 0;
-  for (let tries = 0; tries < 1200 && placed < 90; tries++) {
+  for (let tries = 0; tries < 1200 && placed < 96; tries++) {
     const a = r() * Math.PI * 2, d = WALL_R + 6 + r() * 80;
     const x = Math.cos(a) * d, z = Math.sin(a) * d;
     if (!freeForTree(x, z)) continue;
     const y = heightAt(x, z);
-    const k = placed % 6;
+    const k = placed % 8;
     if (k === 0) {
       // another great oak
-      const t = tree('oak', r, 1.5 + r() * 0.6);
+      const t = tree('oak', r, 1.5 + r() * 0.6, d < 72 ? 1 : 0);
       t.position.set(x, y - 0.1, z);
       g.add(t);
     } else if (k === 1) {
       const b = blob(0.9 + r() * 0.8, 0x7d8570, x, y + 0.3, z, 1.3, 0.8, 1.1);
       g.add(b);
-      g.add(blob(0.7, 0x4f7f32, x, y + 0.85, z, 1.2, 0.35, 1));
+      g.add(leafCluster(0.7, mossPal(), x, y + 0.85, z, 1.2, 0.35, 1, 0, placed));
     } else if (k === 2) fern(x, z, y);
     else if (k === 3) shrooms(x, z, y);
-    else flowers(x, z, y);
+    else if (k === 4) hedge(x, z, y);
+    else if (k === 5 && placed % 16 === 5) {
+      const st = runeStone(1.8 + r() * 0.8, r);
+      st.position.set(x, y - 0.1, z);
+      st.rotation.y = r() * Math.PI * 2;
+      g.add(st);
+    } else if (k === 6 && placed % 16 === 6) {
+      const tt = leafTotem(2.6 + r() * 0.6, r);
+      tt.position.set(x, y - 0.05, z);
+      tt.rotation.y = r() * Math.PI * 2;
+      g.add(tt);
+    } else flowers(x, z, y);
     placed++;
   }
   // flowers, ferns and toadstools around the great trees inside the walls
   for (const [x, z] of [[-34, 2], [-24, -24], [28, -18], [32, 14], [10, -31], [-5, 31]]) {
     flowers(x + 2, z + 1.5, 0);
     fern(x - 2, z - 1, 0);
+  }
+  // living-wood arches over the road out of the gate, lanterns hung beneath them
+  for (const az of [48.6, 55, 61.5]) {
+    const ay = heightAt(0, az);
+    const arch = new THREE.Group();
+    const pts: THREE.Vector3[] = [];
+    for (let i = 0; i <= 8; i++) {
+      const a = (Math.PI * i) / 8;
+      pts.push(new THREE.Vector3(-Math.cos(a) * 3.9, 2.0 + Math.sin(a) * 3.6, 0));
+    }
+    for (let i = 0; i < 8; i++) arch.add(branch(pts[i], pts[i + 1], 0.34 - Math.min(i, 7 - i) * 0.05, i % 2 ? 0x5a3f28 : 0x4a3420));
+    for (const s of [-1, 1]) {
+      // the two trunks the arch grows from, rooted either side of the road
+      arch.add(branch(new THREE.Vector3(s * 3.9, -0.2, 0), new THREE.Vector3(s * 3.9, 2.05, 0), 0.42, 0x4a3420));
+      for (let k = 0; k < 3; k++) {
+        const a = (k / 3) * Math.PI * 2 + 0.5;
+        arch.add(branch(new THREE.Vector3(s * 3.9, 0.8, 0), new THREE.Vector3(s * 3.9 + Math.cos(a) * 0.9, -0.15, Math.sin(a) * 0.9), 0.2, 0x3f2c1c, 4));
+      }
+    }
+    for (let i = 1; i < 8; i++) {
+      const p = pts[i];
+      arch.add(leafCluster(0.55 + (i === 4 ? 0.2 : 0), i % 2 ? 'mid' : 'deep', p.x, p.y + 0.15, (r() - 0.5) * 0.3, 1.2, 0.75, 0.9, 0, i + az));
+      if (i % 3 === 1 && getSeason() !== 'winter') arch.add(mesh(new THREE.OctahedronGeometry(0.14, 0), BLOSSOM).translateX(p.x).translateY(p.y + 0.6).translateZ(0.3));
+    }
+    const glyph = spiralGlyph(0.9);
+    glyph.position.set(0, pts[4].y - 0.2, 0.36);
+    arch.add(glyph);
+    for (const i of [2, 6]) {
+      const l = hangingLantern(0.7, 1.1);
+      l.position.set(pts[i].x, pts[i].y - 0.2, 0);
+      arch.add(l);
+    }
+    arch.position.set(0, ay, az);
+    g.add(arch);
   }
   motes(g, r, 34, 0xf4ff9a, 0x9aff3a, () => {
     const a = r() * Math.PI * 2, d = 10 + r() * 75;
@@ -832,6 +891,13 @@ function addLamps(g: THREE.Group): void {
   });
   for (const [x, z] of spots) {
     if (!clearOf(x, z)) continue;
+    if (getTheme() === 'orc') {
+      // the Horde lights its streets with fire baskets on stakes
+      const tp = torchPost();
+      tp.position.set(x, 0, z);
+      g.add(tp);
+      continue;
+    }
     const l = new THREE.Group();
     l.add(cyl(0.22, 0.28, 0.3, C.stoneDark, 6));
     l.add(cyl(0.06, 0.08, 2.6, C.iron, 5, 0, 0.3));
@@ -856,24 +922,43 @@ function addSpring(g: THREE.Group, r: () => number): void {
   const y0 = at(cx, cz);
   const pool = new THREE.Mesh(new THREE.CircleGeometry(4.2, 18), mat(0x4a9aa8, { emissive: 0x0a3a40 }));
   pool.rotation.x = -Math.PI / 2;
-  pool.position.set(cx, y0 + 0.08, cz);
+  pool.position.set(cx, y0 + 0.14, cz);
   g.add(pool);
   g.add(cyl(4.5, 4.6, 0.12, 0x6a5a40, 18, cx, y0 - 0.02, cz));
   for (let i = 0; i < 7; i++) {
     const a = r() * Math.PI * 2, d = r() * 3.2;
     const lily = new THREE.Mesh(new THREE.CircleGeometry(0.42, 7), mat(0x5e8c34));
     lily.rotation.x = -Math.PI / 2;
-    lily.position.set(cx + Math.cos(a) * d, y0 + 0.11, cz + Math.sin(a) * d);
+    lily.position.set(cx + Math.cos(a) * d, y0 + 0.17, cz + Math.sin(a) * d);
     g.add(lily);
-    if (i % 2 === 0) g.add(blob(0.13, 0xf4c0d8, lily.position.x, y0 + 0.2, lily.position.z));
+    if (i % 2 === 0) g.add(blob(0.13, 0xf4c0d8, lily.position.x, y0 + 0.26, lily.position.z));
   }
   for (let i = 0; i < 9; i++) {
     const a = (i / 9) * Math.PI * 2;
     const x = cx + Math.cos(a) * 7.2, z = cz + Math.sin(a) * 6.4;
-    const st = box(0.9, 2.4 + (i % 3) * 0.5, 0.6, 0x8e9a80, x, at(x, z) - 0.2, z);
-    st.rotation.y = -a;
+    const st = runeStone(2.4 + (i % 3) * 0.5, r, i % 3 !== 1);
+    st.scale.set(1.45, 1, 1.45);
+    st.position.set(x, at(x, z) - 0.2, z);
+    st.rotation.y = -a - Math.PI / 2; // the carved face turned to the pool
     g.add(st);
-    g.add(blob(0.5, 0x5e7d32, x, at(x, z) + 2.3 + (i % 3) * 0.5, z, 1, 0.4, 1));
+  }
+  // fireflies and spirit wisps over the water, lily flowers glowing
+  const ff = fireflies(16, 5, 2.4, r, true);
+  ff.position.set(cx, y0 + 0.6, cz);
+  g.add(ff);
+  // a weeping willow leaning over the far side of the pool
+  const wil = new THREE.Group();
+  wil.add(gnarledTrunk(0.35, 0.6, 3.2, r, { roots: 4, rootR: 0.18, spread: 1.6 }));
+  const wc = druidCanopy({ r: 2.6, h: 2.2, rand: r, droop: 8, vines: 22, blossom: 0 });
+  wc.position.y = 3.0;
+  wil.add(wc);
+  wil.position.set(cx + 9.4, at(cx + 9.4, cz - 2.5) - 0.1, cz - 2.5);
+  wil.rotation.z = 0.05;
+  g.add(wil);
+  for (const s of [-1, 1]) {
+    const tt = leafTotem(3.0, r);
+    tt.position.set(cx + s * 3.2, at(cx + s * 3.2, cz + 7.8), cz + 7.8);
+    g.add(tt);
   }
   const deer = (x: number, z: number, rot: number, grazing: boolean) => {
     const d = new THREE.Group();
@@ -1044,6 +1129,10 @@ export function buildWall(level: number, color: number): THREE.Group {
   const tier = level < 5 ? 1 : level < 10 ? 2 : level < 15 ? 3 : 4;
   const R = WALL_R;
   const start = GATE_A + GATE_HALF, end = GATE_A + Math.PI * 2 - GATE_HALF;
+  if (tier <= 2 && getTheme() === 'orc') {
+    orcPalisade(g, tier, R, start, end, GATE_A, GATE_HALF);
+    return bake(g, { building: 'wall' });
+  }
   if (tier <= 2) {
     const h = tier === 1 ? 2.6 : 3.6;
     const step = 0.72 / R;
@@ -1130,12 +1219,15 @@ export function buildWall(level: number, color: number): THREE.Group {
       }
     }
     if (getTheme() === 'druid') {
-      // ivy grown over both faces, moss along the top, wildflowers here and there
+      // ivy grown over both faces (leafy masses, strands trailing down), moss along the top, wildflowers here and there
       for (const side of [-1, 1]) for (let k = 0; k < 2; k++) {
-        seg.add(blob(0.9 + (i % 3) * 0.2, k ? 0x4f7a2e : 0x5e8c34, -len / 4 + k * len / 2, h * (0.45 + ((i + k) % 3) * 0.12), side * (thick / 2 + 0.05), 1.1, 0.9, 0.25));
+        const x = -len / 4 + k * len / 2, y = h * (0.45 + ((i + k) % 3) * 0.12);
+        seg.add(leafCluster(0.85 + (i % 3) * 0.18, (i + k) % 2 ? 'deep' : 'mid', x, y, side * (thick / 2 + 0.06), 1.15, 0.95, 0.3, 0, i * 4 + k + side));
+        if ((i + k) % 2 === 0) seg.add(box(0.06, y * 0.8, 0.06, 0x445c24, x + 0.4, y * 0.15, side * (thick / 2 + 0.08)));
       }
       seg.add(box(len, 0.16, thick + 0.1, 0x5e7d32, 0, h + 0.3, 0));
-      if (i % 3 === 0) for (let k = 0; k < 4; k++) seg.add(blob(0.14, [0xf2e46a, 0xf4f1e6, 0xb58cd8, 0xe88aa6][k], -len / 2 + (k + 0.5) * len / 4, h + 1.05, (k % 2 ? 1 : -1) * thick * 0.25));
+      if (i % 2 === 0) seg.add(leafCluster(0.5, 'mid', (i % 4 - 1.5) * 0.4, h + 0.55, 0, 1.4, 0.55, 1.2, 0, i));
+      if (i % 3 === 0 && getSeason() !== 'winter') for (let k = 0; k < 4; k++) seg.add(mesh(new THREE.OctahedronGeometry(0.14, 0), [0xf2e46a, 0xf4f1e6, 0xb58cd8, 0xe88aa6][k]).translateX(-len / 2 + (k + 0.5) * len / 4).translateY(h + 1.05).translateZ((k % 2 ? 1 : -1) * thick * 0.25));
     }
     if (getTheme() === 'goblin') {
       // rusty plates hammered over the holes, and a skull on a stake now and then
@@ -1147,6 +1239,7 @@ export function buildWall(level: number, color: number): THREE.Group {
       }
       if (i % 5 === 3) { const l = mesh(new THREE.IcosahedronGeometry(0.22, 0), 0x9aff3a, { emissive: 0x4a9a10 }); l.position.set(0, h + 0.8, 0); seg.add(l); }
     }
+    if (getTheme() === 'orc') orcWallDress(seg, len, h, thick, i, merlons);
     if (getTheme() === 'goblin') {
       // sharpened stakes bristling outward from the battlements (local -z faces out of the village)
       for (let k = 0; k < merlons; k++) {
@@ -1187,21 +1280,10 @@ export function buildWall(level: number, color: number): THREE.Group {
   gate.add(box(GATE_HALF * 2 * R, 0.5, 0.3, C.woodDark, 0, h - 0.4, thick / 2 + 0.2));
   gate.position.set(0, 0, R);
   g.add(gate);
-  if (level >= 20) {
-    for (let i = 0; i < towers; i++) {
-      const a = start + ((end - start) * i) / (towers - 1);
-      const th = tier === 3 ? 6 : 8, tr = tier === 3 ? 2.3 : 2.7;
-      const pole = new THREE.Group();
-      pole.add(cyl(0.06, 0.06, 2.4, C.woodDark, 5));
-      const fl = box(1.2, 0.7, 0.05, color, 0.62, 1.5, 0);
-      fl.userData.flag = true;
-      pole.add(fl);
-      pole.add(box(1.2, 0.08, 0.06, 0xe9b83a, 0.62, 1.48, 0));
-      pole.add(cone(0.1, 0.25, 0xe9b83a, 5, 0, 2.4));
-      pole.userData.dynamic = true;
-      pole.position.set(Math.cos(a) * (R + tr * 0.4), th + tr * 2.7 * (tier === 4 ? 1 : 0.2) + 0.2, Math.sin(a) * (R + tr * 0.4));
-      g.add(pole);
-    }
+  // the Horde hangs a beast's skull over its gate (it takes the crest's place)
+  if (getTheme() === 'orc') orcGate(g, R, h, thick);
+  if (level >= 20 && getTheme() !== 'orc') {
+    // (the ruler's own banners fly either side of the gate: see flags3d.ts)
     // the crest over the gate: a great golden shield
     const crest = new THREE.Group();
     crest.add(cyl(1.3, 1.3, 0.2, 0xe9b83a, 12).rotateX(Math.PI / 2));
@@ -1212,7 +1294,8 @@ export function buildWall(level: number, color: number): THREE.Group {
   }
   const baked = bake(g, { building: 'wall' });
   void torches;
-  if (tier === 4) {
+  // (at level 20 the ruler's own banners take over from these: flags3d.ts)
+  if (tier === 4 && level < 20) {
     for (const s of [-1, 1]) {
       const pole = new THREE.Group();
       pole.add(cyl(0.08, 0.08, 3, C.woodDark, 5));

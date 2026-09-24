@@ -88,8 +88,11 @@ export function UnitBadge({ u, n, dim, theme = viewTheme() }: { u: UnitId; n?: n
   );
 }
 
+/** Every kind of troop a village can own, for lists of what it has (horse merchants last: they trade, not fight). */
+export const OWNED_ORDER: UnitId[] = [...ARMY_ORDER, 'trader'];
+
 export function UnitList({ units, empty = 'none', theme }: { units: Units | undefined; empty?: string; theme?: VillageTheme }) {
-  const list = ARMY_ORDER.filter((u) => (units?.[u] ?? 0) > 0);
+  const list = OWNED_ORDER.filter((u) => (units?.[u] ?? 0) > 0);
   if (!units || list.length === 0) return <span class="muted">{empty}</span>;
   return (
     <span class="unit-list">
@@ -100,7 +103,7 @@ export function UnitList({ units, empty = 'none', theme }: { units: Units | unde
 
 /** Grid table of units with optional loss row (battle reports). */
 export function UnitTable({ rows, show, theme }: { rows: { label: string; units?: Units; tone?: string }[]; show?: UnitId[]; theme?: VillageTheme }) {
-  const cols = show ?? ARMY_ORDER.filter((u) => rows.some((r) => (r.units?.[u] ?? 0) > 0));
+  const cols = show ?? OWNED_ORDER.filter((u) => rows.some((r) => (r.units?.[u] ?? 0) > 0));
   if (cols.length === 0) return <p class="muted">No troops.</p>;
   return (
     <div class="table-scroll">

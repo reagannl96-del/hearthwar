@@ -1,11 +1,15 @@
 // Scenery and small props, all built from primitives.
 
 import * as THREE from 'three';
-import { C, blob, box, cone, cyl, darker, getSeason, getTheme, mesh, type Theme } from './kit';
+import {
+  BLOOD, BLOSSOM, BLOSSOM_W, BONE_SH, BONE_W, C, EMBER, EMBER_E, HIDE_C, HIDE_DK, IRON_BK, LEAF_MID, LEAF_SUN, ORC_SKIN, ORC_SKIN_DK, ROPE, SOCKET,
+  blob, box, branch, cone, cyl, darker, detailMat, druidCanopy, fireflies, getSeason, getTheme, gnarledTrunk, horn, hornPair, leafCluster, limb, mesh, orcSkull, type Theme,
+} from './kit';
+import { runeStone, toadstools } from './grove';
 
 const AUTUMN = [C.leafOrange, C.leafRed, C.leafYellow, C.leafGold, C.leafOrange, C.leafGreen];
 
-export function tree(kind: 'oak' | 'pine' | 'birch', r: () => number, scale = 1): THREE.Group {
+export function tree(kind: 'oak' | 'pine' | 'birch', r: () => number, scale = 1, detail = 1): THREE.Group {
   const g = new THREE.Group();
   if (getSeason() === 'volcanic') {
     // a charred snag: black trunk, a few bare branches, embers still glowing in the bark
@@ -26,6 +30,7 @@ export function tree(kind: 'oak' | 'pine' | 'birch', r: () => number, scale = 1)
     g.rotation.y = r() * Math.PI * 2;
     return g;
   }
+  if (getTheme() === 'druid' && kind !== 'pine') return groveTree(kind, r, scale, detail);
   if (kind === 'pine') {
     g.add(cyl(0.18, 0.28, 1.4, C.trunk, 5));
     const col = r() < 0.5 ? C.pine : C.pineDark;
@@ -49,6 +54,58 @@ export function tree(kind: 'oak' | 'pine' | 'birch', r: () => number, scale = 1)
     g.add(blob(1.5, col, 0, 2.6, 0, 1.1, 0.95, 1.1));
     g.add(blob(1.05, darker(col, 0.9), 0.8, 2.2, 0.4));
     g.add(blob(0.95, darker(col, 1.08), -0.7, 2.9, -0.3));
+  }
+  g.scale.setScalar(scale * (0.8 + r() * 0.45));
+  g.rotation.y = r() * Math.PI * 2;
+  return g;
+}
+
+/**
+ * A tree of the druids' grove: lush and green the year round (a gold leaf or two in autumn, snow on
+ * the tops in winter). Oaks with a crown of faceted leaf masses, some in blossom; pale-barked birches
+ * in light green; and now and then a weeping willow trailing long strands.
+ */
+function groveTree(kind: 'oak' | 'birch', r: () => number, scale: number, det: number): THREE.Group {
+  const g = new THREE.Group();
+  const seed = Math.floor(r() * 1000);
+  const fall = getSeason() === 'fall';
+  if (kind === 'oak' && r() < 0.16) {
+    // a weeping willow
+    g.add(cyl(0.2, 0.34, 2.0, C.trunk, 6));
+    g.add(leafCluster(1.35, 'mid', 0, 2.5, 0, 1.15, 0.7, 1.15, det, seed));
+    g.add(leafCluster(0.8, 'sun', 0.1, 3.15, -0.1, 1, 0.75, 1, 0, seed + 1));
+    const strand = getSeason() === 'winter' ? 0x3a6a36 : LEAF_SUN;
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2 + r() * 0.3, d = 1.15 + r() * 0.35, len = 1.3 + r() * 0.9;
+      g.add(box(0.1, len, 0.1, i % 2 ? strand : LEAF_MID, Math.cos(a) * d, 2.35 - len, Math.sin(a) * d));
+    }
+  } else if (kind === 'birch') {
+    g.add(cyl(0.12, 0.18, 2.6, 0xe8e2d4, 5));
+    for (const y of [0.7, 1.4, 2.0]) g.add(box(0.2, 0.06, 0.05, 0x3a3530, 0, y, 0.15));
+    g.add(leafCluster(0.95, 'sun', 0, 3.0, 0, 1, 1.25, 1, det, seed));
+    g.add(leafCluster(0.6, fall && r() < 0.3 ? 'gold' : 'mid', 0.45, 2.45, 0.3, 1, 1, 1, 0, seed + 1));
+    g.add(leafCluster(0.5, 'sun', -0.4, 3.6, -0.2, 1, 1.1, 1, 0, seed + 2));
+  } else {
+    g.add(cyl(0.22, 0.36, 1.9, C.trunk, 6));
+    if (det > 0) for (const s of [-1, 1]) {
+      const b = cyl(0.07, 0.12, 1.0, C.trunk, 4, s * 0.25, 1.4, 0);
+      b.rotation.z = -s * 0.8;
+      g.add(b);
+    }
+    g.add(leafCluster(1.4, 'mid', 0, 2.75, 0, 1.1, 0.8, 1.1, det, seed));
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2 + r();
+      const tone = i === 0 && fall && r() < 0.35 ? 'gold' : i % 2 ? 'deep' : 'mid';
+      g.add(leafCluster(0.75 + r() * 0.2, tone, Math.cos(a) * 1.1, 2.2 + r() * 0.3, Math.sin(a) * 1.1, 1.1, 0.75, 1.1, 0, seed + 2 + i));
+    }
+    g.add(leafCluster(0.8, 'sun', (r() - 0.5) * 0.4, 3.55, (r() - 0.5) * 0.4, 1, 0.8, 1, 0, seed + 9));
+    if (getSeason() !== 'winter' && r() < 0.3) {
+      // in blossom
+      for (let i = 0; i < 6; i++) {
+        const a = r() * Math.PI * 2, d = 0.6 + r() * 0.8;
+        g.add(new THREE.Mesh(new THREE.OctahedronGeometry(0.15, 0), detailMat(i % 3 ? BLOSSOM : BLOSSOM_W)).translateX(Math.cos(a) * d).translateY(3.2 + r() * 0.8 - d * 0.35).translateZ(Math.sin(a) * d));
+      }
+    }
   }
   g.scale.setScalar(scale * (0.8 + r() * 0.45));
   g.rotation.y = r() * Math.PI * 2;
@@ -386,6 +443,8 @@ export function person(tunic: number): THREE.Group {
       }
     }
     g.add(box(0.6, 0.05, 0.06, pattern === 1 ? 0xdfe6ef : 0xf3d36a, 0, 0.05, -0.28)); // hem
+  } else if (theme === 'orc') {
+    orcFolk(g, tunic);
   } else if (theme === 'necromancer') {
     // the risen: bare bones under a tattered cape, a green light where the eyes were
     const k = figureCount++;
@@ -416,6 +475,38 @@ export function person(tunic: number): THREE.Group {
   }
   for (const c of g.children) c.castShadow = true;
   return g;
+}
+
+/** The Horde's own war-gear colours: a soldier's jerkin is one of these, a villager's is a hide. */
+const ORC_KIT = [0x6e4a2a, 0x5a3a24, 0x7a5a3a, 0x4a3a2c, 0x8a3a24, 0x3e3a36];
+const ORC_SKINS = [ORC_SKIN, 0x7a9442, 0x62803a, 0x6a7a3a];
+
+/**
+ * Orc folk: broad and hunched, moss-green, tusks jutting from a heavy jaw, a hide jerkin belted at the
+ * waist, and each their own touch: a topknot, a bone necklace, a scar of red war paint.
+ */
+function orcFolk(g: THREE.Group, tunic: number): void {
+  const k = figureCount++;
+  const skin = ORC_SKINS[k % ORC_SKINS.length];
+  const jerkin = ORC_KIT.includes(tunic) ? tunic : ORC_KIT[k % 4];
+  g.add(box(0.36, 0.34, 0.24, 0x2e2218, 0, 0, 0));
+  g.add(cyl(0.29, 0.31, 0.7, jerkin, 7, 0, 0.3));
+  g.add(cyl(0.32, 0.32, 0.08, HIDE_DK, 7, 0, 0.5));
+  g.add(blob(0.2, skin, 0, 0.98, -0.02, 1.7, 0.62, 1.1));
+  g.add(blob(0.21, skin, 0, 1.18, 0.07, 1, 0.92, 1));
+  g.add(box(0.26, 0.12, 0.14, skin, 0, 1.04, 0.16));
+  for (const x of [-0.08, 0.08]) {
+    g.add(cone(0.028, 0.1, BONE_W, 4, x, 1.06, 0.24));
+    g.add(box(0.05, 0.04, 0.03, SOCKET, x, 1.22, 0.26));
+  }
+  for (const x of [-1, 1]) {
+    const ear = cone(0.05, 0.18, skin, 4, x * 0.2, 1.2, 0.02);
+    ear.rotation.z = -x * 1.3;
+    g.add(ear);
+  }
+  if (k % 3 === 0) g.add(cone(0.08, 0.26, 0x1e1a16, 5, 0, 1.34, -0.04)); // a topknot
+  if (k % 3 === 1) g.add(mesh(new THREE.TorusGeometry(0.2, 0.03, 3, 8).rotateX(Math.PI / 2 - 0.4), BONE_W).translateY(0.9).translateZ(0.04)); // bones strung round the neck
+  if (k % 3 === 2) g.add(box(0.26, 0.05, 0.02, BLOOD, 0, 1.17, 0.27)); // war paint
 }
 
 /** A farmer called up as militia: arms raised, often waving a pitchfork. */
@@ -507,7 +598,7 @@ const STEEL = 0xb9c4cc;
 const STEEL_DK = 0x6a7782;
 const SHAFT = 0x7a5230;
 
-export type TroopModel = 'spear' | 'sword' | 'axe' | 'archer' | 'scout' | 'noble' | 'light' | 'marcher' | 'heavy' | 'paladin' | 'sorcerer' | 'druid' | 'goblin' | 'necromancer';
+export type TroopModel = 'spear' | 'sword' | 'axe' | 'archer' | 'scout' | 'noble' | 'light' | 'marcher' | 'heavy' | 'paladin' | 'sorcerer' | 'druid' | 'goblin' | 'necromancer' | 'orc';
 
 function helmet(g: THREE.Group, color = STEEL) {
   g.add(cyl(0.16, 0.23, 0.2, color, 7, 0, 1.3));
@@ -527,6 +618,7 @@ const GEAR = {
   sorcerer: { blade: 0xb58cff, shield: 0x3f6ad8, glow: 0x5a2fb0 },
   druid: { blade: 0xd6cdb0, shield: 0x4f7a2e, glow: 0 },
   necromancer: { blade: 0x7d8480, shield: 0x2e2a33, glow: 0 },
+  orc: { blade: 0x5e5a56, shield: 0x6e4a2a, glow: 0 },
 };
 const bladeMesh = (geo: THREE.BufferGeometry) => {
   const k = GEAR[getTheme()];
@@ -694,6 +786,28 @@ function nobleman(theme: Theme): THREE.Group {
       g.add(glow(new THREE.IcosahedronGeometry(0.08, 0), 0x5cff9a, 0x1f9a4a).translateX(0.52).translateY(1.72).translateZ(0.2));
       break;
     }
+    case 'orc': {
+      // a warchief: a hulking orc in a wolf-fur mantle over black iron, a horned helm, the clan's standard in his fist
+      const body = new THREE.Group();
+      body.add(box(0.4, 0.36, 0.26, IRON_BK, 0, 0, 0));
+      body.add(cyl(0.32, 0.36, 0.8, IRON_BK, 8, 0, 0.3));
+      body.add(box(0.3, 0.55, 0.05, BLOOD, 0, 0.35, 0.31));
+      body.add(blob(0.26, 0x4a3a2c, 0, 1.08, -0.02, 1.8, 0.6, 1.2));
+      body.add(blob(0.22, ORC_SKIN_DK, 0, 1.3, 0.07, 1, 0.92, 1));
+      body.add(box(0.28, 0.12, 0.14, ORC_SKIN_DK, 0, 1.15, 0.17));
+      for (const x of [-0.09, 0.09]) body.add(cone(0.03, 0.12, BONE_W, 4, x, 1.17, 0.25));
+      body.add(cyl(0.23, 0.25, 0.16, IRON_BK, 8, 0, 1.42));
+      body.add(hornPair(0.2, 1.5, 0, 0.18, 0.32, 0.12, 0.05));
+      body.add(box(0.7, 1.05, 0.05, BLOOD, 0, 0.1, -0.3));
+      g.add(body);
+      g.add(cyl(0.04, 0.045, 2.8, 0x3a2618, 5, 0.42, 0, 0.05));
+      g.add(box(0.04, 0.9, 0.6, BLOOD, 0.44, 1.75, 0.35));
+      g.add(blob(0.12, BONE_W, 0.48, 2.0, 0.35, 0.3, 1, 1));
+      const sk = orcSkull(0.26);
+      sk.position.set(0.42, 2.92, 0.05);
+      g.add(sk);
+      break;
+    }
     default: {
       // a lord: a crimson robe with an ermine collar, a gold crown, a sceptre and orb
       g.add(cyl(0.22, 0.4, 1.1, 0x9a1f1a, 8, 0, 0));
@@ -715,8 +829,10 @@ function nobleman(theme: Theme): THREE.Group {
 /** One of your soldiers on foot, carrying what their unit is known for. */
 function footSoldier(kind: TroopModel): THREE.Group {
   if (kind === 'goblin') return goblin();
+  if (kind === 'orc') return orcKing();
   if (kind === 'noble') return nobleman(getTheme());
   const theme = getTheme();
+  if (theme === 'orc') return orcSoldier(kind);
   if (kind === 'scout' && (theme === 'sorcerer' || theme === 'druid')) return bird(theme === 'sorcerer');
   if (kind === 'scout' && theme === 'necromancer') return bats();
   const gear = GEAR[theme];
@@ -873,6 +989,191 @@ function goblin(): THREE.Group {
   return g;
 }
 
+// ---------- the Horde ----------
+
+/** An iron cap: a spike on the grunts' and a pair of horns on the cleavers'. */
+function orcHelm(g: THREE.Group, horns: boolean): void {
+  g.add(cyl(0.2, 0.24, 0.16, IRON_BK, 7, 0, 1.3));
+  if (horns) g.add(hornPair(0.18, 1.38, 0, 0.14, 0.26, 0.08, 0.04));
+  else g.add(cone(0.05, 0.22, IRON_BK, 4, 0, 1.45));
+}
+
+/**
+ * A soldier of the Horde: spear grunts in iron caps, cleavers behind a hide shield with a skull boss,
+ * berserkers stripped to the waist and daubed in red with a great double axe, bow orcs under hide hoods;
+ * the scouts are wargs running loose.
+ */
+function orcSoldier(kind: TroopModel): THREE.Group {
+  if (kind === 'scout') {
+    const g = new THREE.Group();
+    const w = warg(0x5a5046);
+    w.rotation.y = -Math.PI / 2;
+    w.scale.setScalar(0.85);
+    g.add(w);
+    for (const c of g.children) c.castShadow = true;
+    return g;
+  }
+  const kit: Record<string, number> = { spear: ORC_KIT[0], sword: ORC_KIT[1], axe: ORC_SKIN_DK, archer: ORC_KIT[3] };
+  const g = person(ORC_KIT.includes(kit[kind] ?? 0) ? kit[kind] : ORC_KIT[4]);
+  const blade = GEAR.orc.blade;
+  switch (kind) {
+    case 'spear':
+      orcHelm(g, false);
+      g.add(box(0.46, 0.4, 0.06, IRON_BK, 0, 0.5, 0.29));
+      g.add(cyl(0.035, 0.04, 2.3, 0x4a3220, 5, 0.36, 0.1, 0.1));
+      g.add(tip(0.1, 0.38, 0.36, 2.4, 0.1));
+      g.add(box(0.12, 0.26, 0.03, BLOOD, 0.42, 2.12, 0.1));
+      break;
+    case 'sword': {
+      orcHelm(g, true);
+      const cl = new THREE.BoxGeometry(0.22, 0.72, 0.04);
+      cl.translate(0.05, 0.36, 0);
+      const c = mesh(cl, blade);
+      c.position.set(0.36, 0.55, 0.22);
+      c.rotation.x = 0.5;
+      g.add(c);
+      const shield = cyl(0.4, 0.4, 0.07, HIDE_C, 7);
+      shield.rotation.z = Math.PI / 2;
+      shield.position.set(-0.34, 0.72, 0);
+      g.add(shield);
+      g.add(blob(0.12, BONE_W, -0.39, 0.74, 0, 0.5, 1, 1));
+      break;
+    }
+    case 'axe': {
+      // a berserker: a mohawk, red war paint and a great double axe over the shoulder
+      g.add(box(0.06, 0.12, 0.34, 0x1e1a16, 0, 1.36, 0));
+      g.add(box(0.5, 0.07, 0.02, BLOOD, 0, 0.7, 0.3), box(0.07, 0.4, 0.02, BLOOD, -0.12, 0.45, 0.31));
+      const handle = box(0.06, 1.25, 0.06, 0x4a3220);
+      handle.position.set(0.32, 0.85, -0.1);
+      handle.rotation.x = -0.55;
+      g.add(handle);
+      for (const s of [-1, 1]) {
+        // a crescent blade either side of the haft
+        const hgeo = new THREE.CylinderGeometry(0.24, 0.24, 0.05, 8, 1, false, 0, Math.PI).rotateZ(Math.PI / 2).rotateX(s * Math.PI / 2);
+        hgeo.scale(1, 1.25, 1);
+        hgeo.translate(0, 0.05, s * 0.03);
+        const head = bladeMesh(hgeo);
+        head.position.set(0.32, 1.8, -0.72);
+        head.rotation.x = -0.55;
+        g.add(head);
+      }
+      break;
+    }
+    case 'archer': {
+      g.add(blob(0.25, HIDE_DK, 0, 1.24, -0.04, 1, 1.05, 1));
+      const b = bow(BONE_SH);
+      b.position.set(0.32, 0.8, 0);
+      g.add(b);
+      g.add(box(0.16, 0.5, 0.12, HIDE_DK, 0, 0.6, -0.3));
+      break;
+    }
+  }
+  for (const c of g.children) c.castShadow = true;
+  return g;
+}
+
+/**
+ * The Orc King: a head taller than his warriors, in black iron under a wolf-fur mantle, spiked pauldrons,
+ * a crown of tusks on his brow, embers for eyes, a blood-red cape and a great crescent axe in his fist.
+ */
+function orcKing(): THREE.Group {
+  const g = new THREE.Group();
+  const body = new THREE.Group();
+  const skin = ORC_SKIN_DK;
+  body.add(box(0.5, 0.44, 0.32, IRON_BK, 0, 0, 0));
+  body.add(cyl(0.44, 0.5, 0.36, HIDE_DK, 8, 0, 0.3));
+  body.add(cyl(0.4, 0.4, 0.8, IRON_BK, 8, 0, 0.56));
+  body.add(box(0.36, 0.62, 0.05, BLOOD, 0, 0.42, 0.38));
+  body.add(blob(0.12, BONE_W, 0, 0.9, 0.4, 1, 1, 0.4));
+  body.add(blob(0.3, 0x3a2e24, 0, 1.36, -0.04, 2.0, 0.55, 1.25));
+  for (const s of [-1, 1]) {
+    body.add(blob(0.22, IRON_BK, s * 0.46, 1.34, 0, 1.2, 0.8, 1.1));
+    for (let k = 0; k < 3; k++) {
+      const sp = cone(0.045, 0.24, BONE_W, 4, s * (0.4 + k * 0.1), 1.46, -0.08 + k * 0.08);
+      sp.rotation.z = -s * 0.5;
+      body.add(sp);
+    }
+  }
+  body.add(blob(0.25, skin, 0, 1.68, 0.08, 1, 0.95, 1));
+  body.add(box(0.32, 0.15, 0.16, skin, 0, 1.52, 0.2));
+  for (const x of [-0.1, 0.1]) {
+    body.add(cone(0.045, 0.2, BONE_W, 4, x, 1.54, 0.3));
+    body.add(new THREE.Mesh(new THREE.OctahedronGeometry(0.035, 0), detailMat(EMBER, { emissive: EMBER_E })).translateX(x).translateY(1.72).translateZ(0.3));
+  }
+  body.add(cyl(0.23, 0.23, 0.1, IRON_BK, 8, 0, 1.84));
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2 + Math.PI / 2;
+    body.add(cone(0.035, i === 0 ? 0.32 : 0.22, BONE_W, 4, Math.cos(a) * 0.2, 1.9, Math.sin(a) * 0.2));
+  }
+  const cape = box(0.8, 1.3, 0.05, BLOOD, 0, 0.35, -0.38);
+  cape.rotation.x = 0.12;
+  body.add(cape);
+  g.add(body);
+  // the great axe: a long haft, a crescent blade either side, a spike at its head
+  g.add(cyl(0.045, 0.05, 2.5, 0x2e2018, 5, 0.56, 0, 0.14));
+  for (const s of [-1, 1]) {
+    const bl = mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.05, 8, 1, false, 0, Math.PI).rotateX(Math.PI / 2).rotateZ(s > 0 ? 0 : Math.PI), GEAR.orc.blade);
+    bl.scale.set(0.8, 1.15, 1);
+    bl.position.set(0.56 + s * 0.02, 2.2, 0.14);
+    g.add(bl);
+  }
+  g.add(cone(0.05, 0.3, BONE_W, 4, 0.56, 2.5, 0.14));
+  g.add(new THREE.Mesh(new THREE.OctahedronGeometry(0.07, 0), detailMat(EMBER, { emissive: EMBER_E })).translateX(0.56).translateY(2.2).translateZ(0.2));
+  for (const c of g.children) c.castShadow = true;
+  return g;
+}
+
+/** A warg: a great shaggy wolf, long along +x like the horse, jaws agape, a spiked iron collar. */
+export function warg(color = 0x4e463e): THREE.Group {
+  const g = new THREE.Group();
+  const dk = darker(color, 0.75);
+  for (const [x, z] of [[-0.55, 0.18], [0.55, 0.18], [-0.55, -0.18], [0.55, -0.18]]) g.add(box(0.16, 0.85, 0.16, dk, x, 0, z));
+  g.add(box(1.5, 0.58, 0.54, color, 0, 0.78, 0));
+  g.add(box(0.62, 0.72, 0.64, dk, 0.5, 0.74, 0));
+  g.add(box(1.0, 0.14, 0.2, dk, -0.1, 1.12, 0));
+  const neck = box(0.34, 0.55, 0.36, color, 0.72, 1.05, 0);
+  neck.rotation.z = -0.65;
+  g.add(neck);
+  g.add(box(0.52, 0.36, 0.38, color, 1.14, 1.38, 0));
+  g.add(box(0.4, 0.16, 0.26, darker(color, 1.15), 1.5, 1.4, 0));
+  const jaw = box(0.38, 0.1, 0.22, dk, 1.46, 1.22, 0);
+  jaw.rotation.z = -0.3;
+  g.add(jaw);
+  for (const z of [-0.08, 0.08]) g.add(cone(0.03, 0.12, BONE_W, 4, 1.62, 1.26, z));
+  for (const z of [-0.12, 0.12]) {
+    g.add(cone(0.08, 0.26, color, 4, 1.02, 1.56, z));
+    g.add(new THREE.Mesh(new THREE.OctahedronGeometry(0.035, 0), detailMat(EMBER, { emissive: EMBER_E })).translateX(1.34).translateY(1.48).translateZ(z * 1.5));
+  }
+  g.add(cyl(0.24, 0.24, 0.1, IRON_BK, 6, 0.8, 1.1, 0).rotateZ(-0.65));
+  const tail = box(0.6, 0.14, 0.14, color, -0.95, 1.0, 0);
+  tail.rotation.z = 0.5;
+  g.add(tail);
+  return g;
+}
+
+/** A war boar: huge, bristle-backed, its great tusks curling up (armoured in iron plates and a red cloth for battle). */
+export function warBoar(armoured = true): THREE.Group {
+  const g = new THREE.Group();
+  const hide = 0x4e3626;
+  for (const [x, z] of [[-0.55, 0.26], [0.55, 0.26], [-0.55, -0.26], [0.55, -0.26]]) g.add(box(0.2, 0.6, 0.2, 0x2e2016, x, 0, z));
+  g.add(blob(0.55, hide, 0, 0.9, 0, 1.45, 0.8, 0.8));
+  g.add(blob(0.38, hide, 0.72, 0.88, 0, 1.1, 0.95, 0.95));
+  g.add(box(1.2, 0.18, 0.14, 0x241810, -0.05, 1.36, 0));
+  const snout = cyl(0.17, 0.17, 0.1, 0x9a6a5a, 8, 1.12, 0.82, 0);
+  snout.rotation.z = Math.PI / 2;
+  g.add(snout);
+  for (const z of [-1, 1]) {
+    g.add(horn(new THREE.Vector3(1.0, 0.72, z * 0.18), new THREE.Vector3(1.3, 0.6, z * 0.34), new THREE.Vector3(1.3, 1.08, z * 0.3), 0.06, BONE_W, 3));
+    g.add(cone(0.08, 0.2, hide, 4, 0.72, 1.18, z * 0.2));
+    g.add(new THREE.Mesh(new THREE.OctahedronGeometry(0.035, 0), detailMat(EMBER, { emissive: EMBER_E })).translateX(1.0).translateY(1.02).translateZ(z * 0.22));
+  }
+  if (armoured) {
+    g.add(box(0.9, 0.12, 0.84, IRON_BK, -0.05, 1.26, 0));
+    g.add(box(0.95, 0.3, 0.9, BLOOD, -0.05, 0.98, 0));
+  }
+  return g;
+}
+
 /** A skeletal horse: bone-white, ribs showing, green light in the eye; the knights' in black barding. */
 function boneHorse(barded: boolean): THREE.Group {
   const g = horse(BONE);
@@ -984,6 +1285,10 @@ function rider(kind: TroopModel): THREE.Group {
     mount = horse({ light: 0x3a2f6a, marcher: 0x2a2350, heavy: 0xe6e0f6 }[kind as 'light'] ?? 0x3a2f6a);
   } else if (theme === 'necromancer') {
     mount = boneHorse(kind === 'heavy');
+  } else if (theme === 'orc') {
+    // warg riders and boar riders
+    mount = kind === 'heavy' ? warBoar() : warg(kind === 'marcher' ? 0x2e2a28 : 0x5a5046);
+    seat = kind === 'heavy' ? 1.32 : 1.26;
   } else if (theme === 'paladin') {
     // white and dapple-grey chargers
     mount = horse({ light: 0xe8e2d6, marcher: 0xc9c0b0, heavy: 0xf4f0e8 }[kind as 'light'] ?? 0xe8e2d6);
@@ -1025,6 +1330,7 @@ function rider(kind: TroopModel): THREE.Group {
   } else {
     if (theme === 'classic') helmet(man, STEEL);
     if (theme === 'paladin') { helmet(man, 0xe6eef4); man.add(cone(0.07, 0.3, C.gold, 5, 0, 1.5)); }
+    if (theme === 'orc') orcHelm(man, kind === 'heavy');
     g.add(cyl(0.035, 0.035, 2.4, SHAFT, 5, 0.34, seat + 0.3, 0));
     g.add(tip(0.08, 0.3, 0.34, seat + 2.7, 0));
     if (theme === 'paladin') g.add(box(0.03, 0.3, 0.5, 0x2c56b0, 0.34, seat + 2.25, 0.22)); // a pennant on the lance
@@ -1152,19 +1458,30 @@ export function crystalSpire(): THREE.Group {
   return g;
 }
 
-/** An ancient oak with a ring of standing stones (druid villages). */
+/** An ancient oak of the grove (druid villages): a gnarled trunk on buttress roots under a layered crown hung
+ *  with lanterns and vines, a ring of rune stones glowing faintly round it, toadstools and fireflies at its feet. */
 export function greatTree(r: () => number): THREE.Group {
   const g = new THREE.Group();
-  g.add(cyl(0.45, 0.8, 3.4, 0x4a3420, 7));
-  for (const [x, y, z, s] of [[0, 4.2, 0, 1.9], [1.2, 3.6, 0.4, 1.3], [-1.1, 3.8, -0.3, 1.4], [0.2, 5.2, -0.6, 1.2]]) {
-    g.add(blob(s, r() < 0.5 ? 0x5e8c34 : 0x4f7a2e, x, y, z, 1, 0.8, 1, 1));
+  g.add(gnarledTrunk(0.45, 0.72, 3.6, r, { roots: 5, rootR: 0.22, spread: 1.6 }));
+  for (let i = 0; i < 3; i++) {
+    const a = (i / 3) * Math.PI * 2 + 0.4;
+    g.add(branch(new THREE.Vector3(0, 2.8, 0), new THREE.Vector3(Math.cos(a) * 1.5, 4.0, Math.sin(a) * 1.5), 0.18));
   }
+  const can = druidCanopy({ r: 2.3, h: 2.3, rand: r, droop: 4, blossom: 5, vines: 6, lanterns: 2, dense: 0.8, glow: 4 });
+  can.position.y = 3.3;
+  g.add(can);
   for (let i = 0; i < 5; i++) {
     const a = (i / 5) * Math.PI * 2 + 0.3;
-    const st = box(0.35, 1.1 + r() * 0.5, 0.25, 0x8e9a80, Math.cos(a) * 1.25, 0, Math.sin(a) * 1.25);
-    st.rotation.y = -a;
+    const st = runeStone(1.1 + r() * 0.5, r, i % 2 === 0);
+    st.scale.setScalar(0.85);
+    st.position.set(Math.cos(a) * 1.35, 0, Math.sin(a) * 1.35);
+    st.rotation.y = Math.PI / 2 - a;
     g.add(st);
   }
+  g.add(toadstools(5, r, 0.9, false, 0.5).translateX(0.9).translateZ(-0.6));
+  const ff = fireflies(7, 2.4, 2.4, r);
+  ff.position.y = 0.8;
+  g.add(ff);
   return g;
 }
 
@@ -1219,8 +1536,17 @@ export function skullTotem(): THREE.Group {
 }
 
 /** What crowns the headquarters in each hero's village. */
-export function hqCrown(theme: 'sorcerer' | 'druid' | 'goblin' | 'necromancer', r: () => number): THREE.Group {
+export function hqCrown(theme: 'sorcerer' | 'druid' | 'goblin' | 'necromancer' | 'orc', r: () => number): THREE.Group {
   const g = new THREE.Group();
+  if (theme === 'orc') {
+    // a horned skull on a stake, embers in its eyes
+    g.add(cyl(0.1, 0.12, 2.4, C.timber, 5));
+    const sk = orcSkull(0.7, true);
+    sk.position.set(0, 2.6, 0);
+    g.add(sk);
+    g.add(hornPair(0.3, 2.8, 0, 0.6, 1.0, 0.1, 0.12));
+    return g;
+  }
   if (theme === 'necromancer') {
     // a black gothic spire with a great skull, green fire in its eyes and crown
     g.add(cyl(1.5, 1.8, 0.4, 0x2e2a33, 8));
