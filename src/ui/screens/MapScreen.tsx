@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { UNITS } from '../../engine/data/units';
 import { hasUnits } from '../../engine/formulas';
-import type { UnitId, Units } from '../../engine/types';
+import type { BonusType, UnitId, Units } from '../../engine/types';
 import type { MapData, MapVillage } from '../../engine/view';
 import { lsGet } from '../../host/storage';
 import { forestSprite, lookOfHero, onVillageArt, villageSprite, villageStage } from '../mapSprites';
@@ -54,6 +54,8 @@ export function MapScreen({ focus }: { focus?: number }) {
   const [zoom, setZoom] = useState<number>(() => Number(lsGet('hw-map-zoom')) || 22);
   const [sel, setSel] = useState<number | null>(focus ?? null);
   const [hover, setHover] = useState<number | null>(null);
+  // phones and tablets have no hover: a crosshair in the middle of the map reads out whatever sits under it
+  const [touchUi, setTouchUi] = useState(() => window.matchMedia('(pointer: coarse)').matches);
   const [jump, setJump] = useState('');
   const canvas = useRef<HTMLCanvasElement>(null);
   const mini = useRef<HTMLCanvasElement>(null);
@@ -65,6 +67,32 @@ export function MapScreen({ focus }: { focus?: number }) {
   useWorldMarks(pv.worldName);
   const mk = marks.value;
   const markKey = JSON.stringify(mk);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(pointer: coarse)');
+    const on = () => setTouchUi(mq.matches);
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
+
+  // the village under the crosshair: the field at the centre, else the nearest one a thumb's width away
+  const aimed = useMemo(() => {
+    if (!touchUi) return undefined;
+    const cx = Math.floor(center[0]), cy = Math.floor(center[1]);
+    const hit = cx >= 0 && cy >= 0 && cx < data.size && cy < data.size ? grid.get(cy * data.size + cx) : undefined;
+    if (hit) return hit;
+    const reach = Math.max(0.75, AIM_RADIUS_PX / zoom);
+    const r = Math.ceil(reach);
+    let best: MapVillage | undefined, bestD = reach * reach;
+    for (let y = Math.max(0, cy - r); y <= Math.min(data.size - 1, cy + r); y++)
+      for (let x = Math.max(0, cx - r); x <= Math.min(data.size - 1, cx + r); x++) {
+        const v = grid.get(y * data.size + x);
+        if (!v) continue;
+        const d = (x + 0.5 - center[0]) ** 2 + (y + 0.5 - center[1]) ** 2;
+        if (d <= bestD) { best = v; bestD = d; }
+      }
+    return best;
+  }, [touchUi, center[0], center[1], zoom, grid]);
 
   useEffect(() => {
     if (focus !== undefined) {
@@ -242,8 +270,8 @@ export function MapScreen({ focus }: { focus?: number }) {
     }
     for (const { v, x, y, px, py, fill, mark } of shown) {
       const gx = px + z / 2, gy = py + z * (z < 10 ? 0.5 : 0.62);
-      // bonus villages glow orange so they stand out at any zoom
-      if (v.bonus) glow(ctx, gx, gy, Math.max(z * 1.25, 12), true, '#ff8a1f');
+      // bonus villages wear a brass ring, but only up close: from afar it would only be noise
+      if (v.bonus && z >= BONUS_RING_ZOOM) bonusRing(ctx, gx, gy, z, 'back');
       if (v.ownerId === me) glow(ctx, gx, gy, Math.max(z * (v.id === cur.id ? 1.35 : 1.1), 10), v.id === cur.id, v.id === pv.me.homeVid ? '#ffffff' : '#ffc43c');
       else if (mark) glow(ctx, gx, gy, Math.max(z * 1.1, 10), false, mark);
       if (z < 10) {
@@ -276,12 +304,11 @@ export function MapScreen({ focus }: { focus?: number }) {
           ctx.fillStyle = fill;
           ctx.fillRect(px + z * 0.78 + 1.5, py + z * 0.03, z * 0.16, z * 0.1);
         }
-        if (v.bonus) {
-          // a little orange star on the flag post
-          ctx.fillStyle = '#ffb347';
-          ctx.strokeStyle = 'rgba(60, 25, 0, 0.9)';
-          ctx.lineWidth = 1;
-          star(ctx, px + z * 0.2, py + z * 0.14, Math.max(3, z * 0.13));
+        if (v.bonus && z >= BONUS_RING_ZOOM) {
+          // the front of the ring passes before the island, with a medallion naming the bonus
+          const gx = px + z / 2, gy = py + z * 0.62;
+          bonusRing(ctx, gx, gy, z, 'front');
+          bonusBadge(ctx, gx + z * 0.6, gy + z * 0.3, Math.max(6, z * 0.15), v.bonus);
         }
         if (owner && myTribe !== null && owner.tribeId === myTribe && v.ownerId !== me) {
           ctx.strokeStyle = '#3a73c0';
@@ -291,7 +318,7 @@ export function MapScreen({ focus }: { focus?: number }) {
           ctx.stroke();
         }
       }
-      if (v.id === sel || (v.id === hover && v.ownerId !== me)) {
+      if (v.id === sel || ((v.id === hover || v.id === aimed?.id) && v.ownerId !== me)) {
         ctx.strokeStyle = v.id === sel ? 'rgba(255,255,255,0.95)' : 'rgba(255,245,215,0.7)';
         ctx.lineWidth = v.id === sel ? 2.5 : 1.8;
         ctx.setLineDash(v.id === sel ? [] : [4, 3]);
@@ -386,7 +413,7 @@ export function MapScreen({ focus }: { focus?: number }) {
         const owner = v.ownerId !== null ? data.players[v.ownerId] : undefined;
         const mine = v.ownerId === pv.me.id;
         const mark = mine ? undefined : markFor(mk, v.id, v.ownerId, owner?.tribeId);
-        b.fillStyle = mine ? (v.id === pv.me.homeVid ? '#ffffff' : col['--me']) : mark ?? (owner ? tribeColor(data, pv.me.tribeId, owner.tribeId) : undefined) ?? owner?.color ?? (v.bonus ? '#ff8a1f' : col['--map-barb']);
+        b.fillStyle = mine ? (v.id === pv.me.homeVid ? '#ffffff' : col['--me']) : mark ?? (owner ? tribeColor(data, pv.me.tribeId, owner.tribeId) : undefined) ?? owner?.color ?? col['--map-barb'];
         b.fillRect(v.x * P, v.y * P, P, P);
         if (mine || mark) {
           b.strokeStyle = 'rgba(20, 10, 0, 0.85)';
@@ -454,6 +481,8 @@ export function MapScreen({ focus }: { focus?: number }) {
   const onPointerDown = (e: PointerEvent) => {
     try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* not every pointer can be captured */ }
     touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    // a touchscreen laptop reports a fine pointer, so a real finger switches the crosshair on too
+    if (e.pointerType === 'touch' && !touchUi) setTouchUi(true);
     if (touches.current.size === 2) {
       const [a, b] = [...touches.current.values()];
       pinch.current = { dist: Math.hypot(a.x - b.x, a.y - b.y) || 1, zoom };
@@ -474,7 +503,11 @@ export function MapScreen({ focus }: { focus?: number }) {
     const d = drag.current;
     if (d) {
       const dx = e.clientX - d.x, dy = e.clientY - d.y;
-      if (Math.abs(dx) + Math.abs(dy) > 4) d.moved = true;
+      if (!d.moved && Math.abs(dx) + Math.abs(dy) > 4) {
+        d.moved = true;
+        // panning hands the read-out over to the crosshair
+        if (e.pointerType !== 'mouse' && hover !== null) setHover(null);
+      }
       if (d.moved) setCenter([d.cx - dx / zoom, d.cy - dy / zoom]);
       return;
     }
@@ -557,6 +590,10 @@ export function MapScreen({ focus }: { focus?: number }) {
               home={hovered.id === pv.me.homeVid}
             />
           )}
+          {touchUi && <div class={`map-crosshair${aimed ? ' is-on' : ''}`} aria-hidden="true" />}
+          {aimed && aimed.id !== hovered?.id && (
+            <HoverCard v={aimed} data={data} docked mine={aimed.ownerId === pv.me.id} home={aimed.id === pv.me.homeVid} />
+          )}
           <canvas
             ref={mini}
             class="minimap"
@@ -589,6 +626,161 @@ export function MapScreen({ focus }: { focus?: number }) {
 const SNOW = { g: '#e7edf1', g2: '#dce4ea', f: '#c9d4d6', w: '#a7c4d6', m: '#c5cacf', peak: '#f5f8fa' };
 /** the volcanic west: ash plains, black rock and lava */
 const ASH = { g: '#5d534c', g2: '#5a504a', rock: '#3d3533', rock2: '#2b2422', lava: '#b3401c', lava2: '#f08a2c', crust: 'rgba(50,20,12,0.45)', ember: '#ff7a2a' };
+
+/** Bonus rings only appear once you are looking closely (fields drawn at least this many pixels wide). */
+const BONUS_RING_ZOOM = 16;
+/** How far (in screen pixels) the touch crosshair reaches for a village when none sits right under it. */
+const AIM_RADIUS_PX = 18;
+/** The medallion's enamel, one per kind of bonus. */
+const BONUS_TINT: Record<BonusType, string> = {
+  wood: '#40682b', clay: '#9a4a27', iron: '#4d5966', farm: '#8a7322', storage: '#6b4a24', recruit: '#7a2828', all: '#8a6a2a',
+};
+const BRASS = { hi: '#f0cf7e', mid: '#c9a24a', dark: '#8a6a2a', ink: '#fbeec8' };
+
+/**
+ * A thin brass ring lying on the ground around a bonus village. The back half (and a soft
+ * halo) goes under the island, the front half over it, so the ring seems to wrap around it.
+ */
+function bonusRing(ctx: CanvasRenderingContext2D, x: number, y: number, z: number, part: 'back' | 'front') {
+  const rx = z * 0.82, ry = z * 0.42;
+  const lw = Math.max(1.4, z * 0.045);
+  ctx.save();
+  if (part === 'back') {
+    // a warm glow hugging the ring, clear in the middle so the island stays crisp
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(1, ry / rx);
+    const g = ctx.createRadialGradient(0, 0, 0, 0, 0, rx * 1.3);
+    g.addColorStop(0, 'rgba(240, 207, 126, 0)');
+    g.addColorStop(0.55, 'rgba(240, 207, 126, 0)');
+    g.addColorStop(0.77, 'rgba(240, 207, 126, 0.32)');
+    g.addColorStop(1, 'rgba(240, 207, 126, 0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(0, 0, rx * 1.3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    ctx.globalAlpha = 0.75;
+  }
+  const [a0, a1] = part === 'back' ? [Math.PI, Math.PI * 2] : [0, Math.PI];
+  // a dark bed under the metal keeps it readable on snow and ash alike
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = 'rgba(40, 22, 4, 0.5)';
+  ctx.lineWidth = lw + 1.6;
+  ctx.beginPath();
+  ctx.ellipse(x, y, rx, ry, 0, a0, a1);
+  ctx.stroke();
+  // polished brass: bright where the light catches it, darker at the flanks
+  const sheen = ctx.createLinearGradient(x - rx, y, x + rx, y);
+  sheen.addColorStop(0, BRASS.dark);
+  sheen.addColorStop(0.3, BRASS.hi);
+  sheen.addColorStop(0.55, BRASS.mid);
+  sheen.addColorStop(0.8, BRASS.hi);
+  sheen.addColorStop(1, BRASS.dark);
+  ctx.strokeStyle = sheen;
+  ctx.lineWidth = lw;
+  ctx.beginPath();
+  ctx.ellipse(x, y, rx, ry, 0, a0, a1);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** A small brass-rimmed enamel medallion with a glyph for the kind of bonus. */
+function bonusBadge(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, type: BonusType) {
+  const tint = BONUS_TINT[type];
+  ctx.save();
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
+  ctx.shadowBlur = 3;
+  ctx.shadowOffsetY = 1;
+  const face = ctx.createRadialGradient(x - r * 0.35, y - r * 0.4, r * 0.1, x, y, r);
+  face.addColorStop(0, shade(tint, 0.45));
+  face.addColorStop(1, tint);
+  ctx.fillStyle = face;
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+  ctx.save();
+  const rim = ctx.createLinearGradient(x, y - r, x, y + r);
+  rim.addColorStop(0, BRASS.hi);
+  rim.addColorStop(1, BRASS.dark);
+  ctx.strokeStyle = rim;
+  ctx.lineWidth = Math.max(1.2, r * 0.2);
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.stroke();
+  // the glyph
+  const u = r * 0.55;
+  ctx.fillStyle = BRASS.ink;
+  ctx.strokeStyle = BRASS.ink;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  if (type === 'wood') {
+    // a fir tree
+    ctx.moveTo(x, y - u * 1.05);
+    ctx.lineTo(x + u * 0.8, y + u * 0.4);
+    ctx.lineTo(x - u * 0.8, y + u * 0.4);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillRect(x - u * 0.16, y + u * 0.35, u * 0.32, u * 0.55);
+  } else if (type === 'clay') {
+    // a stack of bricks
+    ctx.fillRect(x - u, y - u * 0.65, u * 2, u * 1.3);
+    ctx.strokeStyle = tint;
+    ctx.lineWidth = Math.max(0.8, u * 0.16);
+    ctx.moveTo(x - u, y); ctx.lineTo(x + u, y);
+    ctx.moveTo(x, y - u * 0.65); ctx.lineTo(x, y);
+    ctx.moveTo(x - u * 0.5, y); ctx.lineTo(x - u * 0.5, y + u * 0.65);
+    ctx.moveTo(x + u * 0.5, y); ctx.lineTo(x + u * 0.5, y + u * 0.65);
+    ctx.stroke();
+  } else if (type === 'iron') {
+    // an ingot
+    ctx.moveTo(x - u * 0.55, y - u * 0.45);
+    ctx.lineTo(x + u * 0.55, y - u * 0.45);
+    ctx.lineTo(x + u, y + u * 0.5);
+    ctx.lineTo(x - u, y + u * 0.5);
+    ctx.closePath();
+    ctx.fill();
+  } else if (type === 'farm') {
+    // an ear of wheat
+    ctx.lineWidth = Math.max(0.8, u * 0.16);
+    ctx.moveTo(x, y + u); ctx.lineTo(x, y - u * 0.6);
+    ctx.stroke();
+    for (let k = 0; k < 3; k++) {
+      const gy = y + u * 0.3 - k * u * 0.45;
+      for (const side of [-1, 1]) {
+        ctx.beginPath();
+        ctx.ellipse(x + side * u * 0.3, gy - u * 0.12, u * 0.17, u * 0.32, side * 0.6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.beginPath();
+    ctx.ellipse(x, y - u * 0.85, u * 0.16, u * 0.3, 0, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (type === 'storage') {
+    // a crate
+    ctx.lineWidth = Math.max(0.8, u * 0.2);
+    ctx.strokeRect(x - u * 0.8, y - u * 0.8, u * 1.6, u * 1.6);
+    ctx.moveTo(x - u * 0.8, y - u * 0.8); ctx.lineTo(x + u * 0.8, y + u * 0.8);
+    ctx.moveTo(x + u * 0.8, y - u * 0.8); ctx.lineTo(x - u * 0.8, y + u * 0.8);
+    ctx.stroke();
+  } else if (type === 'recruit') {
+    // crossed swords
+    ctx.lineWidth = Math.max(0.9, u * 0.24);
+    ctx.moveTo(x - u * 0.85, y - u * 0.85); ctx.lineTo(x + u * 0.85, y + u * 0.85);
+    ctx.moveTo(x + u * 0.85, y - u * 0.85); ctx.lineTo(x - u * 0.85, y + u * 0.85);
+    ctx.moveTo(x + u * 0.3, y + u * 0.75); ctx.lineTo(x + u * 0.75, y + u * 0.3);
+    ctx.moveTo(x - u * 0.3, y + u * 0.75); ctx.lineTo(x - u * 0.75, y + u * 0.3);
+    ctx.stroke();
+  } else {
+    // everything: a star
+    ctx.strokeStyle = tint;
+    ctx.lineWidth = Math.max(0.6, u * 0.1);
+    star(ctx, x, y + u * 0.05, u * 1.1);
+  }
+  ctx.restore();
+}
 
 /** The halo Tribal Wars puts around villages: gold for yours, white for your home, any colour for markers. */
 function glow(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, strong: boolean, color: string) {
@@ -647,13 +839,19 @@ function shade(hex: string, amt: number): string {
   return `rgb(${f(m[1])},${f(m[2])},${f(m[3])})`;
 }
 
-function HoverCard({ v, data, x, y, mine, home }: { v: MapVillage; data: MapData; x: number; y: number; mine: boolean; home: boolean }) {
+/** What a bonus village gives its ruler, in a few words. */
+function bonusLabel(b: BonusType): string {
+  return b === 'all' ? '+30% all resources' : b === 'farm' ? '+10% population' : b === 'storage' ? '+50% storage' : b === 'recruit' ? 'faster recruitment' : `+100% ${b}`;
+}
+
+/** The village read-out: floats over the village under the cursor, or sits docked atop the map for the touch crosshair. */
+function HoverCard({ v, data, x, y, mine, home, docked }: { v: MapVillage; data: MapData; x?: number; y?: number; mine: boolean; home: boolean; docked?: boolean }) {
   const owner = v.ownerId !== null ? data.players[v.ownerId] : null;
   const tribe = owner?.tribeId ? data.tribes[owner.tribeId] : null;
   const m = marks.value;
   const color = mine ? (home ? '#ffffff' : '#ffc43c') : markFor(m, v.id, v.ownerId, owner?.tribeId) ?? owner?.color ?? '#9c8f7a';
   return (
-    <div class="map-hover" role="tooltip" style={{ left: `${x}px`, top: `${y}px` }}>
+    <div class={`map-hover${docked ? ' is-docked' : ''}`} role={docked ? 'status' : 'tooltip'} style={docked ? undefined : { left: `${x}px`, top: `${y}px` }}>
       <div class="mh-name">{v.name}</div>
       <div class="mh-owner">
         <i class="mh-dot" style={{ background: color }} />
@@ -663,7 +861,7 @@ function HoverCard({ v, data, x, y, mine, home }: { v: MapVillage; data: MapData
       <div class="mh-meta">
         <span><Icon name="points" size={12} /> <b class="num">{fmt(v.points)}</b></span>
         <span class="num">{coords(v.x, v.y)} · {quadrant(v.x, v.y, view.value!.config.size)}</span>
-        {v.bonus && <span class="mh-bonus">bonus</span>}
+        {v.bonus && <span class="mh-bonus">{bonusLabel(v.bonus)}</span>}
       </div>
     </div>
   );
@@ -678,7 +876,7 @@ function Legend({ data }: { data: MapData }) {
       <span><i class="sw" style={{ background: '#ffffff' }} /> Your home</span>
       <span><i class="sw" style={{ background: 'var(--me)' }} /> Your other villages</span>
       <span><i class="sw" style={{ background: 'var(--map-barb)' }} /> Barbarians</span>
-      <span><i class="sw" style={{ background: '#ff8a1f', boxShadow: '0 0 6px #ff8a1f' }} /> Bonus village</span>
+      <span><i class="sw sw-bonus" /> Bonus village (up close)</span>
       {pv.me.tribeId != null && <>
         <span><i class="sw" style={{ background: TRIBE_COLORS.own }} /> Tribe</span>
         <span><i class="sw" style={{ background: TRIBE_COLORS.ally }} /> Allies</span>
@@ -732,7 +930,7 @@ function VillagePanel({ v, data, onClose }: { v: MapVillage; data: MapData; onCl
       <dl class="facts">
         <dt>Ruler</dt>
         <dd>{owner ? <button type="button" class="link" onClick={() => pane.go({ name: 'ranking', player: owner.id })}>{owner.name}</button> : 'Barbarians'}{owner?.tribeId != null && data.tribes[owner.tribeId] && <> <TribeTag id={owner.tribeId} tag={data.tribes[owner.tribeId].tag} /></>}</dd>
-        {info.bonus && <><dt>Bonus</dt><dd>{info.bonus === 'all' ? '+30% all resources' : info.bonus === 'farm' ? '+10% population' : info.bonus === 'storage' ? '+50% storage' : info.bonus === 'recruit' ? 'faster recruitment' : `+100% ${info.bonus}`}</dd></>}
+        {info.bonus && <><dt>Bonus</dt><dd>{bonusLabel(info.bonus)}</dd></>}
         {!own && <><dt>Distance</dt><dd class="num">{info.distanceFrom?.toFixed(1)} fields</dd></>}
         {info.protected && <><dt>Status</dt><dd>Beginner protection</dd></>}
         {own && info.loyalty !== undefined && <><dt>Loyalty</dt><dd class="num">{Math.floor(info.loyalty)}</dd></>}

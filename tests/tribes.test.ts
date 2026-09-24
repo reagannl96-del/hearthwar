@@ -213,3 +213,19 @@ describe('sharing reports in the tribe forum', () => {
     expect(tribeHome(w, b.id).tribe!.forum[0].posts.length).toBe(2);
   });
 });
+
+describe('tribes merging', () => {
+  it('a small tribe folds into a bigger one: everyone moves over, the old name is gone', async () => {
+    const { mergeTribes } = await import('../src/engine/tribes');
+    const { w, a, b, c } = world();
+    const big = applyAction(w, a.id, { type: 'tribeCreate', name: 'Iron Oath', tag: 'IRN' }).data as number;
+    applyAction(w, a.id, { type: 'tribeInvite', name: 'Bram' });
+    applyAction(w, b.id, { type: 'tribeAccept', tribe: big });
+    const small = applyAction(w, c.id, { type: 'tribeCreate', name: 'Ash Crowns', tag: 'ASH' }).data as number;
+    expect(mergeTribes(w, small, big)).toBe(true);
+    expect(w.tribes[small]).toBeUndefined();
+    expect(w.tribes[big].members).toEqual(expect.arrayContaining([a.id, b.id, c.id]));
+    expect(c.tribeId).toBe(big);
+    expect(w.news[0].text).toContain('has joined');
+  });
+});

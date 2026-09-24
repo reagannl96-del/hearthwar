@@ -58,11 +58,14 @@ function planFor(pers: P): [BuildingId, number][] {
   } else if (pers === 'opportunist') {
     plan.splice(40, 0, ['stable', 5]);
   }
-  if (pers === 'expander' || pers === 'opportunist') {
-    // rush the academy a little
-    const idx = plan.findIndex(([b, l]) => b === 'academy' && l === 1);
-    const aca = plan.splice(idx, 1)[0];
-    plan.splice(Math.max(0, idx - 10), 0, aca);
+  if (pers === 'expander' || pers === 'opportunist' || pers === 'warlord') {
+    // the noble rush players do: once the basics stand, straight for the academy's
+    // requirements (headquarters 20, smithy 20, market 10) and the academy itself
+    // (and a warehouse big enough to hold what a nobleman costs)
+    const rush: [BuildingId, number][] = [['main', 20], ['smithy', 20], ['market', 10], ['warehouse', 20], ['academy', 1]];
+    plan = plan.filter(([b, l]) => !rush.some(([rb, rl]) => rb === b && rl === l));
+    const at = plan.findIndex(([b, l]) => b === 'main' && l === 15) + 1;
+    plan.splice(at, 0, ...rush);
   }
   planCache[pers] = plan;
   return plan;
@@ -200,14 +203,14 @@ export function aiAwake(w: World, p: Player): boolean {
 
 /**
  * How much of a dedicated player's time this ruler puts in: some are at it every
- * spare minute, some are casual and look in now and then (0.5 to 1.15, the same for
+ * spare minute, some are casual and look in now and then (0.5 to 1.1, the same for
  * a ruler all round; warlords and opportunists lean keen, defenders lean casual).
  */
 export function activityOf(p: Player): number {
   const base = 0.5 + (((p.id * 2654435761) >>> 0) % 1000) / 1000 * 0.62;
   const pers = p.ai?.personality;
   const lean = pers === 'warlord' || pers === 'opportunist' ? 0.12 : pers === 'turtle' || pers === 'guardian' ? -0.08 : 0;
-  return Math.max(0.5, Math.min(1.15, base + lean));
+  return Math.max(0.5, Math.min(1.1, base + lean));
 }
 
 /**
@@ -231,7 +234,8 @@ function glance(w: World, p: Player): void {
     const v = w.villages[p.villages[(from + i) % n]];
     if (!v || v.ownerId !== p.id) continue;
     updateVillage(w, v, w.now);
-    // before looking away again, fill the whole building queue
+    // before looking away again: a nobleman or crown first if it can (people save for those), then fill the building queue
+    nobles(w, p, v);
     build(w, p, v);
     research(w, p, v);
     hero(w, p, v);
@@ -261,9 +265,10 @@ export function aiThink(w: World, p: Player): void {
     if (!v || v.ownerId !== p.id) continue;
     updateVillage(w, v, w.now);
     trade(w, p, v);
+    // noblemen and crowns before the builders spend everything
+    nobles(w, p, v);
     build(w, p, v);
     research(w, p, v);
-    nobles(w, p, v);
     hero(w, p, v);
     recruit(w, p, v);
     if (ai.campaign?.from !== v.id) farm(w, p, v);
@@ -313,6 +318,8 @@ function chooseBuild(w: World, p: Player, v: Village): BuildingId | null {
     if (c.reason?.includes('warehouse') && checkBuild(w, v, 'warehouse').ok) return 'warehouse';
     return null;
   }
+  // an academy is no use while the warehouse can't hold what a nobleman costs
+  if (v.buildings.academy > 0 && cap < Math.max(...RES_KEYS.map((k) => UNITS.noble.cost[k])) * 1.05 && queuedLevel(v, 'warehouse') < 30 && checkBuild(w, v, 'warehouse').ok) return 'warehouse';
   // a wall the catapults brought down comes back first
   const wallWas = p.ai!.wallWas?.[v.id] ?? 0;
   if (v.buildings.wall > wallWas) (p.ai!.wallWas ??= {})[v.id] = v.buildings.wall;

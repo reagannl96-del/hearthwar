@@ -7,6 +7,8 @@
 
 import { advance } from '../src/engine/game';
 import { campaignVerdict } from '../src/engine/ai/ai';
+import { nobleInfo } from '../src/engine/actions';
+import { farmMax, popFree } from '../src/engine/village';
 import { distance } from '../src/engine/formulas';
 import { HEROES } from '../src/engine/data/units';
 import { villagePoints } from '../src/engine/formulas';
@@ -50,6 +52,7 @@ const finished = { taken: 0, given: 0, wavesToTake: [] as number[] };
 const reinforceDay = Number(process.env.REINFORCE_DAY || 0), reinforceTo = Number(process.env.REINFORCE_TO || 0);
 const newcomers = new Set<number>();
 const gains = new Map<number, string[]>();
+const firstAcademy = new Map<number, number>(), firstGain = new Map<number, number>();
 for (let h = 1; h <= days * 24; h++) {
   if (reinforceDay && h === reinforceDay * 24) {
     const before = new Set(Object.keys(w.players).map(Number));
@@ -59,6 +62,7 @@ for (let h = 1; h <= days * 24; h++) {
   // step in 5-minute slices so campaigns are watched closely
   for (let k = 1; k <= 12; k++) {
     advance(w, start + (h - 1) * 3_600_000 + k * 300_000);
+    if (k === 12) for (const p of ais()) { if (!firstAcademy.has(p.id) && p.villages.some((id) => (w.villages[id]?.buildings.academy ?? 0) > 0)) firstAcademy.set(p.id, w.now); if (!firstGain.has(p.id) && p.villages.length > 1) firstGain.set(p.id, w.now); }
     for (const p of ais()) {
       const c = p.ai!.campaign;
       const prev = campaignLog.get(p.id);
@@ -103,6 +107,7 @@ for (let h = 1; h <= days * 24; h++) {
       owner.set(v.id, v.ownerId);
     }
   }
+  if (process.env.NOBDBG && h === Number(process.env.NOBDBG)) for (const p of ais().filter((x) => x.villages.some((id) => w.villages[id].buildings.academy > 0)).slice(0, 6)) { const v = w.villages[p.villages[0]]; const ni = nobleInfo(w, p.id); console.log(`   ${p.name} wh${v.buildings.warehouse} res ${Math.round(v.res.wood)}/${Math.round(v.res.clay)}/${Math.round(v.res.iron)} coins ${p.coins} canTrain ${ni.canTrain} need ${ni.coinsNeeded} noble ${v.units.noble ?? 0} q ${v.recruit.academy.length} main${v.buildings.main} farm${v.buildings.farm} pop ${popFree(v)}/${farmMax(v)} queue ${v.buildQueue.map((j) => j.building + j.level).join(',')}`); }
   if (h % 24 === 0) {
     const list = ais();
     const nob = list.reduce((a, p) => a + p.villages.reduce((b, id) => b + (w.villages[id]?.units.noble ?? 0), 0), 0);
@@ -146,4 +151,5 @@ void finished;
   const all = Object.values(w.villages).filter((v) => v.ownerId !== null).length;
   console.log('== top tribes: ' + tribes.slice(0, 5).map((t) => `[${t.tag}] ${t.n}m ${t.v}v (${Math.round((t.v / all) * 100)}%)`).join(' | '));
 }
+{ const med = (m: Map<number, number>) => { const v = [...m.values()].sort((a, b) => a - b); return v.length ? `first ${(v[0] / 864e5).toFixed(2)}d, median ${(v[Math.floor(v.length / 2)] / 864e5).toFixed(2)}d (${v.length} rulers)` : 'none'; }; console.log(`== academy: ${med(firstAcademy)} | second village: ${med(firstGain)}`); }
 console.log(`== save size: ${(JSON.stringify(w).length / 1e6).toFixed(1)} MB (${Object.keys(w.villages).length} villages, ${Object.keys(w.commands).length} commands on the road)`);

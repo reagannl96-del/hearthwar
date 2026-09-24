@@ -7,6 +7,8 @@ import { createWorld, defaultConfig } from '../src/engine/world';
 describe('AI rulers play at a human pace', () => {
   it('about one attack a minute while online, and no runaway expansion in the first days', () => {
     const w = createWorld({ worldName: 'T', playerName: 'P', villageName: 'H', seed: 7, config: { ...defaultConfig(), size: 110, aiCount: 12, difficulty: 'normal' } });
+    // the rulers' hours follow the real clock the realm was made at: pin it, so the test is the same every run
+    w.createdReal = 0;
     const ais = Object.values(w.players).filter((p) => p.kind === 'ai');
     const online = new Map<number, number>();
     for (let m = 0; m < 2 * 1440; m++) {
@@ -15,10 +17,12 @@ describe('AI rulers play at a human pace', () => {
     }
     for (const p of ais) {
       const hours = (online.get(p.id) ?? 0) / 60;
-      expect(hours).toBeLessThan(2 * 8);
+      // at most eight hours a day, plus the realm's opening rush when nobody sleeps
+      expect(hours).toBeLessThan(2 * 8 + 2);
       // a person clicking out raids between everything else: not hundreds an hour
       expect(p.stats.attacks / Math.max(1, hours)).toBeLessThan(120);
-      expect(p.villages.length).toBeLessThanOrEqual(4);
+      // the first conquests come late on day one; the hungriest ruler has a handful by the end of day two
+      expect(p.villages.length).toBeLessThanOrEqual(5);
     }
   }, 60_000);
 });
