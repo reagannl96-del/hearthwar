@@ -265,3 +265,28 @@ describe('tribes answering attacks', () => {
     expect(answered).toBe(true);
   });
 });
+
+describe('members under attack', () => {
+  it('say who is attacking and from which village, so both can be opened', async () => {
+    const { createWorld, defaultConfig } = await import('../src/engine/world');
+    const { applyAction } = await import('../src/engine/actions');
+    const { sendTroops } = await import('../src/engine/commands');
+    const { tribeAlerts } = await import('../src/engine/tribes');
+    const w = createWorld({ worldName: 'A', playerName: 'P', villageName: 'Home', seed: 4, config: { ...defaultConfig(), aiCount: 3, size: 80 } });
+    const p = w.players[w.humanId];
+    const v = w.villages[p.villages[0]];
+    expect(applyAction(w, p.id, { type: 'tribeCreate', name: 'Watchers', tag: 'WAT' }).ok).toBe(true);
+    p.protectedUntil = 0;
+    const ai = Object.values(w.players).find((x) => x.kind === 'ai')!;
+    ai.protectedUntil = 0;
+    const home = w.villages[ai.villages[0]];
+    home.buildings.rally = 1;
+    home.units = { axe: 50 };
+    expect(sendTroops(w, { ownerId: ai.id, fromVid: home.id, toVid: v.id, kind: 'attack', units: { axe: 50 } }).ok).toBe(true);
+    const [a] = tribeAlerts(w, p.id);
+    expect(a.attackerId).toBe(ai.id);
+    expect(a.fromVid).toBe(home.id);
+    expect(a.fromName).toBe(home.name);
+    expect([a.fx, a.fy]).toEqual([home.x, home.y]);
+  });
+});

@@ -440,7 +440,11 @@ export interface TribeInvite { pid: number; by: number; t: number }
 export interface TribeApplication { pid: number; t: number }
 
 /** Someone in the tribe is under attack (members with the "internal" right see these). */
-export interface TribeAlert { cid: number; memberId: number; vid: number; vname: string; x: number; y: number; attacker: string; arrive: number }
+export interface TribeAlert {
+  cid: number; memberId: number; vid: number; vname: string; x: number; y: number; attacker: string; arrive: number;
+  /** who sent it and from where (as the defender sees it) */
+  attackerId?: number; fromVid?: number; fromName?: string; fx?: number; fy?: number;
+}
 
 export interface Tribe {
   id: number;

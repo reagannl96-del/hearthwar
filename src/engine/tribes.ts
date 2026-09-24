@@ -500,7 +500,11 @@ export function tribeAlerts(w: World, pid: number): TribeAlert[] {
       for (const c of commandsTo(w, vid)) {
         if (c.kind !== 'attack' || c.ownerId === m) continue;
         if (w.players[c.ownerId]?.tribeId === t.id) continue;
-        out.push({ cid: c.id, memberId: m, vid, vname: v.name, x: v.x, y: v.y, attacker: w.players[c.ownerId]?.name ?? 'Unknown', arrive: c.arrive });
+        const from = w.villages[c.fromVid];
+        out.push({
+          cid: c.id, memberId: m, vid, vname: v.name, x: v.x, y: v.y, attacker: w.players[c.ownerId]?.name ?? 'Unknown', arrive: c.arrive,
+          attackerId: c.ownerId, fromVid: from?.id, fromName: from?.name, fx: from?.x, fy: from?.y,
+        });
       }
     }
   }

@@ -1,13 +1,13 @@
 import { SharedReportCard } from './ReportsScreen';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { FORUM_MAX_TEXT, RIGHT_LABEL, TRIBE_MAX_MEMBERS, TRIBE_RIGHTS, TRIBE_TEXT_MAX } from '../../engine/tribes';
-import type { Diplomacy, TribeRight } from '../../engine/types';
+import type { Diplomacy, TribeAlert, TribeRight } from '../../engine/types';
 import type { MyTribeView, TribeProfileView } from '../../engine/view';
 import { Icon } from '../art/icons';
 import { BBEditor, appendQuote } from '../bbcode/Editor';
 import { excerpt } from '../bbcode/parse';
 import { BBCode } from '../bbcode/render';
-import { Btn, CopyButton, Countdown, Empty, Section, Tabs } from '../components/common';
+import { Btn, CopyButton, Countdown, Empty, PlayerLink, Section, Tabs, VillageLink } from '../components/common';
 import { threadLink } from '../deepLink';
 import { coords, fmt, fmtAgo } from '../format';
 import { act, host, now, view, usePane } from '../store';
@@ -16,6 +16,17 @@ type Tab = 'overview' | 'members' | 'invites' | 'diplomacy' | 'forum' | 'setting
 type Home = ReturnType<NonNullable<typeof host.value>['tribeHome']>;
 
 const REL_LABEL: Record<Diplomacy | 'own', string> = { ally: 'Ally', nap: 'Non-aggression pact', enemy: 'Enemy', own: 'Your tribe' };
+
+/** Attacks on the same village, from the same village, landing within a second of each other read as one line (×n). */
+function groupAlerts(alerts: TribeAlert[]): { a: TribeAlert; n: number }[] {
+  const out: { a: TribeAlert; n: number }[] = [];
+  for (const a of alerts) {
+    const same = out.find((g) => g.a.vid === a.vid && g.a.attacker === a.attacker && g.a.fromVid === a.fromVid && Math.abs(g.a.arrive - a.arrive) < 1000);
+    if (same) same.n++;
+    else out.push({ a, n: 1 });
+  }
+  return out;
+}
 
 export function TribeScreen({ id, tab, thread, post }: { id?: number; tab?: string; thread?: number; post?: number }) {
   const h = host.value!;
@@ -304,12 +315,16 @@ function Overview({ t }: { t: MyTribeView }) {
           <Section title="Members under attack">
             {t.alerts.length === 0 ? <Empty>No attacks are heading for the tribe.</Empty> : (
               <ul class="cmd-list">
-                {t.alerts.map((a) => (
+                {groupAlerts(t.alerts).map(({ a, n }) => (
                   <li class="cmd is-incoming">
                     <Icon name="attack" size={16} />
                     <div class="grow">
-                      <b>{t.names[a.memberId]}</b>: {a.vname} <span class="muted">({coords(a.x, a.y)})</span>
-                      <div class="muted small">from {a.attacker}</div>
+                      <b><PlayerLink id={a.memberId} name={t.names[a.memberId] ?? '?'} /></b>: <VillageLink vid={a.vid} name={a.vname} x={a.x} y={a.y} />
+                      {n > 1 && <b class="alert-count" title={`${n} attacks landing together`}> ×{n}</b>}
+                      <div class="muted small">
+                        from <PlayerLink id={a.attackerId ?? null} name={a.attacker} />
+                        {a.fromVid !== undefined && a.fromName && a.fx !== undefined && a.fy !== undefined && <> · <VillageLink vid={a.fromVid} name={a.fromName} x={a.fx} y={a.fy} /></>}
+                      </div>
                     </div>
                     <Countdown until={a.arrive} />
                   </li>
