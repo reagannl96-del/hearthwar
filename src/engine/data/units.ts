@@ -122,7 +122,7 @@ export const UNITS: Record<UnitId, UnitDef> = {
   },
   orc: {
     id: 'orc', name: 'Orc King', plural: 'Orc Kings',
-    description: 'A hero of the statue. The warlord of the clans: his warcry sends rams and rock-hurlers crashing through walls, and his warband eats and grows where he rules.',
+    description: 'A hero of the statue. The warlord of the clans: his warcry sends rams and rock-hurlers crashing through walls, and his warband charges with a bloodlust no army can match.',
     cost: r(50, 40, 40), pop: 10, attack: 180, def: [220, 180, 150], speed: 11, carry: 60, time: 21600,
     cls: 'inf', building: 'statue', req: { statue: 1 }, research: false, smithy: 0,
   },
@@ -186,9 +186,7 @@ export const HERO_POWERS = {
   /** the Orc King's warcry: rams and catapults in the army he leads strike this much harder */
   warcry: 0.5,
   /** the Orc King's bloodlust: every attacker in the army he leads fights this much harder */
-  bloodlust: 0.1,
-  /** the horde: a village sworn to the Orc King feeds this much more population */
-  horde: 0.1,
+  bloodlust: 0.15,
 };
 
 export const HERO_VS_BONUS = 0.25;
@@ -211,8 +209,8 @@ export const HERO_INFO: Record<string, HeroInfo> = {
     perks: ['Sneak in: attacking, his goblins slip over 4 levels of the enemy wall', 'Plunder: the army he leads carries 40% more loot'],
   },
   orc: {
-    vs: 'arc', vsBonus: 0.2, vsLabel: 'Archers', ability: 'Warcry',
-    perks: ['Warcry: rams and rock-hurlers in the army he leads strike 50% harder at walls and buildings', 'Bloodlust: every attacker in the warband he leads fights 10% harder', 'The Horde: a village sworn to him feeds 10% more population', 'Beastbane: +20% strength against archers'],
+    vsLabel: 'Walls and everything behind them', ability: 'Warcry',
+    perks: ['Warcry: rams and rock-hurlers in the army he leads strike 50% harder at walls and buildings', 'Bloodlust: every attacker in the warband he leads fights 15% harder'],
   },
   necromancer: {
     vsLabel: 'Infantry and the fallen', ability: 'Dread',

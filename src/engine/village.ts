@@ -1,7 +1,7 @@
 // Village economy: lazy resource accrual, recruitment delivery, population & capacity.
 
 import { BUILDINGS, BUILDING_ORDER } from './data/buildings';
-import { HERO_POWERS, UNITS } from './data/units';
+import { UNITS } from './data/units';
 import {
   HOUR, bonusMultiplier, buildingPop, farmCap, hideCap, mineRate, res, storageCap, unitsPop, villagePoints,
 } from './formulas';
@@ -100,9 +100,7 @@ export function hideOf(v: Village): number {
 }
 
 export function farmMax(v: Village): number {
-  // the horde: a village sworn to the Orc King feeds more mouths
-  const horde = v.heroKind === 'orc' ? 1 + HERO_POWERS.horde : 1;
-  return Math.round(farmCap(v.buildings.farm, v.bonus) * horde);
+  return farmCap(v.buildings.farm, v.bonus);
 }
 
 /** level a building will have once everything in the queue has finished */
