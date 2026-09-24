@@ -9,7 +9,7 @@ import { buildModel, visualTier } from '../src/ui/three/buildings';
 import { LAYOUT, OUTSIDE, WALL_R, buildingScale, heightAt, sceneryPlan } from '../src/ui/three/scene';
 import { WALK_PATHS } from '../src/ui/three/paths';
 import { setTheme } from '../src/ui/three/kit';
-import { campSlots } from '../src/ui/three/camp';
+import { CAMP_TENTS, TENT_MAX, TENT_MIN, TENT_R, campSlots, tentScale } from '../src/ui/three/camp';
 import { CAMP } from '../src/ui/three/scene';
 
 type P = [number, number];
@@ -208,9 +208,26 @@ describe('village layout', () => {
     expect([...bad]).toEqual([]);
   });
 
+  it('tents grow with the army, within limits', () => {
+    expect(tentScale(50)).toBeLessThan(0.6);
+    expect(tentScale(1000)).toBeGreaterThan(0.9);
+    expect(tentScale(1e6)).toBe(TENT_MAX);
+    expect(tentScale(1)).toBe(TENT_MIN);
+  });
+
   it('the support camp stands clear of the wall, the paths, the buildings and the trees', () => {
     const bad: string[] = [];
-    const spots = [...campSlots().map((t) => ({ x: t.x, z: t.z, r: 1.9 })), { x: CAMP[0], z: CAMP[1], r: 0.9 }];
+    // every mix of army sizes: all huts, all great pavilions, and a spread between
+    const mixes = [Array(CAMP_TENTS).fill(TENT_MAX), Array(CAMP_TENTS).fill(TENT_MIN), [TENT_MAX, TENT_MAX], [TENT_MIN], [1.6, 1.2, 0.9, 0.7, 0.5, 0.45, 0.45, 0.45]];
+    const spots = [{ x: CAMP[0], z: CAMP[1], r: 0.9 }];
+    for (const m of mixes) {
+      const slots = campSlots(m);
+      slots.forEach((a, i) => {
+        spots.push({ x: a.x, z: a.z, r: TENT_R * a.scale + 0.2 });
+        // neighbouring tents must not overlap each other either
+        slots.forEach((b, j) => { if (j > i && Math.hypot(a.x - b.x, a.z - b.z) < TENT_R * (a.scale + b.scale) * 0.95) bad.push(`tents ${i} and ${j} overlap in [${m.join(',')}]`); });
+      });
+    }
     for (const t of spots) {
       const at = `${t.x.toFixed(0)},${t.z.toFixed(0)}`;
       if (Math.hypot(t.x, t.z) < WALL_R + 4 + t.r) bad.push(`tent at ${at} by the wall`);

@@ -46,7 +46,7 @@ export const RING_R = WALL_R - 4;
 /** Where visiting armies pitch their tents: west of the road outside the gate, clear of every path. */
 export const CAMP: [number, number] = [-24, 57];
 /** How far round the camp nothing else is put. */
-export const CAMP_R = 8.5;
+export const CAMP_R = 10;
 
 // x1, z1, x2, z2, width
 const ROADS: [number, number, number, number, number][] = [

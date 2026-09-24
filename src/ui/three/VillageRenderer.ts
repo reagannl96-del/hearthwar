@@ -15,7 +15,7 @@ import { isRider, militiaman, person, plot, scaffold, troop, type TroopModel } f
 import { heroAura, type Aura, type AuraHero } from './heroAura';
 import { FOOT_LOOPS, PEOPLE_LOOPS, RIDE_LOOPS } from './paths';
 import { CAMP, wallGuardPosts } from './scene';
-import { buildCamp, mainUnit } from './camp';
+import { buildCamp, headcount, mainUnit, sentries, tentScale } from './camp';
 import { LAYOUT, OUTSIDE, WALL_R, buildScenery, buildTerrain, buildWall, buildingScale, heightAt } from './scene';
 import { BattleTheatre, type TheatreInput, type TheatreReport } from './battle/theatre';
 import { battleSfx } from '../sound';
@@ -768,9 +768,9 @@ export class VillageRenderer {
   /** Archers and spearmen keeping watch from the wall, once it is big enough to stand on. */
   /** Pitch a tent for each army stationed here, in the style of the village it came from. */
   setSupport(armies: { theme: Theme; units: Units }[]): void {
-    const total = (u: Units) => Object.values(u).reduce((a, b) => a + (b ?? 0), 0);
-    const list = armies.filter((a) => total(a.units) > 0).sort((a, b) => total(b.units) - total(a.units));
-    const key = list.map((a) => `${a.theme}:${mainUnit(a.units)}`).join('|');
+    const list = armies.filter((a) => headcount(a.units) > 0).sort((a, b) => headcount(b.units) - headcount(a.units));
+    // rebuild only when a tent would look different (its size moves in small steps)
+    const key = list.map((a) => { const n = headcount(a.units); return `${a.theme}:${mainUnit(a.units)}:${Math.round(tentScale(n) * 20)}:${sentries(n)}`; }).join('|');
     if (key === this.campKey) return;
     this.campKey = key;
     if (this.camp) { this.scene.remove(this.camp); disposeTree(this.camp); this.camp = null; }

@@ -4,6 +4,9 @@
 // leafy bower for the druids, a patched hide heap for goblins, a bone-ribbed
 // shroud for the dead, and a plain canvas tent for everyone else. A soldier of the
 // army's main unit keeps watch at the door, and a fire burns in the middle.
+//
+// A tent is as big as the army in it: a little hut for fifty spears, a great
+// pavilion with a proper guard for ten thousand. The camp spreads out to fit.
 
 import * as THREE from 'three';
 import type { Units, UnitId } from '../../engine/types';
@@ -14,13 +17,55 @@ import { CAMP, heightAt } from './scene';
 /** No more tents than this, however many armies come. */
 export const CAMP_TENTS = 8;
 
-/** The tent spots: an arc behind the fire, open to the south so the camp faces the road and the gate. */
-export function campSlots(): { x: number; z: number; face: number }[] {
-  const out: { x: number; z: number; face: number }[] = [];
-  for (let i = 0; i < CAMP_TENTS; i++) {
-    const a = (172 + (i * 196) / (CAMP_TENTS - 1)) * (Math.PI / 180);
-    const x = CAMP[0] + Math.cos(a) * 5.6, z = CAMP[1] + Math.sin(a) * 4.6;
-    out.push({ x, z, face: Math.atan2(CAMP[0] - x, CAMP[1] - z) });
+/** Smallest and largest a tent gets. */
+export const TENT_MIN = 0.45, TENT_MAX = 1.6;
+/** How far out the tents may stand from the fire (the camp's clearing is a little wider). */
+const ARC_MIN = 3.6, ARC_MAX = 7;
+/** Ground a tent takes up at scale 1 (its radius). */
+export const TENT_R = 1.65;
+/** The arc the tents stand on: behind the fire, open to the south so the camp faces the road and the gate. */
+const ARC_FROM = 172, ARC_SPAN = 196, SQUASH = 0.82;
+
+/** Headcount of an army. */
+export const headcount = (u: Units) => Object.values(u).reduce((a, b) => a + (b ?? 0), 0);
+
+/** How big an army's tent is: a hut for 50, a full tent at about 1000, a great pavilion past 20 000. */
+export function tentScale(troops: number): number {
+  return Math.max(TENT_MIN, Math.min(TENT_MAX, 0.5 + 0.38 * Math.log10(Math.max(1, troops) / 50)));
+}
+
+/**
+ * Where the tents go, given their sizes (biggest first). They stand shoulder to
+ * shoulder round the fire, the arc widening for big armies; if even the widest arc
+ * can't hold them all, every tent shrinks alike so they still fit.
+ */
+export function campSlots(sizes: number[]): { x: number; z: number; face: number; scale: number }[] {
+  const n = Math.min(CAMP_TENTS, sizes.length);
+  if (!n) return [];
+  const span = (ARC_SPAN * Math.PI) / 180;
+  // the arc is an ellipse, and the tightest part of it sets how much fits
+  const perR = span * SQUASH;
+  const width = (sc: number[]) => sc.reduce((a, b) => a + b * TENT_R * 2 + 0.3, 0);
+  let sc = sizes.slice(0, n);
+  let R = Math.max(ARC_MIN, width(sc) / perR);
+  if (R > ARC_MAX) {
+    const f = (ARC_MAX * perR - n * 0.3) / (width(sc) - n * 0.3);
+    sc = sc.map((v) => v * f);
+    R = ARC_MAX;
+  }
+  // the biggest tents in the middle of the arc, the smaller ones out to the ends
+  const order = sc.map((v, i) => ({ v, i })).sort((a, b) => b.v - a.v);
+  const seat: number[] = [];
+  order.forEach((o, k) => { if (k % 2) seat.push(o.i); else seat.unshift(o.i); });
+  const share = (i: number) => ((sc[i] * TENT_R * 2 + 0.3) / (R * perR)) * span;
+  const spare = (span - seat.reduce((a, i) => a + share(i), 0)) / n;
+  const out = new Array<{ x: number; z: number; face: number; scale: number }>(n);
+  let a = (ARC_FROM * Math.PI) / 180 + spare / 2;
+  for (const i of seat) {
+    const mid = a + share(i) / 2;
+    const x = CAMP[0] + Math.cos(mid) * R, z = CAMP[1] + Math.sin(mid) * R * SQUASH;
+    out[i] = { x, z, face: Math.atan2(CAMP[0] - x, CAMP[1] - z), scale: sc[i] };
+    a += share(i) + spare;
   }
   return out;
 }
@@ -185,27 +230,35 @@ export function mainUnit(units: Units): TroopModel | null {
   return best;
 }
 
-/** The whole camp: a tent per army (their own style), each with a sentry, and a fire in the middle. */
+/** Sentries at the door: one for a small band, up to three for a great army. */
+export const sentries = (troops: number) => (troops >= 3000 ? 3 : troops >= 600 ? 2 : 1);
+
+/** The whole camp: a tent per army (their own style, sized to it) with its sentries, and a fire in the middle. */
 export function buildCamp(armies: { theme: Theme; units: Units }[]): THREE.Group {
   const g = new THREE.Group();
-  const slots = campSlots();
-  armies.slice(0, CAMP_TENTS).forEach((a, i) => {
+  const list = armies.slice(0, CAMP_TENTS);
+  const slots = campSlots(list.map((a) => tentScale(headcount(a.units))));
+  list.forEach((a, i) => {
     const s = slots[i];
-    const t = withTheme(a.theme, () => {
+    const spot = new THREE.Group();
+    withTheme(a.theme, () => {
       const tent = supportTent(a.theme);
+      tent.scale.setScalar(s.scale);
+      spot.add(tent);
       const k = mainUnit(a.units);
-      if (k) {
+      if (!k) return;
+      // the guards stand by the door whatever the tent's size; more of them for a bigger army
+      const n = sentries(headcount(a.units));
+      for (let j = 0; j < n; j++) {
         const guard = troop(k);
-        guard.scale.setScalar(0.95);
-        guard.position.set(-0.95, 0, 1.55);
-        tent.add(guard);
+        const side = j === 0 ? -1 : j === 1 ? 1 : 0;
+        guard.position.set(side * (0.55 + 0.45 * s.scale), 0, TENT_R * s.scale * 0.95 + (j === 2 ? 0.9 : 0.3));
+        spot.add(guard);
       }
-      return tent;
     });
-    t.scale.setScalar(1.05);
-    t.position.set(s.x, heightAt(s.x, s.z), s.z);
-    t.rotation.y = s.face;
-    g.add(t);
+    spot.position.set(s.x, heightAt(s.x, s.z), s.z);
+    spot.rotation.y = s.face;
+    g.add(spot);
   });
   if (armies.length) {
     const [cx, cz] = CAMP, y = heightAt(cx, cz);
