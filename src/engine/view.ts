@@ -16,7 +16,7 @@ import { DOMINATION, roundDays, standings, type Standings } from './round';
 import type {
   BonusType, BuildJob, Buildings, Intel, PaladinState, PlayerStats, RecruitBuilding, RecruitJob, Report, Res,
   ResearchJob, ScavengeRun, UnitId, Units, World, WorldConfig, Diplomacy, ForumThread, TribeAlert, TribeRight, RoundResult, HeroGear } from './types';
-import { farmMax, popUsed, productionRates, updateVillage } from './village';
+import { farmMax, popUsed, productionRates, updateVillage, villageMorale } from './village';
 
 export interface SupportView { fromVid: number; fromName: string; ownerId: number; ownerName: string; units: Units; theme: VillageTheme }
 export interface StationedView { hostVid: number; hostName: string; hostX: number; hostY: number; hostOwner: string; units: Units }
@@ -28,6 +28,8 @@ export interface VillageView {
   y: number;
   points: number;
   loyalty: number;
+  /** how its people are holding up (only attacks bring it down): its defenders fight a little softer when low */
+  morale: number;
   bonus?: BonusType;
   buildings: Buildings;
   buildQueue: BuildJob[];
@@ -139,6 +141,7 @@ function villageView(w: World, pid: number, vid: number): VillageView {
     y: v.y,
     points: v.points,
     loyalty: v.loyalty,
+    morale: Math.round(villageMorale(v, w.now)),
     bonus: v.bonus,
     buildings: { ...v.buildings },
     buildQueue: v.buildQueue.map((j) => ({ ...j })),

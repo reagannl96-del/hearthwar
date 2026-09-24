@@ -531,7 +531,7 @@ export function reinforceRulers(w: World, want: number): number {
     if (!p) break;
     n++;
   }
-  if (n > 0) news(w, `${n} new rulers have arrived in the realm and settled the open land.`, 'player');
+  if (n > 0) news(w, n === 1 ? 'A new ruler has arrived in the realm and settled the open land.' : `${n} new rulers have arrived in the realm and settled the open land.`, 'player');
   return n;
 }
 

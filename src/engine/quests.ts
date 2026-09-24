@@ -119,6 +119,8 @@ export function claimQuest(w: World, pid: number, id: string, vid?: number): Act
   if (!q) return { ok: false, error: 'Unknown quest.' };
   if (p.questsClaimed.includes(id)) return { ok: false, error: 'Already claimed.' };
   if (q.requires && !p.questsClaimed.includes(q.requires)) return { ok: false, error: 'Finish the previous quest first.' };
+  // bring every village up to date first (troops finish training lazily), so the check sees what the player sees
+  for (const vid of p.villages) { const v0 = w.villages[vid]; if (v0) updateVillage(w, v0, w.now); }
   const [cur, max] = q.progress(w, p);
   if (cur < max) return { ok: false, error: 'Not finished yet.' };
   const v = w.villages[vid !== undefined && p.villages.includes(vid) ? vid : p.villages[0]];

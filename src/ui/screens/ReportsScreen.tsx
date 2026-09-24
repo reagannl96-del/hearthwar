@@ -287,7 +287,8 @@ function Battle({ b, kind, shared }: { b: BattleData; kind: Report['kind']; shar
 
       <div class="rep-factors">
         <LuckMeter luck={b.luck} />
-        <div class="factor"><span>Morale</span><b class="num">{Math.round(b.morale * 100)}%</b></div>
+        <div class="factor" title="A big player attacking a much smaller one fights softer"><span>Size morale</span><b class="num">{Math.round(b.morale * 100)}%</b></div>
+        {b.spirit && <div class="factor" title="How the defending village's people were holding up: at low morale its defenders fight up to 12% softer"><span>Village morale</span><b class={`num ${b.spirit.after < 60 ? 'bad-text' : ''}`}>{b.spirit.before}%{b.spirit.after !== b.spirit.before && <> → {b.spirit.after}%</>}</b></div>}
         {b.wall && <div class="factor"><Icon name="b_wall" size={16} /><span>Wall</span><b class="num">{b.wall.before}{b.wall.before !== b.wall.after && <> → {b.wall.after}</>}</b></div>}
         {b.nightOwl && <div class="factor"><span>Night bonus</span><b class="good-text">×2 defense</b></div>}
         {b.militia && <div class="factor"><Icon name="militia" size={16} /><span>Militia fought</span></div>}

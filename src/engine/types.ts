@@ -119,6 +119,9 @@ export interface Village {
   grownAt?: number;
   /** the hero this village's statue is sworn to: the first one trained here, for good */
   heroKind?: UnitId;
+  /** how its people are holding up, 0..100 (unset = 100): only attacks bring it down, and it comes back on its own */
+  morale?: number;
+  moraleAt?: number;
 }
 
 export type CommandKind = 'attack' | 'support' | 'return' | 'trade' | 'tradeback';
@@ -187,6 +190,8 @@ export interface BattleData {
   scout?: ScoutInfo;
   paladinItem?: string;
   militia?: boolean;
+  /** the defending village's morale before and after the battle (its people fight harder when it is high) */
+  spirit?: { before: number; after: number };
   /** a necromancer raised some of the fallen as skeleton spearmen for his side */
   risen?: { side: 'attacker' | 'defender'; n: number };
   /** a paladin laid hands on his side's fallen: how many rose healed */

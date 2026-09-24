@@ -21,6 +21,8 @@ export interface CombatInput {
   luck: number;
   /** 0.3..1 */
   morale: number;
+  /** how hard the defenders fight for the village's morale (0.88..1; unset = 1) */
+  defSpirit?: number;
   /** level of the catapult target building before the battle (if catapults present) */
   catTargetLevel?: number;
   catTargetMin?: number;
@@ -199,6 +201,8 @@ export function resolveBattle(input: CombatInput): CombatResult {
   // a defending sorcerer raises an arcane barrier, and warding items add to it
   if (defHeroes.includes('sorcerer')) { D *= 1 + HERO_POWERS.barrier; effects.push('barrier'); }
   if (defItems.some((i) => i.special === 'ward')) { D *= 1 + ITEM_POWERS.ward; effects.push('ward'); }
+  // a village whose people are shaken fights a little softer
+  if (input.defSpirit !== undefined) D *= input.defSpirit;
   // a defending druid grows a thorn hedge along the wall
   const defWall = battleWall + (defHeroes.includes('druid') ? HERO_POWERS.thornwall : 0);
   if (defWall > battleWall) effects.push('thornwall');

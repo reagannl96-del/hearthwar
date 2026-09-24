@@ -177,6 +177,10 @@ export function VillageScreen() {
             <dd class="num">{fmt(v.hide)} each</dd>
             <dt>Loyalty</dt>
             <dd class="num">{Math.floor(v.loyalty)}</dd>
+            <dt title="How your people are holding up. Only attacks bring it down, and it comes back on its own in about half a day. At low morale your defenders fight up to 12% softer.">Morale</dt>
+            <dd class={`num ${v.morale < 60 ? 'bad-text' : v.morale < 90 ? 'warn-text' : 'good-text'}`} title={`Defenders fight at ${Math.round((0.88 + 0.12 * v.morale / 100) * 100)}% strength`}>
+              {v.morale}%{v.morale < 100 && <span class="muted small"> · defenders at {Math.round((0.88 + 0.12 * v.morale / 100) * 100)}%</span>}
+            </dd>
             {v.bonus && (
               <>
                 <dt>Bonus</dt>

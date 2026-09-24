@@ -18,7 +18,7 @@ import type {
   Village, World,
 } from './types';
 import { RES_KEYS } from './types';
-import { popFree, refreshPoints, storageOf, updateVillage } from './village';
+import { moraleFight, popFree, refreshPoints, storageOf, updateVillage, villageMorale } from './village';
 
 export const REPORT_CAP = 600;
 
@@ -449,6 +449,8 @@ function resolveAttack(w: World, c: Command, hooks: ArrivalHooks): void {
 
   const luck = (nextRandom(w) * 2 - 1) * w.config.luck;
   const morale = w.config.morale && defender ? moraleFor(defender.points, attacker.points) : 1;
+  // the village's own morale: its people fight softer when it is shaken (barbarians have none to lose)
+  const spiritBefore = target.ownerId !== null ? villageMorale(target, w.now) : 100;
   const catTarget = c.units.catapult ? pickCatTarget(w, target, c.catTarget) : undefined;
   const wallBefore = target.buildings.wall;
 
@@ -461,6 +463,7 @@ function resolveAttack(w: World, c: Command, hooks: ArrivalHooks): void {
     wall: wallBefore,
     luck,
     morale,
+    defSpirit: target.ownerId !== null ? moraleFight(spiritBefore) : undefined,
     catTargetLevel: catTarget ? target.buildings[catTarget] : undefined,
     catTargetMin: catTarget ? BUILDINGS[catTarget].min : undefined,
     catTargetIsWall: catTarget === 'wall',
@@ -649,6 +652,20 @@ function resolveAttack(w: World, c: Command, hooks: ArrivalHooks): void {
     attacker.stats.scouted++;
   }
 
+  // the blow to the village's morale: a lost battle hurts most, a won one by how many fell,
+  // and a battered wall or a nobleman's speech on top (scouts alone change nothing)
+  let spirit: BattleData['spirit'];
+  if (target.ownerId !== null && !result.pureScout && !conquered) {
+    const fell = unitsPop(defLostTotal), stood = Math.max(1, unitsPop(defUnitsTotal));
+    let drop = result.winner === 'attacker' ? 25 : 10 * Math.min(1, fell / stood);
+    if (wallChange && wallChange.after < wallChange.before) drop += 5;
+    if (loyaltyChange) drop += 10;
+    const after = Math.max(0, Math.round(spiritBefore - drop));
+    target.morale = after;
+    target.moraleAt = w.now;
+    spirit = { before: Math.round(spiritBefore), after };
+  }
+
   // what the attacker learns about the defenders
   const attackerSees = result.pureScout ? result.scoutsSurvived > 0 : result.winner === 'attacker';
 
@@ -667,6 +684,7 @@ function resolveAttack(w: World, c: Command, hooks: ArrivalHooks): void {
     loot,
     capacity: loot ? capacity : undefined,
     loyalty: loyaltyChange,
+    spirit,
     conquered,
     scout,
     paladinItem: attItem?.id,

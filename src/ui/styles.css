@@ -1611,3 +1611,5 @@ button.realm-row:hover { background: var(--surface-2); border-color: var(--line)
 
 /* phones: no room for the connection pill in the header */
 @media (max-width: 760px) { .online-pill { display: none; } }
+.news-link { font: inherit; font-weight: 700; padding: 0; }
+.news-link-tribe { color: #6a4a10; }

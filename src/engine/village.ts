@@ -72,6 +72,19 @@ export function productionRates(w: World, v: Village, t = w.now): Res {
   };
 }
 
+/**
+ * A village's morale: how its people are holding up. It stands at 100 until the village
+ * is attacked, drops with each blow (a lost battle most of all), and climbs back on its
+ * own, fully in about half a day. Low morale makes its defenders fight a little softer.
+ */
+export const MORALE_REGEN = 8.5; // per hour
+export function villageMorale(v: Village, t: number): number {
+  if (v.morale === undefined) return 100;
+  return Math.min(100, v.morale + ((t - (v.moraleAt ?? t)) / HOUR) * MORALE_REGEN);
+}
+/** How hard the defenders fight at this morale: in full at 100, down to 88% when it is broken. */
+export const moraleFight = (morale: number) => 0.88 + 0.12 * Math.max(0, Math.min(100, morale)) / 100;
+
 export function storageOf(v: Village): number {
   const cap = storageCap(v.buildings.warehouse, v.bonus);
   // a barbarian village with a resource bonus hoards: its stores run three times as deep, so

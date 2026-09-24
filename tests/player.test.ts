@@ -505,3 +505,46 @@ describe('bonus villages', () => {
     expect(rich.res.wood).toBeGreaterThan(plain.res.wood);
   });
 });
+
+describe('village morale', () => {
+  it('stands at 100 until attacked, falls with a lost battle, softens the defence, and comes back on its own', async () => {
+    const { villageMorale, moraleFight } = await import('../src/engine/village');
+    const w = createWorld({ worldName: 'M', playerName: 'P', villageName: 'H', seed: 4, config: { ...defaultConfig(), aiCount: 2, size: 60, difficulty: 'peaceful' } });
+    removeEvents(w, (e) => e.type === 'barb');
+    const me = w.players[w.humanId];
+    const v = w.villages[me.villages[0]];
+    me.protectedUntil = 0;
+    expect(villageMorale(v, w.now)).toBe(100);
+    // an AI ruler's army overruns the village
+    const ai = Object.values(w.players).find((p) => p.kind === 'ai')!;
+    const from = w.villages[ai.villages[0]];
+    from.buildings.rally = 1;
+    from.units = { axe: 2000 };
+    v.units = { spear: 20 };
+    expect(sendTroops(w, { ownerId: ai.id, fromVid: from.id, toVid: v.id, kind: 'attack', units: { axe: 2000 } }).ok).toBe(true);
+    advance(w, w.now + 2 * HOUR);
+    const hit = villageMorale(v, w.now);
+    expect(hit).toBeLessThan(100);
+    expect(moraleFight(hit)).toBeLessThan(1);
+    expect(moraleFight(0)).toBeCloseTo(0.88);
+    // half a day later its people have steadied
+    expect(villageMorale(v, w.now + 12 * HOUR)).toBe(100);
+  });
+});
+
+describe('quest claims', () => {
+  it('a hero that finished training since the village was last looked at counts when claiming', () => {
+    const w = createWorld({ worldName: 'Q', playerName: 'P', villageName: 'H', seed: 6, config: { ...defaultConfig(), aiCount: 0, size: 60 } });
+    removeEvents(w, (e) => e.type === 'barb');
+    const p = w.players[w.humanId];
+    const v = w.villages[p.villages[0]];
+    Object.assign(v.buildings, { statue: 1, main: 10, farm: 10 });
+    p.questsClaimed.push('main10');
+    v.res = { wood: 1000, clay: 1000, iron: 1000 };
+    expect(applyAction(w, p.id, { type: 'recruit', vid: v.id, unit: 'paladin', count: 1 }).ok).toBe(true);
+    // time passes with nothing touching the village: the paladin is trained but not yet delivered
+    w.now += 48 * HOUR;
+    expect(v.units.paladin ?? 0).toBe(0);
+    expect(applyAction(w, p.id, { type: 'claimQuest', quest: 'paladin', vid: v.id }).ok).toBe(true);
+  });
+});
