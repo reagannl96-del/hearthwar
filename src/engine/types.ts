@@ -151,7 +151,7 @@ export type ReportColor = 'green' | 'yellow' | 'red' | 'blue' | 'grey';
 
 export interface SideInfo {
   /** the village's look, so reports can name its troops (goblin, sorcerer, druid or classic) */
-  theme?: 'classic' | 'sorcerer' | 'druid' | 'goblin' | 'necromancer';
+  theme?: 'classic' | 'paladin' | 'sorcerer' | 'druid' | 'goblin' | 'necromancer';
   playerId: number | null;
   playerName: string;
   vid: number;

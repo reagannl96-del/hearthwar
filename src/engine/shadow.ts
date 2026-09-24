@@ -4,7 +4,7 @@
 // world" that the normal engine query code can read.
 
 import { UNITS } from './data/units';
-import { distance, watchtowerRange } from './formulas';
+import { distance, watchtowerRange, sighted } from './formulas';
 import { commandsOf, commandsTo } from './cmdindex';
 import type { Command, Player, SupportStack, Tribe, TribeAlert, UnitId, Units, Village, World } from './types';
 import { applicationsBy, invitesFor, tribeAlerts } from './tribes';
@@ -113,7 +113,11 @@ export function privatePacket(w: World, pid: number): PrivatePacket {
           const s = slowest(c.units);
           if (s && distance(cx, cy, to.x, to.y) <= watchtowerRange(tower)) units = { [s]: 1 };
         }
-        commands.push({ ...c, units, res: undefined, catTarget: undefined, tag: undefined });
+        // in the last stretch the army is in plain sight: what kinds of troops, never how many
+        if (sighted(w.now, c.depart, c.arrive)) {
+          for (const k in c.units) if ((c.units[k as keyof Units] ?? 0) > 0) units[k as keyof Units] = 1;
+        }
+        commands.push({ ...c, units, res: undefined, catTarget: undefined, tag: undefined, repeat: undefined, targetOwner: undefined });
       } else if (c.kind === 'support' || c.kind === 'trade') commands.push(c);
     }
   }

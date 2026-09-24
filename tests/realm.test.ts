@@ -105,7 +105,9 @@ describe('each kind of village fields its own troops', () => {
     expect(unitNameAt({ heroKind: 'goblin' }, 'marcher')).toBe('Wolf Archer');
     expect(unitNameAt({ heroKind: 'druid' }, 'heavy', true)).toBe('Bear Riders');
     expect(unitNameAt({}, 'light')).toBe(UNITS.light.name);
-    expect(themeOfHero('paladin')).toBe('classic');
+    expect(themeOfHero('paladin')).toBe('paladin');
+    expect(themeOfHero(undefined)).toBe('classic');
+    expect(unitNameAt({ heroKind: 'paladin' }, 'heavy', true)).toBe('Knights');
   });
 
   it('battle reports remember what kind of army each side fielded', () => {

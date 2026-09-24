@@ -263,3 +263,13 @@ export function fmtDuration(ms: number): string {
   const pad = (n: number) => String(n).padStart(2, '0');
   return h > 0 ? `${h}:${pad(m)}:${pad(sec)}` : `${m}:${pad(sec)}`;
 }
+
+/**
+ * An attacking army comes into sight of its target for the last fifth of its
+ * march: from then on the defender can see what kinds of troops are coming
+ * (not how many).
+ */
+export const SIGHTED_AT = 0.8;
+export function sighted(now: number, depart: number, arrive: number): boolean {
+  return (now - depart) / Math.max(1, arrive - depart) >= SIGHTED_AT;
+}

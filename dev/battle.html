@@ -1,0 +1,17 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Battle sandbox</title>
+<style>
+html,body{margin:0;height:100%;background:#1a1510;color:#f1dfb4;font:12px sans-serif}
+#app,.sb{height:100%}
+.sb{display:flex;flex-direction:column}
+.sb-panel{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;padding:6px 8px;background:#2a2016}
+.sb-panel label{display:flex;gap:4px;align-items:center}
+.sb-panel input[type=number]{width:48px}
+.sb-panel button{padding:3px 10px;font-weight:bold}
+.sb-log{flex-basis:100%;color:#ffd27a}
+.sb-scene{flex:1;position:relative;overflow:hidden}
+.sb-scene canvas{display:block;width:100%;height:100%}
+.village3d-labels{position:absolute;inset:0;pointer-events:none}
+.lvl-badge{position:absolute;left:0;top:0;background:#3a2614;color:#fff;border-radius:8px;padding:0 5px;font-size:11px}
+</style>
+</head><body><div id="app"></div><script type="module" src="/src/dev/battle.tsx"></script></body></html>

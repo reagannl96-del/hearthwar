@@ -728,6 +728,10 @@ tr.is-current td { font-weight: 800; background: #f4d9ae !important; }
 .template { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: 4px; background: var(--parch-hi); }
 .tpl-key { font: 800 1.3rem var(--font-display); color: var(--accent); }
 .farm-table td, .farm-table th { padding: 5px 6px; }
+/* the send buttons stay in view (and big enough for a thumb) however far the table scrolls */
+.farm-table td.farm-send, .farm-table th:last-child { position: sticky; right: 0; background: var(--parch-hi); box-shadow: -6px 0 6px -6px rgba(0, 0, 0, 0.25); }
+.farm-table .farm-send .btn { min-width: 40px; min-height: 36px; touch-action: manipulation; }
+.farm-home { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .train-list { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 4px; }
 .train-list li::marker { font-weight: 800; color: var(--accent); }
 input.tiny { width: 56px; padding: 2px 4px; }
@@ -1389,3 +1393,21 @@ button.realm-row:hover { background: var(--surface-2); border-color: var(--line)
   .rep-factors { flex-wrap: wrap; row-gap: 6px; }
   .rep-verdict { font-size: 1.05rem; }
 }
+
+/* ---------- the attack theatre ---------- */
+.village3d-watch {
+  position: absolute; left: 10px; top: 10px; z-index: 3;
+  padding: 5px 12px; border-radius: 16px; border: 1px solid #7a2016;
+  background: linear-gradient(#c9412f, #8e2a1c); color: #fff4dc; font-weight: 800; cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35); animation: watch-pulse 1.6s ease-in-out infinite;
+}
+.village3d-watch:hover { filter: brightness(1.1); }
+@keyframes watch-pulse { 50% { box-shadow: 0 0 0 5px rgba(201, 65, 47, 0.25), 0 2px 6px rgba(0, 0, 0, 0.35); } }
+.rep-watch { padding: 0 14px 10px; }
+
+/* ---------- watching your own attack ---------- */
+.battle-viewer { position: fixed; inset: 0; z-index: 200; display: flex; flex-direction: column; background: #16121c; }
+.battle-viewer-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 12px; background: var(--parch-hi); border-bottom: 1px solid var(--line-strong); }
+.battle-viewer-bar .grow { flex: 1; min-width: 160px; }
+.battle-viewer-scene { flex: 1; position: relative; min-height: 0; border-radius: 0; }
+.battle-viewer-none { flex: 1; display: grid; place-items: center; color: #e8dcc4; }

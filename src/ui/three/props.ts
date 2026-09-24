@@ -508,6 +508,17 @@ const SHAFT = 0x7a5230;
 
 export type TroopModel = 'spear' | 'sword' | 'axe' | 'archer' | 'scout' | 'noble' | 'light' | 'marcher' | 'heavy' | 'paladin' | 'sorcerer' | 'druid' | 'goblin' | 'necromancer';
 
+/** A little wizard's hat: a brim, a steep crown bent over at the tip, a gold band and a star. */
+function wizardHat(g: THREE.Group, color: number) {
+  g.add(cyl(0.3, 0.3, 0.04, color, 10, 0, 1.36));
+  g.add(cyl(0.1, 0.2, 0.36, color, 8, 0, 1.38));
+  g.add(cyl(0.205, 0.205, 0.06, C.gold, 8, 0, 1.42));
+  const tip = cone(0.1, 0.3, color, 6, 0, 1.73);
+  tip.rotation.z = -0.55;
+  g.add(tip);
+  g.add(mesh(new THREE.OctahedronGeometry(0.05, 0), 0xf4ecc8, { emissive: 0x8a7a40 }).translateX(0.17).translateY(1.99));
+}
+
 function helmet(g: THREE.Group, color = STEEL) {
   g.add(cyl(0.16, 0.23, 0.2, color, 7, 0, 1.3));
 }
@@ -520,6 +531,7 @@ function bow(color = SHAFT): THREE.Mesh {
 
 /** Each kind of village arms its troops its own way: rusty goblin iron, sorcerers' crystal, druids' flint. */
 const GEAR = {
+  paladin: { blade: 0xe6eef4, shield: 0x2c56b0, glow: 0 },
   classic: { blade: STEEL, shield: C.red, glow: 0 },
   goblin: { blade: 0x978d74, shield: 0x6e4a2a, glow: 0 },
   sorcerer: { blade: 0xb58cff, shield: 0x3f6ad8, glow: 0x5a2fb0 },
@@ -599,10 +611,27 @@ function footSoldier(kind: TroopModel): THREE.Group {
   if (kind === 'scout' && (theme === 'sorcerer' || theme === 'druid')) return bird(theme === 'sorcerer');
   if (kind === 'scout' && theme === 'necromancer') return bats();
   const gear = GEAR[theme];
-  // helmets are a village-folk thing; goblins, sorcerers and druids go bare-headed, hatted or hooded
-  const helm = (g: THREE.Group) => { if (theme === 'classic') helmet(g); };
-  const tunic = { spear: 0x2f5d99, sword: 0x8e3a1f, axe: 0x5a3a22, archer: 0x4f7a2e, scout: 0x3b3a30, noble: C.red, sorcerer: 0x5b3596, druid: 0x4f7a2e, necromancer: 0x221f27 }[kind as 'spear'] ?? 0x6f7c35;
+  // helmets are a village-folk thing; goblins, sorcerers and druids go bare-headed, hatted or hooded;
+  // the Order's men wear bright great helms with a golden crest
+  const helm = (g: THREE.Group) => {
+    if (theme === 'classic') helmet(g);
+    if (theme === 'paladin') { helmet(g, 0xe6eef4); g.add(cone(0.07, 0.3, C.gold, 5, 0, 1.5)); }
+    if (theme === 'sorcerer') wizardHat(g, kind === 'spear' ? 0x2e3f8a : kind === 'sword' ? 0x432a8c : kind === 'archer' ? 0x2f5a6a : 0x5a2a7a);
+  };
+  const tunic = theme === 'paladin'
+    ? ({ spear: 0x2c56b0, sword: 0xf3eee2, axe: 0xf3eee2, archer: 0x2c56b0, scout: 0x3a4a6a, noble: 0x2c56b0 }[kind as 'spear'] ?? 0x2c56b0)
+    : ({ spear: 0x2f5d99, sword: 0x8e3a1f, axe: 0x5a3a22, archer: 0x4f7a2e, scout: 0x3b3a30, noble: C.red, sorcerer: 0x5b3596, druid: 0x4f7a2e, necromancer: 0x221f27 }[kind as 'spear'] ?? 0x6f7c35);
   const g = person(tunic);
+  if (theme === 'sorcerer' && kind !== 'scout' && kind !== 'sorcerer') {
+    // a silver star on the breast and a glowing hem to the robe
+    g.add(mesh(new THREE.OctahedronGeometry(0.08, 0), 0xf4ecc8, { emissive: 0x8a7a40 }).translateY(0.74).translateZ(0.24));
+    g.add(mesh(new THREE.CylinderGeometry(0.29, 0.31, 0.06, 8, 1, true), 0x8fe8ff, { emissive: 0x2a8ab8, double: true }).translateY(0.05));
+  }
+  if (theme === 'paladin' && kind !== 'scout') {
+    // a tabard with the golden sun over the chest
+    g.add(box(0.36, 0.52, 0.05, tunic === 0x2c56b0 ? 0xf3eee2 : 0x2c56b0, 0, 0.42, 0.22));
+    g.add(blob(0.07, C.gold, 0, 0.72, 0.26));
+  }
   switch (kind) {
     case 'spear':
       helm(g);
@@ -628,6 +657,7 @@ function footSoldier(kind: TroopModel): THREE.Group {
     case 'axe': {
       if (theme === 'sorcerer') {
         // a warmage: a staff crowned with fire
+        helm(g);
         g.add(cyl(0.035, 0.04, 1.9, 0x2a1d40, 5, 0.36, 0, 0.1));
         const fire = mesh(new THREE.IcosahedronGeometry(0.2, 0), 0xff8a3a, { emissive: 0xd0501a });
         fire.position.set(0.36, 2.02, 0.1);
@@ -661,6 +691,8 @@ function footSoldier(kind: TroopModel): THREE.Group {
       g.add(b);
       g.add(box(0.16, 0.5, 0.12, 0x6e4220, 0, 0.6, -0.26));
       if (theme === 'classic') g.add(cone(0.24, 0.35, 0x3a4f22, 6, 0, 1.3));
+      if (theme === 'paladin') g.add(cyl(0.2, 0.24, 0.16, 0xe6eef4, 7, 0, 1.3));
+      if (theme === 'sorcerer') helm(g);
       break;
     }
     case 'scout':
@@ -866,11 +898,19 @@ function rider(kind: TroopModel): THREE.Group {
     mount = horse({ light: 0x3a2f6a, marcher: 0x2a2350, heavy: 0xe6e0f6 }[kind as 'light'] ?? 0x3a2f6a);
   } else if (theme === 'necromancer') {
     mount = boneHorse(kind === 'heavy');
+  } else if (theme === 'paladin') {
+    // white and dapple-grey chargers
+    mount = horse({ light: 0xe8e2d6, marcher: 0xc9c0b0, heavy: 0xf4f0e8 }[kind as 'light'] ?? 0xe8e2d6);
   } else {
     mount = horse({ light: C.horse, marcher: 0x4a3222, heavy: 0xd8d0c0 }[kind as 'light'] ?? C.horse);
   }
   mount.rotation.y = -Math.PI / 2;
   g.add(mount);
+  if (theme === 'paladin') {
+    // blue barding with a gold hem for every horse of the Order; the knights' goes down to the hooves
+    g.add(box(0.66, kind === 'heavy' ? 0.62 : 0.34, 1.34, 0x2c56b0, 0, kind === 'heavy' ? 0.55 : 0.85, 0));
+    g.add(box(0.68, 0.07, 1.36, C.gold, 0, kind === 'heavy' ? 0.55 : 0.85, 0));
+  }
   if (kind === 'heavy' && (theme === 'classic' || theme === 'sorcerer')) {
     g.add(box(0.62, 0.3, 1.2, theme === 'sorcerer' ? 0x3c2470 : C.red, 0, 0.8, 0));
     if (theme === 'sorcerer') {
@@ -898,8 +938,10 @@ function rider(kind: TroopModel): THREE.Group {
     g.add(b);
   } else {
     if (theme === 'classic') helmet(man, STEEL);
+    if (theme === 'paladin') { helmet(man, 0xe6eef4); man.add(cone(0.07, 0.3, C.gold, 5, 0, 1.5)); }
     g.add(cyl(0.035, 0.035, 2.4, SHAFT, 5, 0.34, seat + 0.3, 0));
     g.add(tip(0.08, 0.3, 0.34, seat + 2.7, 0));
+    if (theme === 'paladin') g.add(box(0.03, 0.3, 0.5, 0x2c56b0, 0.34, seat + 2.25, 0.22)); // a pennant on the lance
   }
   for (const c of g.children) c.castShadow = true;
   return g;
@@ -978,6 +1020,34 @@ export function troop(kind: TroopModel): THREE.Group {
 export const isRider = (k: TroopModel) => k === 'light' || k === 'marcher' || k === 'heavy' || k === 'paladin';
 
 // ---------- hero themes: landmarks ----------
+
+/** A shrine of the sun: a white column on stepped marble, a golden sun shining on its top (paladin villages). */
+export function sunShrine(r: () => number): THREE.Group {
+  const g = new THREE.Group();
+  g.add(cyl(1.6, 1.7, 0.3, 0xd9d1bd, 8));
+  g.add(cyl(1.15, 1.2, 0.3, 0xece6d6, 8, 0, 0.3));
+  g.add(cyl(0.34, 0.4, 3.6, 0xf6f1e4, 10, 0, 0.6));
+  g.add(cyl(0.52, 0.42, 0.34, C.gold, 10, 0, 4.2));
+  const sun = new THREE.Group();
+  sun.add(mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.14, 16).rotateX(Math.PI / 2), 0xffd35a, { emissive: 0xa0701a }));
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2;
+    const ray = mesh(new THREE.ConeGeometry(0.1, i % 2 ? 0.38 : 0.62, 4), 0xffd35a, { emissive: 0xa0701a });
+    ray.position.set(Math.cos(a) * 0.72, Math.sin(a) * 0.72, 0);
+    ray.rotation.z = a - Math.PI / 2;
+    sun.add(ray);
+  }
+  sun.position.set(0, 5.4, 0);
+  sun.rotation.y = r() * Math.PI;
+  g.add(sun);
+  // roses at its foot
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2 + r();
+    g.add(blob(0.32, 0x3f6a2a, Math.cos(a) * 1.9, 0.2, Math.sin(a) * 1.9, 1, 0.7, 1));
+    g.add(blob(0.12, r() < 0.5 ? 0xe0506a : 0xf0f0f0, Math.cos(a) * 1.9, 0.5, Math.sin(a) * 1.9));
+  }
+  return g;
+}
 
 /** A cluster of glowing arcane crystals on a rune stone (sorcerer villages). */
 export function crystalSpire(): THREE.Group {

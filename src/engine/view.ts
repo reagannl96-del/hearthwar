@@ -7,7 +7,7 @@ import { cancelWindow, playerName, travelTime } from './commands';
 import { commandsOf, commandsTo } from './cmdindex';
 import { HEROES, UNITS } from './data/units';
 import {
-  armyMsPerField, distance, hideCap, merchantCount, storageCap, unitsCount, watchtowerRange,
+  armyMsPerField, distance, hideCap, merchantCount, storageCap, unitsCount, watchtowerRange, sighted,
 } from './formulas';
 import { achievementLevels, questStatus } from './quests';
 import { TRIBE_RIGHTS, applicationsBy, tribeFull, invitesFor, joinedThisWeek, relation, tribeAlerts, tribePoints, unreadThreads } from './tribes';
@@ -78,6 +78,8 @@ export interface CommandView {
   repeat?: boolean;
   cancelUntil?: number;
   detected?: UnitId | null;
+  /** an attack in its last stretch, in plain sight: the kinds of troops coming (never how many) */
+  kinds?: UnitId[];
   origin?: number;
   originName?: string;
   tag?: string;
@@ -226,8 +228,11 @@ export function buildView(w: World, pid: number): PlayerView {
         const cx = from.x + (to.x - from.x) * frac, cy = from.y + (to.y - from.y) * frac;
         if (distance(cx, cy, to.x, to.y) <= watchtowerRange(tower)) detected = slowestUnit(c.units);
       }
+      const kinds = c.kind === 'attack' && sighted(w.now, c.depart, c.arrive)
+        ? (Object.keys(c.units) as UnitId[]).filter((k) => (c.units[k] ?? 0) > 0)
+        : undefined;
       incoming.push({
-        ...base, dir: 'in', detected,
+        ...base, dir: 'in', detected, kinds,
         units: c.kind === 'support' ? { ...c.units } : undefined,
         res: c.kind === 'trade' && c.res ? { ...c.res } : undefined,
       });

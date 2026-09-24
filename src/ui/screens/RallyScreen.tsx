@@ -469,18 +469,21 @@ function CommandsTab() {
 
 interface FarmTemplates { a: Units; b: Units }
 
-function loadTemplates(): FarmTemplates {
+/** Templates saved on this device, or a first guess from the troops this village has. */
+function loadTemplates(v: VillageView): FarmTemplates {
   try {
-    return JSON.parse(lsGet('hw-farm') ?? '') as FarmTemplates;
-  } catch {
-    return { a: { light: 5 }, b: { spear: 20, axe: 10 } };
-  }
+    const t = JSON.parse(lsGet('hw-farm') ?? '') as FarmTemplates;
+    if (t && t.a && t.b) return t;
+  } catch { /* none saved yet */ }
+  const has = (u: UnitId, n: number) => (v.units[u] ?? 0) >= n;
+  const a: Units = has('light', 10) ? { light: 5 } : has('axe', 20) ? { axe: 20 } : has('spear', 20) ? { spear: 15 } : { light: 5 };
+  return { a, b: { spear: 20, axe: 10 } };
 }
 
 function FarmAssistant({ v }: { v: VillageView }) {
   const h = host.value!;
   const pv = view.value!;
-  const [tpl, setTpl] = useState<FarmTemplates>(loadTemplates);
+  const [tpl, setTpl] = useState<FarmTemplates>(() => loadTemplates(v));
   const [radius, setRadius] = useState(12);
   const [hideRed, setHideRed] = useState(true);
   const [edit, setEdit] = useState(false);
@@ -498,6 +501,16 @@ function FarmAssistant({ v }: { v: VillageView }) {
     .map((r) => ({ ...r, info: h.villageInfo(r.m.id, v.id)! }))
     .filter((r) => !(hideRed && r.info.intel?.lastColor === 'red'));
   const canSend = (u: Units) => hasUnits(u) && Object.entries(u).every(([k, n]) => (v.units[k as UnitId] ?? 0) >= (n ?? 0));
+  // how many times a template can go out with the troops at home, and what it is short of when it can't
+  const sendsLeft = (u: Units) => {
+    let n = Infinity;
+    for (const [k, c] of Object.entries(u)) if ((c ?? 0) > 0) n = Math.min(n, Math.floor((v.units[k as UnitId] ?? 0) / c!));
+    return n === Infinity ? 0 : n;
+  };
+  const short = (u: Units) => Object.entries(u)
+    .filter(([k, n]) => (n ?? 0) > (v.units[k as UnitId] ?? 0))
+    .map(([k, n]) => `${unitName(k as UnitId, true)} ${v.units[k as UnitId] ?? 0}/${n}`)
+    .join(', ');
   const send = (vid: number, u: Units, repeat = false) => act({ type: 'send', vid: v.id, target: vid, kind: 'attack', units: u, repeat });
   return (
     <div class="stack">
@@ -518,9 +531,13 @@ function FarmAssistant({ v }: { v: VillageView }) {
               ) : (
                 <span><UnitList units={tpl[k]} empty="empty" /> <span class="muted small">carries {fmt(unitsCarry(tpl[k]))}</span></span>
               )}
+              {!hasUnits(tpl[k]) ? <span class="small muted">Empty: tap Edit to set it up.</span>
+                : canSend(tpl[k]) ? <span class="small good-text">{sendsLeft(tpl[k])} {sendsLeft(tpl[k]) === 1 ? 'send' : 'sends'} possible</span>
+                : <span class="small bad-text">Not enough at home: {short(tpl[k])}</span>}
             </div>
           ))}
         </div>
+        <p class="small farm-home"><span class="muted">At home:</span> <UnitList units={v.units} empty="nobody" /></p>
         <p class="muted small">
           <b>Repeat</b> sends template A again every time the troops come home, as long as the raids come back without losses.
         </p>
@@ -547,9 +564,9 @@ function FarmAssistant({ v }: { v: VillageView }) {
                   const known = it?.res ? it.res.wood + it.res.clay + it.res.iron : undefined;
                   const onWay = busy.has(m.id);
                   return (
-                    <tr>
+                    <tr key={m.id}>
                       <td>{it?.lastColor ? <span class={`dot dot-${it.lastColor}`} title={`last report ${it.lastColor}`} /> : <span class="dot" />}</td>
-                      <td>
+                      <td class="nowrap">
                         <button type="button" class="link" onClick={() => go({ name: 'map', focus: m.id })}>{coords(m.x, m.y)}</button>
                         {m.bonus && <span class="pill" title="Bonus village">bonus</span>}
                         {onWay && <span class="pill" title="Troops are on the way">en route</span>}
@@ -560,7 +577,7 @@ function FarmAssistant({ v }: { v: VillageView }) {
                       <td>{it?.lastAttackT ? <span class="small">{fmtAgo(it.lastAttackT, now.value)}{it.lastLoot !== undefined ? <> · <span class="num">{fmt(it.lastLoot)}</span>{full && <b title="Troops came home full — send more"> full</b>}</> : null}</span> : <span class="muted small">never</span>}</td>
                       <td class="right num">{it?.wall ?? '?'}</td>
                       <td class="right num">{known !== undefined ? fmt(known) : '—'}</td>
-                      <td class="right nowrap">
+                      <td class="right nowrap farm-send">
                         <Btn small disabled={!canSend(tpl.a)} onClick={() => send(m.id, tpl.a)} title="Send template A">A</Btn>{' '}
                         <Btn small disabled={!canSend(tpl.b)} onClick={() => send(m.id, tpl.b)} title="Send template B">B</Btn>{' '}
                         <Btn small variant="ghost" disabled={!canSend(tpl.a)} onClick={() => send(m.id, tpl.a, true)} title="Send A and keep repeating">A↻</Btn>

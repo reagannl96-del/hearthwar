@@ -2,14 +2,14 @@
 
 import * as THREE from 'three';
 import type { BuildingId } from '../../engine/types';
-import { C, bake, box, cone, cyl, darker, getSeason, getTheme, mat, rng, roundTower, seasonal } from './kit';
-import { rock, tree, pumpkin, hayBale, barrel, crate, crystalSpire, greatTree, skullTotem, necroObelisk, gravestone } from './props';
+import { ARC, ARC_EMIT, C, VIO, VIO_EMIT, arcaneLamp, bake, box, cone, cyl, darker, floatingCrystal, floatingIsle, getSeason, getTheme, mat, rng, roundTower, seasonal } from './kit';
+import { rock, tree, pumpkin, hayBale, barrel, crate, crystalSpire, greatTree, skullTotem, necroObelisk, gravestone, sunShrine, banner } from './props';
 import { blob, mesh } from './kit';
 import { distToPaths } from './paths';
 
 export const WALL_R = 44;
 export const GATE_A = Math.PI / 2; // gate faces +Z (towards the viewer)
-const GATE_HALF = 0.12;
+export const GATE_HALF = 0.12;
 
 /**
  * Where each building stands (x, z, rotation y). Worked out so that no two
@@ -246,8 +246,10 @@ export function buildScenery(seed = 11): THREE.Group {
     const inside = Math.hypot(it.x, it.z) < WALL_R;
     const y = inside ? 0 : heightAt(it.x, it.z);
     const theme = getTheme();
+    // the tournament ground (paladin) and the stone circle (sorcerer) outside the gate are kept clear
+    if ((theme === 'paladin' || theme === 'sorcerer') && Math.hypot(it.x - 21, it.z - 57.5) < 13) continue;
     if (inside && theme !== 'classic' && (it.kind === 'oak' || it.kind === 'birch')) {
-      const lm = theme === 'sorcerer' ? crystalSpire() : theme === 'druid' ? greatTree(r) : theme === 'necromancer' ? necroObelisk(r) : skullTotem();
+      const lm = theme === 'paladin' ? sunShrine(r) : theme === 'sorcerer' ? crystalSpire() : theme === 'druid' ? greatTree(r) : theme === 'necromancer' ? necroObelisk(r) : skullTotem();
       if (theme === 'goblin') lm.scale.setScalar(1.5);
       lm.position.set(it.x, 0, it.z);
       lm.rotation.y = r() * Math.PI * 2;
@@ -266,11 +268,134 @@ export function buildScenery(seed = 11): THREE.Group {
     else g.add(crate(it.x, it.z));
   }
   if (getTheme() === 'goblin') addSwamp(g, r);
+  if (getTheme() === 'paladin') addTourney(g, r);
   if (getTheme() === 'sorcerer') addArcane(g, r);
   if (getTheme() === 'druid') addGlade(g, r);
   if (getTheme() === 'necromancer') addGraveyard(g, r);
   if (getSeason() === 'volcanic') addVolcanic(g, r);
   return bake(g);
+}
+
+/**
+ * The Radiant Order's grounds: a tournament field outside the gate (the tilt, two
+ * pavilions and a grandstand under the Order's colours), heraldic banners lining
+ * the road, rose bushes and white waystones in the meadows, and golden motes of
+ * light drifting over it all.
+ */
+function addTourney(g: THREE.Group, r: () => number): void {
+  const ROYAL = 0x2c56b0, WHITE = 0xf3eee2, GOLD = 0xd9a441, CRIMSON = 0xb3261a;
+  const at = (x: number, z: number) => heightAt(x, z);
+  // the lists: a long striped tilt barrier running east-west
+  const cx = 21, cz = 57;
+  for (let i = 0; i <= 14; i++) {
+    const x = cx - 7 + i;
+    g.add(box(0.24, 1.3, 0.24, i % 2 ? ROYAL : WHITE, x, at(x, cz), cz));
+  }
+  for (const y of [0.55, 1.15]) {
+    const rail = box(14.4, 0.14, 0.12, i2c(y), cx, at(cx, cz) + y, cz);
+    g.add(rail);
+  }
+  function i2c(y: number) { return y > 1 ? GOLD : WHITE; }
+  // a pavilion at each end of the lists, striped in the Order's colours and a guest's
+  const pavilion = (x: number, z: number, a: number, b: number) => {
+    const p = new THREE.Group();
+    const n = 12;
+    for (let i = 0; i < n; i++) {
+      const ang = (i / n) * Math.PI * 2;
+      const panel = box(0.95, 2.2, 0.06, i % 2 ? a : b, Math.cos(ang) * 1.7, 0, Math.sin(ang) * 1.7);
+      panel.rotation.y = -ang + Math.PI / 2;
+      p.add(panel);
+    }
+    p.add(cone(2.3, 2.2, a, n, 0, 2.2));
+    p.add(cyl(2.35, 2.35, 0.2, b, n, 0, 2.1));
+    p.add(cyl(0.05, 0.05, 1.3, 0x4a3220, 4, 0, 4.3));
+    const pennant = box(1.0, 0.45, 0.04, a === ROYAL ? GOLD : a, 0.5, 5.2, 0);
+    pennant.userData.flag = true;
+    p.add(pennant);
+    p.add(box(1.0, 1.6, 0.08, 0x2a1d12, 0, 0, 1.72)); // the doorway
+    p.position.set(x, at(x, z), z);
+    g.add(p);
+  };
+  pavilion(cx - 10.5, cz + 0.5, ROYAL, WHITE);
+  pavilion(cx + 10.5, cz - 0.5, CRIMSON, WHITE);
+  // the grandstand on the north side, under a blue and gold canopy
+  const sx = cx, sz = cz - 4.5;
+  const stand = new THREE.Group();
+  for (let i = 0; i < 3; i++) stand.add(box(9, 0.5, 1.2, 0x8a6a48, 0, i * 0.55, -i * 1.1));
+  for (const x of [-4.4, 4.4]) for (const z of [0.4, -2.6]) stand.add(box(0.2, 3.6, 0.2, 0x5b3e28, x, 0, z));
+  for (let i = 0; i < 6; i++) stand.add(box(1.5, 0.12, 3.4, i % 2 ? ROYAL : GOLD, -3.75 + i * 1.5, 3.6, -1.1));
+  for (let i = 0; i < 5; i++) {
+    const fl = box(0.7, 0.9, 0.04, i % 2 ? ROYAL : WHITE, -3.6 + i * 1.8, 2.55, 0.62);
+    stand.add(fl);
+    stand.add(blob(0.12, GOLD, -3.6 + i * 1.8, 2.8, 0.66));
+  }
+  stand.position.set(sx, at(sx, sz), sz);
+  g.add(stand);
+  // lances racked by the lists, a practice quintain, and a mounting block
+  const rack = new THREE.Group();
+  rack.add(box(2.4, 0.14, 0.14, 0x5b3e28, 0, 1.6, 0));
+  for (let i = 0; i < 5; i++) {
+    const l = cyl(0.05, 0.05, 3.4, i % 2 ? ROYAL : WHITE, 5, -1 + i * 0.5, 0, 0);
+    l.rotation.x = -0.18;
+    rack.add(l);
+  }
+  rack.position.set(cx - 5, at(cx - 5, cz + 3.5), cz + 3.5);
+  g.add(rack);
+  const q = new THREE.Group();
+  q.add(cyl(0.12, 0.14, 2.6, 0x5b3e28, 6));
+  q.add(box(1.8, 0.14, 0.14, 0x5b3e28, 0.5, 2.4, 0));
+  q.add(heraldicDisc(ROYAL, GOLD).translateX(1.35).translateY(2.1));
+  q.position.set(cx + 5, at(cx + 5, cz + 4), cz + 4);
+  g.add(q);
+  // banners of the Order lining the road out of the gate
+  for (const z of [51, 60, 69, 78]) for (const x of [-3.9, 3.9]) {
+    const b = banner(ROYAL, 5.2);
+    b.position.set(x, at(x, z), z);
+    b.rotation.y = x < 0 ? -0.2 : 0.2;
+    g.add(b);
+  }
+  // white waystones and rose bushes in the meadows
+  let placed = 0;
+  for (let tries = 0; tries < 700 && placed < 34; tries++) {
+    const a = r() * Math.PI * 2, d = WALL_R + 7 + r() * 72;
+    const x = Math.cos(a) * d, z = Math.sin(a) * d;
+    if (!freeForTree(x, z)) continue;
+    if (Math.hypot(x - cx, z - cz) < 16) continue;
+    const y = at(x, z);
+    if (placed % 4 === 0) {
+      const st = new THREE.Group();
+      st.add(box(0.7, 1.9, 0.4, 0xe4ddcb));
+      st.add(cone(0.42, 0.5, 0xe4ddcb, 4, 0, 1.9).rotateY(Math.PI / 4));
+      st.add(blob(0.14, GOLD, 0, 1.2, 0.22));
+      st.position.set(x, y, z);
+      st.rotation.y = r() * Math.PI;
+      g.add(st);
+    } else {
+      for (let k = 0; k < 3; k++) {
+        const bx = x + (r() - 0.5) * 2, bz = z + (r() - 0.5) * 2;
+        g.add(blob(0.5 + r() * 0.3, 0x3f6a2a, bx, at(bx, bz) + 0.3, bz, 1, 0.75, 1));
+        for (let j = 0; j < 3; j++) g.add(blob(0.13, r() < 0.6 ? 0xe0506a : 0xf6f2ea, bx + (r() - 0.5) * 0.8, at(bx, bz) + 0.62 + r() * 0.2, bz + (r() - 0.5) * 0.8));
+      }
+    }
+    placed++;
+  }
+  // golden motes of light
+  motes(g, r, 44, 0xffe9a0, 0xb08a20, () => {
+    const a = r() * Math.PI * 2, d = 6 + r() * 82;
+    const x = Math.cos(a) * d, z = Math.sin(a) * d;
+    return [x, (Math.hypot(x, z) > WALL_R ? heightAt(x, z) : 0) + 1.5 + r() * 5, z];
+  });
+}
+
+/** A round shield: a coloured field with a gold boss (the quintain's target). */
+function heraldicDisc(field: number, boss: number): THREE.Group {
+  const g = new THREE.Group();
+  const d = cyl(0.55, 0.55, 0.1, field, 12);
+  d.rotation.x = Math.PI / 2;
+  g.add(d);
+  const b = blob(0.18, boss, 0, 0, 0.08);
+  g.add(b);
+  return g;
 }
 
 /** The necromancers' grounds: rows of gravestones, iron fences, open graves, drifting fog and green wisps. */
@@ -433,6 +558,96 @@ function addArcane(g: THREE.Group, r: () => number): void {
     const x = Math.cos(a) * d, z = Math.sin(a) * d;
     return [x, (Math.hypot(x, z) > WALL_R ? heightAt(x, z) : 0) + 1.5 + r() * 4, z];
   });
+  motes(g, r, 24, 0xbff4ff, 0x2a8ab8, () => {
+    const a = r() * Math.PI * 2, d = 8 + r() * 80;
+    const x = Math.cos(a) * d, z = Math.sin(a) * d;
+    return [x, (Math.hypot(x, z) > WALL_R ? heightAt(x, z) : 0) + 2 + r() * 6, z];
+  });
+  addHenge(g, r);
+}
+
+/**
+ * The sorcerers' stone circle outside the gate: standing stones cut with glowing
+ * runes, lintels across some, an altar with a great crystal turning over it and a
+ * pillar of light rising into the sky; a line of glowing ley-stones leads to it from
+ * the road, crystal lamps light the road itself, and isles of rock drift overhead.
+ */
+function addHenge(g: THREE.Group, r: () => number): void {
+  const cx = 21, cz = 58;
+  const at = (x: number, z: number) => heightAt(x, z);
+  const n = 10, R = 6.8;
+  const tops: THREE.Vector3[] = [];
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2;
+    const x = cx + Math.cos(a) * R, z = cz + Math.sin(a) * R;
+    const h = 3.4 + (i % 2) * 0.6;
+    const st = new THREE.Group();
+    st.add(box(1.1, h, 0.7, 0x8f8ca8));
+    for (const side of [-1, 1]) {
+      const rune = mesh(new THREE.BoxGeometry(0.3, 0.9, 0.05), i % 2 ? ARC : VIO, { emissive: i % 2 ? ARC_EMIT : VIO_EMIT });
+      rune.position.set(0, h * 0.55, side * 0.37);
+      st.add(rune);
+    }
+    st.position.set(x, at(x, z) - 0.2, z);
+    st.rotation.y = -a + Math.PI / 2;
+    g.add(st);
+    tops.push(new THREE.Vector3(x, at(x, z) - 0.2 + h, z));
+  }
+  // lintels across every other pair
+  for (let i = 0; i < n; i += 2) {
+    const p = tops[i], q = tops[(i + 1) % n];
+    const len = Math.hypot(q.x - p.x, q.z - p.z) + 1.2;
+    const l = box(len, 0.55, 0.8, 0x8f8ca8, (p.x + q.x) / 2, Math.min(p.y, q.y), (p.z + q.z) / 2);
+    l.rotation.y = -Math.atan2(q.z - p.z, q.x - p.x);
+    g.add(l);
+  }
+  // the altar, a rune circle round it, and the crystal over it
+  const y0 = at(cx, cz);
+  g.add(cyl(1.5, 1.7, 0.9, 0x77779c, 8, cx, y0 - 0.1, cz));
+  g.add(cyl(1.1, 1.2, 0.3, 0xd2d2e8, 8, cx, y0 + 0.8, cz));
+  const ring = mesh(new THREE.TorusGeometry(4.2, 0.09, 4, 40), VIO, { emissive: VIO_EMIT });
+  ring.rotation.x = Math.PI / 2;
+  ring.position.set(cx, y0 + 0.08, cz);
+  g.add(ring);
+  const c = floatingCrystal(1.4);
+  c.position.set(cx, y0 + 3.6, cz);
+  g.add(c);
+  const beam = mesh(new THREE.CylinderGeometry(0.7, 1.1, 40, 14, 1, true).translate(0, 20, 0), 0xcbb8ff, { emissive: 0x6a38d0, opacity: 0.2, double: true });
+  beam.position.set(cx, y0 + 1.1, cz);
+  beam.castShadow = false;
+  g.add(beam);
+  // ley-stones glowing in the grass from the road to the circle
+  const sx = 3.6, sz = 52;
+  const steps = 12;
+  for (let i = 0; i <= steps; i++) {
+    const k = i / steps;
+    const x = sx + (cx - R - 0.8 - sx) * k, z = sz + (cz - sz) * k + Math.sin(k * Math.PI) * 2.5;
+    const ls = mesh(new THREE.BoxGeometry(0.55, 0.12, 0.3), ARC, { emissive: ARC_EMIT });
+    ls.position.set(x, at(x, z) + 0.05, z);
+    ls.rotation.y = r() * Math.PI;
+    ls.castShadow = false;
+    g.add(ls);
+  }
+  // crystal lamps along the road out of the gate
+  for (const z of [51, 60, 69, 78]) for (const x of [-3.9, 3.9]) {
+    const l = arcaneLamp(3.4);
+    l.position.set(x, at(x, z), z);
+    l.rotation.y = x < 0 ? -Math.PI / 2 : Math.PI / 2;
+    g.add(l);
+  }
+  // isles of rock adrift over the meadows
+  let placed = 0;
+  for (let tries = 0; tries < 300 && placed < 6; tries++) {
+    const a = r() * Math.PI * 2, d = WALL_R + 16 + r() * 50;
+    const x = Math.cos(a) * d, z = Math.sin(a) * d;
+    if (Math.hypot(x - cx, z - cz) < 14 || Math.abs(x) < 8 && z > 0) continue;
+    const s = 0.9 + r() * 0.9;
+    const isle = floatingIsle(s, r, s > 1.3 ? tree('pine', r, 0.55) : undefined);
+    isle.position.set(x, at(x, z) + 11 + r() * 9, z);
+    isle.rotation.y = r() * Math.PI * 2;
+    g.add(isle);
+    placed++;
+  }
 }
 
 /** The druids' glade: great oaks, mossy boulders, ferns, mushroom rings, wildflowers and fireflies. */
@@ -566,6 +781,26 @@ export function wallGuardPosts(level: number): { x: number; y: number; z: number
 }
 
 /** The wall ring for a given level. */
+/** A long royal-blue banner hung from the parapet: a gold rod, a gold sun, a swallowtail hem. */
+function wallBanner(h: number, z: number): THREE.Group {
+  const g = new THREE.Group();
+  const bh = h * 0.72;
+  g.add(box(1.25, bh, 0.05, 0x2c56b0, 0, h - bh - 0.05, 0));
+  for (const x of [-0.36, 0.36]) {
+    const tail = cone(0.32, 0.55, 0x2c56b0, 3, x, h - bh - 0.05, 0);
+    tail.rotation.z = Math.PI;
+    tail.scale.z = 0.12;
+    g.add(tail);
+  }
+  g.add(box(1.25, 0.09, 0.07, 0xd9a441, 0, h - bh * 0.3, 0));
+  g.add(box(1.45, 0.1, 0.12, 0xd9a441, 0, h - 0.08, 0));
+  const sun = mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.04, 12).rotateX(Math.PI / 2), 0xffd35a, { emissive: 0x6a4a10 });
+  sun.position.set(0, h - bh * 0.55, Math.sign(z) * 0.04);
+  g.add(sun);
+  g.position.z = z;
+  return g;
+}
+
 export function buildWall(level: number, color: number): THREE.Group {
   const g = new THREE.Group();
   if (level <= 0) return g;
@@ -617,11 +852,33 @@ export function buildWall(level: number, color: number): THREE.Group {
       seg.add(box(0.6, 0.7, 0.45, C.stone, -len / 2 + (k + 0.5) * (len / merlons), h + 0.3, thick / 2 - 0.1));
       seg.add(box(0.6, 0.7, 0.45, C.stone, -len / 2 + (k + 0.5) * (len / merlons), h + 0.3, -thick / 2 + 0.1));
     }
+    if (getTheme() === 'paladin') {
+      // a gilt coping along the parapet, and every third stretch of wall hung with the Order's banner, both faces
+      seg.add(box(len, 0.08, thick + 0.26, C.gold, 0, h + 0.29, 0));
+      if (i % 3 === 1) for (const side of [-1, 1]) seg.add(wallBanner(h, side * (thick / 2 + 0.04)));
+    }
+    if (getTheme() === 'sorcerer') {
+      // a coping that glows faintly, rune plates set in both faces, and crystals hovering over the parapet here and there
+      seg.add(mesh(new THREE.BoxGeometry(len, 0.08, thick + 0.26).translate(0, h + 0.33, 0), 0xc9b8f0, { emissive: 0x3a2080 }));
+      if (i % 3 === 1) for (const side of [-1, 1]) {
+        const plate = mesh(new THREE.BoxGeometry(0.62, 0.9, 0.06), VIO, { emissive: VIO_EMIT });
+        plate.position.set(0, h * 0.52, side * (thick / 2 + 0.03));
+        seg.add(plate);
+        const bar = mesh(new THREE.BoxGeometry(0.1, 0.62, 0.08), ARC, { emissive: ARC_EMIT });
+        bar.position.set(0, h * 0.52, side * (thick / 2 + 0.06));
+        seg.add(bar);
+      }
+      if (i % 5 === 2) {
+        const c = floatingCrystal(0.5);
+        c.position.set(0, h + 1.9, 0);
+        seg.add(c);
+      }
+    }
     if (getTheme() === 'goblin') {
-      // sharpened stakes bristling outward from the battlements
+      // sharpened stakes bristling outward from the battlements (local -z faces out of the village)
       for (let k = 0; k < merlons; k++) {
-        const st = cone(0.13, 1.3, C.timber, 4, -len / 2 + (k + 0.5) * (len / merlons), h - 0.4, thick / 2 + 0.2);
-        st.rotation.x = 1.25;
+        const st = cone(0.13, 1.3, C.timber, 4, -len / 2 + (k + 0.5) * (len / merlons), h - 0.4, -thick / 2 - 0.2);
+        st.rotation.x = -1.25;
         seg.add(st);
       }
     }

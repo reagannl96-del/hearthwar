@@ -3,7 +3,10 @@
 
 import * as THREE from 'three';
 import type { BuildingId } from '../../engine/types';
-import { C, blob, box, cone, cyl, darker, getTheme, house, mesh, rng, roundTower, type Theme } from './kit';
+import {
+  ARC, ARC_EMIT, C, GLASS, STAR, STAR_EMIT, VIO, VIO_EMIT, arcaneLamp, blob, box, cone, cyl, darker, extrude, floatingCrystal, floatingIsle,
+  getTheme, heraldry, house, lancet, mesh, orbitRing, rng, roundTower, runeRing, witchHat, type Theme,
+} from './kit';
 import {
   anvil, banner, barrel, hqCrown, campfire, cart, catapult, crate, dummy, fence, hayBale, horse, logPile, pumpkin, ram, rock,
   stall, stump, tree, weaponRack, wheatField, windmill,
@@ -46,6 +49,8 @@ function baseModel(id: BuildingId, t: number, color: number): Built {
   switch (id) {
     case 'main': {
       const th = getTheme();
+      if (th === 'paladin') return paladinHall(t);
+      if (th === 'sorcerer') return sorcererHall(t);
       if (th === 'druid') return druidHall(t);
       if (th === 'goblin') return goblinHall(t);
       return crowned(mainHall(t, color), t);
@@ -72,7 +77,7 @@ function baseModel(id: BuildingId, t: number, color: number): Built {
 /** In a hero's village the headquarters wears that hero's crown on its roof. */
 function crowned(b: Built, t: number): Built {
   const theme = getTheme();
-  if (theme === 'classic') return b;
+  if (theme === 'classic' || theme === 'paladin') return b;
   const top = [0, 5.0, 6.4, 7.3, 10.2, 11.4][t];
   const size = [0, 0.75, 0.85, 0.95, 1.2, 1.3][t];
   const c = hqCrown(theme, rng(t * 7 + 3));
@@ -524,6 +529,455 @@ function farm(t: number, r: () => number): Built {
 const MOSS = 0x5e7d32, MOSS_DK = 0x445c24, BARK = 0x5a3f28, BARK_DK = 0x3f2c1c, LEAF = 0x4f7a2e, LEAF_LT = 0x6f9a3a, MENHIR = 0x8e9a80;
 
 /** A round window that glows at night. */
+// ---------- the Radiant Order: the paladin's headquarters grows from a chapel into a cathedral ----------
+
+const ROYAL = 0x2c56b0, SUNGOLD = 0xffd35a, SUN_EMIT = 0x8a5a10;
+
+/** A golden bell hanging in a belfry. */
+function bell(s = 1): THREE.Group {
+  const g = new THREE.Group();
+  g.add(cone(0.42 * s, 0.7 * s, C.gold, 10, 0, -0.7 * s));
+  g.add(cyl(0.46 * s, 0.46 * s, 0.1 * s, C.gold, 10, 0, -0.75 * s));
+  g.add(blob(0.1 * s, C.gold, 0, -0.85 * s, 0));
+  return g;
+}
+
+/** A square tower with an open belfry, a steep four-sided blue spire and gilded finial. */
+function steeple(w: number, h: number, spire: number, withBell = true): THREE.Group {
+  const g = new THREE.Group();
+  g.add(box(w, h, w, C.stoneLight));
+  g.add(box(w + 0.3, 0.35, w + 0.3, C.stone, 0, h * 0.62, 0));
+  // belfry: four corner piers and a gold rail, the bell in the middle
+  const bh = Math.max(1.8, w * 0.9);
+  for (const x of [-1, 1]) for (const z of [-1, 1]) g.add(box(w * 0.22, bh, w * 0.22, C.stoneLight, x * w * 0.39, h, z * w * 0.39));
+  g.add(box(w + 0.2, 0.3, w + 0.2, C.stone, 0, h + bh, 0));
+  g.add(box(w + 0.24, 0.1, w + 0.24, C.gold, 0, h + bh + 0.3, 0));
+  if (withBell) { const b = bell(w * 0.34); b.position.set(0, h + bh - 0.1, 0); g.add(b); }
+  // lancets on the tower faces
+  for (let i = 0; i < 4; i++) {
+    const a = (i * Math.PI) / 2;
+    const l = lancet(0, 0, 0, w * 0.22, w * 0.45, i);
+    l.position.set(Math.sin(a) * (w / 2 + 0.02), h * 0.35, Math.cos(a) * (w / 2 + 0.02));
+    l.rotation.y = a;
+    g.add(l);
+  }
+  const sp = cone(w * 0.78, spire, C.tile, 4, 0, h + bh + 0.35);
+  sp.rotation.y = Math.PI / 4;
+  g.add(sp);
+  g.add(cyl(0.08, 0.08, 1.4, C.gold, 5, 0, h + bh + 0.3 + spire - 0.3));
+  g.add(blob(0.2, C.gold, 0, h + bh + spire + 0.7, 0));
+  return g;
+}
+
+/** The great rose window: a wheel of stained glass in a gilded frame, facing +Z. */
+function roseWindow(r: number): THREE.Group {
+  const g = new THREE.Group();
+  const disc = (rad: number, c: number, e: number, z: number) => {
+    const m = mesh(new THREE.CylinderGeometry(rad, rad, 0.1, 16).rotateX(Math.PI / 2), c, { emissive: e });
+    m.position.z = z;
+    g.add(m);
+  };
+  disc(r + 0.18, C.stoneLight, 0x000000, -0.04);
+  disc(r, GLASS[0].c, GLASS[0].e, 0);
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    const petal = mesh(new THREE.CylinderGeometry(r * 0.24, r * 0.24, 0.12, 8).rotateX(Math.PI / 2), GLASS[1 + (i % 3)].c, { emissive: GLASS[1 + (i % 3)].e });
+    petal.position.set(Math.cos(a) * r * 0.62, Math.sin(a) * r * 0.62, 0.02);
+    g.add(petal);
+    const spoke = box(0.07, r, 0.08, C.gold, 0, 0, 0.07);
+    spoke.geometry.translate(0, 0, 0);
+    spoke.rotation.z = a;
+    g.add(spoke);
+  }
+  disc(r * 0.26, SUNGOLD, SUN_EMIT, 0.05);
+  const ring = mesh(new THREE.TorusGeometry(r, 0.09, 5, 24), C.gold);
+  ring.position.z = 0.06;
+  g.add(ring);
+  return g;
+}
+
+/** A golden sun with rays, turning slowly (for the top of the great spire). */
+function sunDisc(r: number): THREE.Group {
+  const g = new THREE.Group();
+  g.add(mesh(new THREE.CylinderGeometry(r * 0.45, r * 0.45, 0.14, 16).rotateX(Math.PI / 2), SUNGOLD, { emissive: SUN_EMIT }));
+  g.add(mesh(new THREE.TorusGeometry(r * 0.6, r * 0.06, 5, 20), C.gold));
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2;
+    const ray = mesh(new THREE.ConeGeometry(r * 0.11, r * (i % 2 ? 0.45 : 0.7), 4), SUNGOLD, { emissive: SUN_EMIT });
+    ray.position.set(Math.cos(a) * r * 0.85, Math.sin(a) * r * 0.85, 0);
+    ray.rotation.z = a - Math.PI / 2;
+    g.add(ray);
+  }
+  g.userData.dynamic = true;
+  g.userData.spin = true;
+  return g;
+}
+
+/** A little flight of white doves wheeling round a spire, their wings beating. */
+function doves(n: number, r: number, y: number, seed: number): THREE.Group {
+  const g = new THREE.Group();
+  const rand = rng(seed);
+  for (let i = 0; i < n; i++) {
+    const d = new THREE.Group();
+    d.add(blob(0.2, 0xfbfaf6, 0, 0, 0, 0.8, 0.75, 1.5));
+    d.add(blob(0.12, 0xfbfaf6, 0, 0.1, 0.3));
+    d.add(cone(0.035, 0.1, 0xe0a040, 4, 0, 0.08, 0.44).rotateX(Math.PI / 2));
+    d.add(box(0.2, 0.04, 0.26, 0xf0eee8, 0, 0, -0.32));
+    for (const side of [-1, 1]) {
+      const wing = new THREE.Group();
+      wing.add(box(0.5, 0.03, 0.26, 0xfbfaf6, side * 0.25, 0, 0));
+      wing.position.set(side * 0.1, 0.04, 0);
+      wing.userData.flap = side;
+      d.add(wing);
+    }
+    const a = (i / n) * Math.PI * 2 + rand() * 0.5;
+    const rr = r * (0.8 + rand() * 0.4);
+    d.position.set(Math.cos(a) * rr, y + (rand() - 0.5) * 1.6, Math.sin(a) * rr);
+    // flying round the circle (anticlockwise seen from above), banked into the turn
+    d.rotation.set(0, -a, 0.35);
+    g.add(d);
+  }
+  g.userData.dynamic = true;
+  g.userData.orbit = -0.45; // (the way they face)
+  return g;
+}
+
+/** A gilded knight: sword raised, the Order's shield on his arm. */
+function knightStatue(s = 1): THREE.Group {
+  const g = new THREE.Group();
+  const gilt = 0xd9a441;
+  g.add(box(0.5, 0.55, 0.3, gilt, 0, 0, 0));
+  g.add(cyl(0.3, 0.36, 0.8, gilt, 7, 0, 0.5));
+  g.add(cyl(0.22, 0.24, 0.36, gilt, 7, 0, 1.3));
+  g.add(cone(0.1, 0.35, ROYAL, 5, 0, 1.64));
+  const arm = box(0.14, 0.7, 0.14, gilt, 0.38, 1.05, 0);
+  arm.rotation.z = -0.35;
+  g.add(arm);
+  const blade = mesh(new THREE.BoxGeometry(0.08, 1.5, 0.03).translate(0, 0.75, 0), 0xfff4d0, { emissive: 0xc09030 });
+  blade.position.set(0.55, 1.7, 0);
+  g.add(blade);
+  g.add(box(0.36, 0.07, 0.07, gilt, 0.55, 1.66, 0));
+  const sh = heraldry(0.5);
+  sh.position.set(-0.36, 0.95, 0.12);
+  sh.rotation.y = -0.4;
+  g.add(sh);
+  g.scale.setScalar(s);
+  return g;
+}
+
+function paladinHall(t: number): Built {
+  const g = new THREE.Group();
+  if (t === 1) {
+    // a white chapel with a little belfry
+    g.add(house({ w: 5.6, d: 7.4, h: 2.9, roofH: 2.1, windows: 2 }));
+    const b = steeple(1.7, 4.2, 2.4);
+    b.position.set(-3.6, 0, 2.2);
+    g.add(b);
+    const bn = banner(ROYAL, 4.4);
+    bn.position.set(3.6, 0, 3.2);
+    g.add(bn);
+    return { obj: g, h: 9.5, w: 9, d: 9 };
+  }
+  if (t === 2) {
+    // a church: a longer nave and a steeple over the door
+    g.add(house({ w: 7, d: 9.6, h: 3.6, roofH: 2.6, windows: 3, stone: true }));
+    const st = steeple(2.5, 6.4, 4.8);
+    st.position.set(0, 0, 5.3);
+    g.add(st);
+    const side = house({ w: 3.8, d: 4.2, h: 2.8, roofH: 1.8, windows: 1, door: false });
+    side.position.set(5.2, 0, -1.2);
+    side.rotation.y = Math.PI / 2;
+    g.add(side);
+    return { obj: g, h: 17, w: 13, d: 13 };
+  }
+  const grand = t >= 4;
+  const k = t === 5 ? 1.06 : 1;
+  const c = new THREE.Group();
+  // the nave
+  const W = 8, D = 11.5, H = 5, RH = 3.2;
+  c.add(house({ w: W, d: D, h: H, roofH: RH, windows: 0, stone: true, door: false }));
+  // tall windows down both sides, between flying buttresses
+  for (const side of [-1, 1]) {
+    for (let i = 0; i < 3; i++) {
+      const z = -D / 2 + 2 + i * 3.4;
+      const l = lancet(0, 0, 0, 0.6, 2.2, i + (side > 0 ? 1 : 0));
+      l.position.set(side * (W / 2 + 0.03), 1.4, z + 1.7);
+      l.rotation.y = side * Math.PI / 2;
+      c.add(l);
+      // a pier and the arch leaning in to the wall
+      c.add(box(0.7, 3.8, 0.7, C.stone, side * (W / 2 + 1.6), 0, z));
+      c.add(cone(0.36, 0.9, C.tile, 4, side * (W / 2 + 1.6), 3.8, z).rotateY(Math.PI / 4));
+      const strut = box(0.4, 2.2, 0.4, C.stone, 0, 0, 0);
+      strut.position.set(side * (W / 2 + 0.8), 3.1, z);
+      strut.rotation.z = side * 0.95;
+      c.add(strut);
+    }
+  }
+  // the west front: twin towers, a great door and the rose window
+  for (const x of [-1, 1]) {
+    const tw = steeple(2.6, 8.4, 6.2, x < 0);
+    tw.position.set(x * 4.4, 0, D / 2 - 0.9);
+    c.add(tw);
+  }
+  c.add(box(W, H + RH * 1.35 * 0.55, 0.5, C.stoneLight, 0, 0, D / 2 + 0.05));
+  const rose = roseWindow(1.35);
+  rose.position.set(0, H + 0.9, D / 2 + 0.34);
+  c.add(rose);
+  // the great door: an arch of gold-banded oak under a carved lintel
+  c.add(box(2.6, 3.6, 0.3, C.stone, 0, 0, D / 2 + 0.28));
+  c.add(box(2.0, 3.0, 0.3, C.door, 0, 0, D / 2 + 0.36));
+  for (const y of [0.9, 2.1]) c.add(box(1.9, 0.09, 0.08, C.gold, 0, y, D / 2 + 0.53));
+  const arms = heraldry(0.9);
+  arms.position.set(0, 3.7, D / 2 + 0.46);
+  c.add(arms);
+  c.add(box(3.4, 0.35, 1.0, C.stoneDark, 0, 0, D / 2 + 0.8));
+  // the apse behind, round under a blue cone
+  c.add(cyl(2.3, 2.4, H - 0.4, C.stoneLight, 12, 0, 0, -D / 2));
+  c.add(cone(2.7, 2.6, C.tile, 12, 0, H - 0.4, -D / 2));
+  for (let i = 0; i < 3; i++) {
+    const a = Math.PI + (i - 1) * 0.7;
+    const l = lancet(0, 0, 0, 0.45, 1.8, i);
+    l.position.set(Math.sin(a) * 2.42, 1.3, -D / 2 + Math.cos(a) * 2.42);
+    l.rotation.y = a;
+    c.add(l);
+  }
+  if (!grand) {
+    // a slender gilded flèche over the crossing
+    c.add(cyl(0.5, 0.6, 1.4, C.stoneLight, 8, 0, H + RH * 1.35 - 0.4, 0));
+    c.add(cone(0.65, 4.2, C.tile, 8, 0, H + RH * 1.35 + 1.0, 0));
+    c.add(blob(0.2, C.gold, 0, H + RH * 1.35 + 5.4, 0));
+    c.add(doves(5, 4.2, H + RH * 1.35 + 3.4, 31));
+    c.scale.setScalar(k);
+    g.add(c);
+    return { obj: g, h: 19, w: 14, d: 15 };
+  }
+  // the grand cathedral: a lantern tower over the crossing, a soaring spire, a golden sun that turns
+  const top = H + RH * 1.35;
+  c.add(box(3.4, 3.2, 3.4, C.stoneLight, 0, top - 0.8, 0));
+  c.add(box(3.8, 0.3, 3.8, C.gold, 0, top + 2.4, 0));
+  for (let i = 0; i < 4; i++) {
+    const a = (i * Math.PI) / 2;
+    const l = lancet(0, 0, 0, 0.5, 1.5, i);
+    l.position.set(Math.sin(a) * 1.72, top - 0.2, Math.cos(a) * 1.72);
+    l.rotation.y = a;
+    c.add(l);
+    // pinnacles at the corners of the lantern
+    const px = (i % 2 ? 1 : -1) * 1.7, pz = (i < 2 ? 1 : -1) * 1.7;
+    c.add(cone(0.28, 1.6, C.stoneLight, 4, px, top + 2.6, pz));
+    c.add(blob(0.12, C.gold, px, top + 4.2, pz));
+  }
+  const spire = cone(1.9, 8.5, C.tile, 8, 0, top + 2.7);
+  c.add(spire);
+  for (const y of [top + 4.2, top + 6.6]) c.add(cyl(1.9 * (1 - (y - top - 2.7) / 8.5) + 0.05, 1.9 * (1 - (y - top - 2.7) / 8.5) + 0.05, 0.14, C.gold, 8, 0, y));
+  const sun = sunDisc(t === 5 ? 1.7 : 1.35);
+  sun.position.set(0, top + 12.3, 0);
+  c.add(sun);
+  c.add(cyl(0.09, 0.09, 1.6, C.gold, 5, 0, top + 10.6));
+  c.add(doves(t === 5 ? 9 : 7, 5.4, top + 7.6, 17));
+  if (t === 5) {
+    // gilded knights keep the door, and the spires fly the Order's banners
+    for (const x of [-1, 1]) {
+      c.add(box(0.9, 1.0, 0.9, C.stone, x * 2.1, 0, D / 2 + 0.8));
+      const kn = knightStatue(1.1);
+      kn.position.set(x * 2.1, 1.0, D / 2 + 0.8);
+      c.add(kn);
+    }
+    for (const x of [-1, 1]) {
+      const b = banner(ROYAL, 3.2);
+      b.position.set(x * 4.4, 8.4 + 1.8 + 0.4, D / 2 - 0.9 + 1.5);
+      c.add(b);
+    }
+  }
+  c.scale.setScalar(k);
+  g.add(c);
+  return { obj: g, h: t === 5 ? 28 : 26, w: 15, d: 16 };
+}
+
+// ---------- the Arcane citadel (sorcerer headquarters) ----------
+
+/** A tall arched window, lit from within, facing +Z. */
+function archWindow(w: number, h: number): THREE.Group {
+  const g = new THREE.Group();
+  g.add(box(w + 0.18, h + 0.12, 0.1, C.stoneLight, 0, -0.06, -0.03));
+  const pane = box(w, h - w / 2, 0.12, C.window);
+  pane.userData.window = true;
+  g.add(pane);
+  const arch = mesh(new THREE.CylinderGeometry(w / 2, w / 2, 0.12, 10, 1, false, 0, Math.PI).rotateX(Math.PI / 2).rotateZ(Math.PI / 2), C.window);
+  arch.position.y = h - w / 2;
+  arch.userData.window = true;
+  g.add(arch);
+  return g;
+}
+
+/** A mage's tower: a slate plinth, tapering stone banded with runes, lit windows, a railed balcony and a crooked hat. */
+function mageTower(R: number, H: number, hat = true): THREE.Group {
+  const g = new THREE.Group();
+  g.add(cyl(R * 1.14, R * 1.2, 0.8, C.stoneDark, 12));
+  g.add(cyl(R * 0.84, R, H, C.stone, 12));
+  g.add(runeRing(R * 0.97, H * 0.24));
+  g.add(runeRing(R * 0.9, H * 0.56, VIO, VIO_EMIT));
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+    for (const k of [0.38, 0.66]) {
+      const rr = R * (1 - k * 0.16) + 0.02;
+      const w = archWindow(Math.min(0.5, R * 0.22), Math.min(1.1, R * 0.5));
+      w.position.set(Math.sin(a) * rr, H * k, Math.cos(a) * rr);
+      w.rotation.y = a;
+      g.add(w);
+    }
+  }
+  // a railed balcony near the top
+  const by = H * 0.8, br = R * (1 - 0.8 * 0.16) + 0.45;
+  g.add(cyl(br, br - 0.15, 0.3, C.stoneLight, 14, 0, by));
+  for (let i = 0; i < 14; i++) {
+    const a = (i / 14) * Math.PI * 2;
+    g.add(box(0.1, 0.62, 0.1, C.stoneLight, Math.cos(a) * (br - 0.08), by + 0.3, Math.sin(a) * (br - 0.08)));
+  }
+  g.add(mesh(new THREE.TorusGeometry(br - 0.08, 0.05, 4, 28).rotateX(Math.PI / 2), C.gold).translateY(by + 0.92));
+  g.add(cyl(R * 0.98, R * 0.84, 0.5, C.stoneLight, 12, 0, H - 0.45));
+  if (hat) {
+    const h = witchHat(R * 0.96, R * 2.7, C.tile, 0.5);
+    h.position.y = H;
+    g.add(h);
+  }
+  return g;
+}
+
+/** An observatory: a starry dome on a gold ring, its slit open and a brass telescope aimed at the sky. */
+function observatory(r: number): THREE.Group {
+  const g = new THREE.Group();
+  g.add(cyl(r * 1.06, r * 1.06, 0.22, C.gold, 14));
+  g.add(mesh(new THREE.SphereGeometry(r, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), 0x2d2a78).translateY(0.2));
+  for (let i = 0; i < 10; i++) {
+    const a = i * 2.3, el = 0.25 + (i % 3) * 0.38;
+    const st = mesh(new THREE.OctahedronGeometry(0.09, 0), STAR, { emissive: STAR_EMIT });
+    st.position.set(Math.cos(a) * Math.cos(el) * r * 1.01, 0.2 + Math.sin(el) * r * 1.01, Math.sin(a) * Math.cos(el) * r * 1.01);
+    g.add(st);
+  }
+  const slit = box(0.5, r * 0.95, 0.3, 0x141028, 0, 0.2 + r * 0.05, r * 0.78);
+  slit.rotation.x = -0.55;
+  g.add(slit);
+  const tel = cyl(0.14, 0.22, r * 1.7, 0xd9a441, 8);
+  tel.rotation.x = 0.75;
+  tel.position.set(0, 0.2 + r * 0.5, r * 0.2);
+  g.add(tel);
+  return g;
+}
+
+/** A bridge of pale stone between two towers (at height y), a glowing rune strip along it. */
+function skyBridge(ax: number, az: number, bx: number, bz: number, y: number): THREE.Group {
+  const g = new THREE.Group();
+  const len = Math.hypot(bx - ax, bz - az);
+  g.add(box(len, 0.45, 1.1, C.stoneLight, 0, 0, 0));
+  g.add(mesh(new THREE.BoxGeometry(len, 0.06, 0.2).translate(0, 0.48, 0), ARC, { emissive: ARC_EMIT }));
+  for (const z of [-0.5, 0.5]) g.add(box(len, 0.5, 0.1, C.stone, 0, 0.45, z));
+  g.position.set((ax + bx) / 2, y, (az + bz) / 2);
+  g.rotation.y = -Math.atan2(bz - az, bx - ax);
+  return g;
+}
+
+function sorcererHall(t: number): Built {
+  const g = new THREE.Group();
+  if (t === 1) {
+    // a lone mage's tower with a study leaning on it
+    const tw = mageTower(2.0, 8.5);
+    tw.position.set(-1.3, 0, -0.9);
+    g.add(tw);
+    const annex = house({ w: 4.4, d: 4.6, h: 2.8, roofH: 1.6, windows: 1 });
+    annex.position.set(2.6, 0, 1.2);
+    g.add(annex);
+    const c = floatingCrystal(0.9);
+    c.position.set(-1.3, 8.5 + 2.0 * 2.7 + 1.8, -0.9);
+    g.add(c);
+    return { obj: g, h: 15, w: 9, d: 9 };
+  }
+  if (t === 2) {
+    // the tower grows, and a hall of study and a little turret join it
+    const tw = mageTower(2.3, 10.5);
+    tw.position.set(-1.6, 0, -1.6);
+    g.add(tw);
+    const hall = house({ w: 6.2, d: 5, h: 3.2, roofH: 2.0, windows: 2, stone: true });
+    hall.position.set(1.4, 0, 2.2);
+    g.add(hall);
+    const small = mageTower(1.1, 6.2);
+    small.position.set(4.4, 0, -1.8);
+    g.add(small);
+    const c = floatingCrystal(1.0);
+    c.position.set(-1.6, 10.5 + 2.3 * 2.7 + 2.0, -1.6);
+    g.add(c);
+    return { obj: g, h: 19, w: 12, d: 12 };
+  }
+  // the college: a great tower behind a hall, twin towers at its front corners (one an observatory)
+  const H = t === 3 ? 12.5 : t === 4 ? 15 : 17;
+  const R = t === 3 ? 2.5 : 2.8;
+  const main = mageTower(R, H);
+  main.position.set(0, 0, -3.2);
+  g.add(main);
+  const hall = house({ w: 7.6, d: 5.2, h: 3.8, roofH: 2.2, windows: 3, stone: true });
+  hall.position.set(0, 0, 2.0);
+  g.add(hall);
+  const left = mageTower(1.3, 7.8);
+  left.position.set(-4.6, 0, 3.4);
+  g.add(left);
+  const right = mageTower(1.3, 7.2, false);
+  right.position.set(4.6, 0, 3.4);
+  g.add(right);
+  const obs = observatory(1.45);
+  obs.position.set(4.6, 7.2, 3.4);
+  g.add(obs);
+  const rc = runeCircle(1.2);
+  rc.position.set(0, 0, 5.4);
+  g.add(rc);
+  const topY = H + R * 2.7;
+  const c = floatingCrystal(t === 5 ? 1.6 : 1.3);
+  c.position.set(0, topY + 2.4, -3.2);
+  g.add(c);
+  if (t >= 4) {
+    // rings of runes wheel about the great tower
+    const r1 = orbitRing(R * 1.9, 0.35, 0.4);
+    r1.position.set(0, H * 0.62, -3.2);
+    g.add(r1);
+    const r2 = orbitRing(R * 2.25, -0.45, -0.28, VIO, VIO_EMIT);
+    r2.position.set(0, H * 0.42, -3.2);
+    g.add(r2);
+    // and two back towers stand bridged to it
+    for (const x of [-1, 1]) {
+      const bt = mageTower(1.1, 9.5);
+      bt.position.set(x * 4.4, 0, -6.2);
+      g.add(bt);
+      g.add(skyBridge(x * 4.4, -6.2, 0, -3.2, 6.4));
+    }
+  }
+  if (t === 5) {
+    // a crown of shards turns over the spire, and isles of rock drift about the citadel
+    const crown = new THREE.Group();
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2;
+      const sh = mesh(new THREE.OctahedronGeometry(0.4, 0), i % 2 ? ARC : VIO, { emissive: i % 2 ? ARC_EMIT : VIO_EMIT });
+      sh.scale.set(1, 2.2, 1);
+      sh.position.set(Math.cos(a) * 2.4, 0, Math.sin(a) * 2.4);
+      crown.add(sh);
+    }
+    crown.userData.dynamic = true;
+    crown.userData.orbit = -0.6;
+    crown.position.set(0, topY + 2.4, -3.2);
+    g.add(crown);
+    const rr = rng(71);
+    for (const [x, y, z, sc] of [[-6.2, 12.5, -1.5, 0.6], [6.3, 14, -5.2, 0.5], [-3.8, 16.5, -7.4, 0.42]]) {
+      const isle = floatingIsle(sc, rr);
+      isle.position.set(x, y, z);
+      g.add(isle);
+    }
+    // the Order of the Star's banners on the twin towers
+    for (const x of [-1, 1]) {
+      const bn = banner(C.red, 2.6);
+      bn.position.set(x * 4.6, 7.8 + (x < 0 ? 2.6 * 1.3 + 0.2 : 1.8), 3.4);
+      if (x < 0) g.add(bn);
+    }
+  }
+  return { obj: g, h: t === 3 ? 22 : t === 4 ? 25 : 28, w: 15, d: 16 };
+}
+
 function glowWindow(x: number, y: number, z: number, ry = 0): THREE.Group {
   const g = new THREE.Group();
   const w = cyl(0.32, 0.32, 0.12, C.window, 8);
@@ -852,9 +1306,45 @@ function antlerPole(h: number): THREE.Group {
   return g;
 }
 
+/** A white post carrying the Order's shield, with a lantern: the paladin's mark at a doorstep. */
+function shieldPost(h: number): THREE.Group {
+  const g = new THREE.Group();
+  g.add(box(0.28, h, 0.28, C.stoneLight));
+  g.add(box(0.4, 0.2, 0.4, C.gold, 0, h, 0));
+  const arms = heraldry(0.62);
+  arms.position.set(0, h * 0.62, 0.2);
+  g.add(arms);
+  const lamp = glowBit(new THREE.BoxGeometry(0.26, 0.34, 0.26), 0xffe3a0, 0xb07a20);
+  lamp.position.set(0, h + 0.4, 0);
+  g.add(lamp);
+  g.add(cone(0.24, 0.3, C.tile, 4, 0, h + 0.58, 0));
+  return g;
+}
+
+/** A sun standard for the rally point: a golden sun that turns above blue pennants. */
+function sunStandard(h: number): THREE.Group {
+  const g = new THREE.Group();
+  g.add(cyl(0.09, 0.11, h, C.stoneLight, 6));
+  g.add(cyl(0.2, 0.2, 0.2, C.gold, 6, 0, h * 0.7));
+  const sun = sunDisc(0.9);
+  sun.position.set(0, h + 0.6, 0);
+  g.add(sun);
+  for (const s of [-1, 1]) {
+    const p = box(0.9, 0.45, 0.04, 0x2c56b0, s * 0.5, h * 0.75, 0);
+    p.userData.flag = true;
+    g.add(p);
+  }
+  return g;
+}
+
 /** Horns, antlers or spikes for the mounts at the stable, by theme. */
 function dressMount(hg: THREE.Object3D, theme: Theme): void {
-  if (theme === 'sorcerer') {
+  if (theme === 'paladin') {
+    // blue barding with a gold hem, and a white plume on the chanfron
+    hg.add(box(1.7, 0.42, 0.62, 0x2c56b0, 0, 0.72, 0));
+    hg.add(box(1.72, 0.08, 0.64, C.gold, 0, 0.7, 0));
+    hg.add(blob(0.16, 0xffffff, 1.1, 2.1, 0, 0.8, 1.4, 0.8));
+  } else if (theme === 'sorcerer') {
     const horn = cone(0.07, 0.55, C.gold, 5, 1.32, 1.95, 0);
     horn.rotation.z = -1.1;
     hg.add(horn);
@@ -889,9 +1379,17 @@ function themedWatchtower(t: number, theme: Theme): Built {
     g.add(box(0.1, 0.8, 0.1, C.timber, Math.cos(a) * 1.65, py + 0.2, Math.sin(a) * 1.65));
   }
   if (theme === 'sorcerer') {
-    const orb = glowBit(new THREE.IcosahedronGeometry(0.45, 1));
-    orb.position.set(0, py + 1.2, 0);
-    g.add(orb);
+    // an armillary sphere of gold rings turns round the crystal over the tower
+    const arm = new THREE.Group();
+    for (const [rx, rz] of [[0, 0], [Math.PI / 2, 0], [Math.PI / 2, Math.PI / 3], [Math.PI / 2, -Math.PI / 3]]) {
+      const ring = mesh(new THREE.TorusGeometry(1.2, 0.05, 4, 28), C.gold);
+      ring.rotation.set(rx, 0, rz);
+      arm.add(ring);
+    }
+    arm.userData.dynamic = true;
+    arm.userData.orbit = 0.5;
+    arm.position.set(0, h * 1.12 + 1.35 * 1.5, 0);
+    g.add(arm);
   }
   if (theme === 'goblin') {
     const sk = skull(0.9);
@@ -903,6 +1401,22 @@ function themedWatchtower(t: number, theme: Theme): Built {
     fire.position.set(0, py + 1.0, 0);
     g.add(fire, cyl(0.55, 0.35, 0.5, 0x2e2a33, 6, 0, py + 0.2, 0));
   }
+  if (theme === 'paladin') {
+    // a belfry over the lookout: four posts, a blue spire and the alarm bell
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+      g.add(box(0.16, 2.3, 0.16, C.stoneLight, Math.cos(a) * 1.4, py + 0.2, Math.sin(a) * 1.4));
+    }
+    g.add(cyl(1.95, 1.95, 0.2, C.gold, 8, 0, py + 2.5, 0));
+    g.add(cone(2.1, 3.2, C.tile, 8, 0, py + 2.7, 0));
+    g.add(blob(0.22, C.gold, 0, py + 6.1, 0));
+    const b = bell(0.9);
+    b.position.set(0, py + 2.45, 0);
+    g.add(b);
+    const flag = box(1.3, 0.8, 0.05, 0x2c56b0, 0.7, py + 6.6, 0);
+    flag.userData.flag = true;
+    g.add(cyl(0.05, 0.05, 1.3, C.gold, 4, 0, py + 6.1), flag);
+  }
   return { obj: g, h: h + 7, w: 4, d: 4 };
 }
 
@@ -913,6 +1427,18 @@ function themedStatue(theme: Theme): Built {
   g.add(box(2.5, 0.25, 2.5, C.stoneLight, 0, 2.0, 0));
   const fig = new THREE.Group();
   const bronze = 0x8d6e3b;
+  if (theme === 'paladin') {
+    // white marble steps, a gold band, and the gilded knight raising his sword to the light
+    g.add(box(2.6, 0.12, 2.6, C.gold, 0, 2.25, 0));
+    for (const [x, z] of [[-1.35, 1.35], [1.35, 1.35], [-1.35, -1.35], [1.35, -1.35]]) g.add(cone(0.18, 0.7, C.gold, 4, x, 2.3, z));
+    const kn = knightStatue(1.35);
+    kn.position.y = 2.37;
+    g.add(kn);
+    const arms = heraldry(0.7);
+    arms.position.set(0, 1.25, 1.12);
+    g.add(arms);
+    return { obj: g, h: 7.2, w: 5, d: 5 };
+  }
   if (theme === 'sorcerer') {
     fig.add(cyl(0.45, 0.75, 2.0, bronze, 8));
     fig.add(blob(0.36, bronze, 0, 2.3, 0));
@@ -922,6 +1448,21 @@ function themedStatue(theme: Theme): Built {
     const orb = glowBit(new THREE.IcosahedronGeometry(0.28, 1));
     orb.position.set(0.75, 3.15, 0.1);
     fig.add(orb);
+    // three runestones circle him, and the plinth is ringed with runes
+    const stones = new THREE.Group();
+    for (let i = 0; i < 3; i++) {
+      const a = (i / 3) * Math.PI * 2;
+      const st = mesh(new THREE.BoxGeometry(0.34, 0.6, 0.14), VIO, { emissive: VIO_EMIT });
+      st.position.set(Math.cos(a) * 1.7, 0, Math.sin(a) * 1.7);
+      st.rotation.y = -a;
+      stones.add(st);
+    }
+    stones.userData.dynamic = true;
+    stones.userData.orbit = 0.6;
+    stones.userData.bob = 0.2;
+    stones.position.y = 4.1;
+    g.add(stones);
+    g.add(runeRing(1.12, 1.2));
   } else if (theme === 'druid') {
     fig.add(cyl(0.5, 0.75, 2.0, bronze, 8));
     fig.add(cone(0.5, 1.0, bronze, 8, 0, 1.9));
@@ -974,6 +1515,22 @@ function themed(id: BuildingId, t: number, b: Built): Built {
       g.traverse((o) => { if (o.userData.mount) dressMount(o, theme); });
       break;
     case 'market': {
+      if (theme === 'paladin') {
+        // a blue pavilion of the Order and a table of relics: gold chalices and candles
+        const tent = new THREE.Group();
+        tent.add(cyl(1.15, 1.25, 1.6, 0xf3eee2, 10));
+        tent.add(cone(1.5, 1.5, 0x2c56b0, 10, 0, 1.6));
+        tent.add(blob(0.14, C.gold, 0, 3.15, 0));
+        for (let i = 0; i < 10; i += 2) {
+          const a = (i / 10) * Math.PI * 2;
+          tent.add(box(0.28, 1.58, 0.05, 0x2c56b0, Math.cos(a) * 1.22, 0.01, Math.sin(a) * 1.22).rotateY(-a + Math.PI / 2));
+        }
+        tent.position.set(3.2, 0, -2.4);
+        g.add(tent);
+        for (let i = 0; i < 4; i++) g.add(cyl(0.09, 0.05, 0.28, C.gold, 6, -3.4 + i * 0.4, 1.05, 0.2));
+        g.add(glowBit(new THREE.BoxGeometry(0.06, 0.16, 0.06), 0xfff0c0, 0xc08a1a).translateX(-1.9).translateY(1.15).translateZ(0.2));
+        break;
+      }
       const extra = theme === 'sorcerer' ? potions(8, r) : theme === 'druid' ? herbs(4, r) : new THREE.Group();
       extra.position.set(-2.8, 1.05, 0.2);
       g.add(extra);
@@ -989,18 +1546,27 @@ function themed(id: BuildingId, t: number, b: Built): Built {
       break;
     }
     case 'workshop':
+      if (theme === 'paladin') { const p = shieldPost(3.2); p.position.set(-3.9, 0, 2.6); g.add(p); }
       if (theme === 'sorcerer') { const rc = runeCircle(2.2); rc.position.set(0.5, 0, 0.2); g.add(rc); }
       if (theme === 'druid') for (const [x, z] of [[-3.5, -2], [3.5, -2], [-3.5, 2], [3.5, 2]]) g.add(blob(0.55, 0x6f9a3a, x, 3.5, z, 1, 0.7, 1));
       if (theme === 'goblin') { const s = skullOnPole(3.4); s.position.set(-3.9, 0, 2.6); g.add(s); }
       if (theme === 'necromancer') { const p = gravePost(3.4); p.position.set(-3.9, 0, 2.6); g.add(p); }
       break;
     case 'rally':
-      if (theme === 'sorcerer') { const rc = runeCircle(1.6); rc.position.set(2.6, 0, 1.6); g.add(rc); }
+      if (theme === 'paladin') { const s = sunStandard(5.2); s.position.set(-1.4, 0, 1.2); g.add(s); }
+      if (theme === 'sorcerer') { const rc = runeCircle(1.6); rc.position.set(2.6, 0, 1.6); g.add(rc); const l = arcaneLamp(3.4); l.position.set(-1.4, 0, 1.2); g.add(l); }
       if (theme === 'druid') { const a = antlerPole(3.2); a.position.set(-1.4, 0, 1.2); g.add(a); }
       if (theme === 'goblin') { const s = skullOnPole(3.2); s.position.set(-1.4, 0, 1.2); g.add(s); }
       if (theme === 'necromancer') { const p = gravePost(3.2); p.position.set(-1.4, 0, 1.2); g.add(p); }
       break;
     case 'hiding':
+      if (theme === 'paladin') {
+        // the cellar is a crypt, sealed with the golden sun
+        const seal = mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.05, 12), 0xffd35a, { emissive: 0x6a4a10 });
+        seal.position.set(0, 0.68, 0.12);
+        seal.rotation.x = -0.15;
+        g.add(seal);
+      }
       if (theme === 'sorcerer') { const rune = glowBit(new THREE.BoxGeometry(0.6, 0.04, 0.6)); rune.position.set(0, 0.66, 0.1); rune.rotation.y = Math.PI / 4; g.add(rune); }
       if (theme === 'druid') g.add(mushrooms(4, r, 2.2));
       if (theme === 'goblin' || theme === 'necromancer') { const sk = skull(0.5); sk.position.set(0.8, 0.8, 0.3); g.add(sk); }
@@ -1010,10 +1576,11 @@ function themed(id: BuildingId, t: number, b: Built): Built {
     case 'academy':
     case 'warehouse':
       // a small banner-post of the theme at the doorstep
+      if (theme === 'paladin') { const p = shieldPost(2.4); p.position.set(b.w * 0.42, 0, b.d * 0.42); g.add(p); }
       if (theme === 'druid') { const a = antlerPole(2.6); a.position.set(b.w * 0.42, 0, b.d * 0.42); g.add(a); }
       if (theme === 'goblin') { const s = skullOnPole(2.6); s.position.set(b.w * 0.42, 0, b.d * 0.42); g.add(s); }
       if (theme === 'necromancer') { const p = gravePost(2.6); p.position.set(b.w * 0.42, 0, b.d * 0.42); g.add(p); }
-      if (theme === 'sorcerer') { const cr = glowBit(new THREE.OctahedronGeometry(0.3, 0)); cr.scale.set(1, 2, 1); cr.position.set(b.w * 0.42, 1.6, b.d * 0.42); g.add(cr); g.add(cyl(0.25, 0.35, 0.9, C.stone, 6, b.w * 0.42, 0, b.d * 0.42)); }
+      if (theme === 'sorcerer') { const l = arcaneLamp(2.2); l.position.set(b.w * 0.42, 0, b.d * 0.42); g.add(l); }
       break;
   }
   return b;
@@ -1035,6 +1602,14 @@ function bar(len: number, thick: number, color: number, x: number, y: number, a:
 /** The board behind the emblem. */
 function plaque(theme: Theme): THREE.Group {
   const g = new THREE.Group();
+  if (theme === 'paladin') {
+    const board = extrude([[-0.62, 0.55], [0.62, 0.55], [0.62, -0.25], [0, -1.0], [-0.62, -0.25]], 0.09, 0x2c56b0);
+    g.add(board);
+    const rim = extrude([[-0.7, 0.63], [0.7, 0.63], [0.7, -0.28], [0, -1.1], [-0.7, -0.28]], 0.05, C.gold);
+    rim.position.z = -0.04;
+    g.add(rim);
+    return g;
+  }
   if (theme === 'sorcerer') {
     const d = cyl(0.62, 0.62, 0.08, 0x3c2470, 16);
     d.rotation.x = Math.PI / 2;

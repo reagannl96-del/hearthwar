@@ -5,7 +5,8 @@ import type { BattleData, Report, ResKey, SideInfo, UnitId, Units, SharedReport 
 import { Icon } from '../art/icons';
 import { Btn, Empty, PlayerLink, Res, Section, VillageLink, UnitIcon, unitName } from '../components/common';
 import { fmt, fmtAgo, fmtClock } from '../format';
-import { act, go, host, now, rallyTarget, view, warp } from '../store';
+import { act, battleReplay, go, host, now, rallyTarget, vid, view, warp } from '../store';
+import { AttackViewer } from './AttackViewer';
 
 type Filter = 'all' | 'attack' | 'defense' | 'support' | 'trade' | 'other';
 
@@ -63,6 +64,7 @@ export function ReportsScreen({ id }: { id?: number }) {
 
 function ReportView({ r }: { r: Report }) {
   const reports = host.value!.reports();
+  const [watching, setWatching] = useState(false);
   const idx = reports.findIndex((x) => x.id === r.id);
   return (
     <div class="stack report">
@@ -84,6 +86,19 @@ function ReportView({ r }: { r: Report }) {
             <Btn small variant="quiet" onClick={() => { act({ type: 'deleteReport', id: r.id }); go({ name: 'reports' }); }}>Delete</Btn>
           </div>
         </header>
+        {r.kind === 'defense' && r.battle && view.value!.villages.some((x) => x.id === r.vid) && (
+          <div class="rep-watch">
+            <Btn small onClick={() => { vid.value = r.vid!; battleReplay.value = { report: r, at: Date.now() }; go({ name: 'village' }); }}>
+              ⚔ Watch it in the village
+            </Btn>
+          </div>
+        )}
+        {r.battle && r.battle.winner === 'attacker' && r.battle.attacker.playerId === view.value!.me.id && r.kind !== 'defense' && (
+          <div class="rep-watch">
+            <Btn small onClick={() => setWatching(true)}>⚔ Watch your attack</Btn>
+          </div>
+        )}
+        {watching && r.battle && <AttackViewer r={r} onClose={() => setWatching(false)} />}
         {r.text && <p class="rep-text">{r.text}</p>}
         {r.res && (
           <div class="rep-block">

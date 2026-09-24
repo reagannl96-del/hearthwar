@@ -97,7 +97,7 @@ describe('village layout', () => {
 
   it('every building still fits in every hero theme', () => {
     const bad: string[] = [];
-    for (const theme of ['sorcerer', 'druid', 'goblin', 'necromancer'] as const) {
+    for (const theme of ['paladin', 'sorcerer', 'druid', 'goblin', 'necromancer'] as const) {
       setTheme(theme);
       const th = new Map<BuildingId, P[][]>(IDS.map((id) => [id, tierLevels(id).map((l) => footprint(id, l))]));
       setTheme('classic');

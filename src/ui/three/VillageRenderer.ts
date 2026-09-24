@@ -12,6 +12,8 @@ import { heroAura, type Aura, type AuraHero } from './heroAura';
 import { FOOT_LOOPS, PEOPLE_LOOPS, RIDE_LOOPS } from './paths';
 import { wallGuardPosts } from './scene';
 import { LAYOUT, OUTSIDE, WALL_R, buildScenery, buildTerrain, buildWall, buildingScale, heightAt } from './scene';
+import { BattleTheatre, type TheatreInput, type TheatreReport } from './battle/theatre';
+import { battleSfx } from '../sound';
 
 /** An army leaving or coming home, as far as the village scene cares. */
 export interface MarchInfo {
@@ -61,6 +63,17 @@ function hammerSwing(t: number): number {
 }
 
 /** Invisible, but it still catches clicks (the raycaster ignores visibility). */
+/** Things that hover: they turn (userData.orbit, radians a second) and bob (userData.bob, how far). */
+function float(o: THREE.Object3D, dt: number, t: number): void {
+  if (o.userData.orbit) o.rotation.y += dt * (o.userData.orbit as number);
+  if (o.userData.bob) {
+    o.userData.bobY ??= o.position.y;
+    o.position.y = (o.userData.bobY as number) + Math.sin(t * 1.3 + o.id * 0.7) * (o.userData.bob as number);
+  }
+}
+
+const AIM_RAY = new THREE.Raycaster();
+const DOWN = new THREE.Vector3(0, -1, 0);
 const HIT_MAT = new THREE.MeshBasicMaterial({ visible: false });
 /** Buildings too thin to hit comfortably, and how wide their click area is (kept clear of their neighbours). */
 const HIT_RADIUS: Partial<Record<BuildingId, number>> = { rally: 3.6 };
@@ -116,6 +129,14 @@ export class VillageRenderer {
   private militia: { g: THREE.Group; from: THREE.Vector3; to: THREE.Vector3; delay: number; t: number; face: number; a: number }[] = [];
   private militiaOn = false;
   private motes: THREE.Object3D[] = [];
+  /** floating isles and crystals out on the land */
+  private floaters: THREE.Object3D[] = [];
+  /** attacks on the village, acted out */
+  private theatre: BattleTheatre | null = null;
+  /** while a battle is on stage, the idle strollers step aside */
+  private quiet = false;
+  private barrierFlash = { value: 0 };
+  private lastUpdate: { b: Buildings; constructing: Partial<Record<BuildingId, number>>; color: number; points: number } | null = null;
 
   constructor(private container: HTMLElement, private opts: VillageRendererOpts = {}) {
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
@@ -168,7 +189,10 @@ export class VillageRenderer {
     this.scene.add(buildTerrain());
     const scenery = buildScenery();
     this.scene.add(scenery);
-    scenery.traverse((o) => { if (o.userData.mote) this.motes.push(o); });
+    scenery.traverse((o) => {
+      if (o.userData.mote) this.motes.push(o);
+      if (o.userData.orbit || o.userData.bob) this.floaters.push(o);
+    });
 
     const ringGeo = new THREE.RingGeometry(0.86, 1, 40);
     ringGeo.rotateX(-Math.PI / 2);
@@ -179,6 +203,31 @@ export class VillageRenderer {
 
     this.initLeaves();
     this.setNight(!!opts.night);
+    if (!opts.showcase) {
+      this.theatre = new BattleTheatre({
+        scene: this.scene,
+        wallLevel: () => this.lastBuildings?.wall ?? 0,
+        aim: (id) => {
+          const s = this.slots.get(id);
+          if (!s) return null;
+          const base = OUTSIDE.includes(id) ? heightAt(s.anchor.x, s.anchor.z) : 0;
+          // cast down onto the building itself: the highest roof near its middle (the ground, once it is gone)
+          const pos = new THREE.Vector3(s.anchor.x, base, s.anchor.z);
+          s.group.updateMatrixWorld(true);
+          for (const [dx, dz] of [[0, 0], [0.22, 0], [-0.22, 0], [0, 0.22], [0, -0.22]]) {
+            AIM_RAY.set(new THREE.Vector3(s.anchor.x + dx * s.radius, s.anchor.y + 40, s.anchor.z + dz * s.radius), DOWN);
+            const hit = AIM_RAY.intersectObject(s.group, true).find((h) => (h.object as THREE.Mesh).material !== HIT_MAT && !h.object.userData.dynamic);
+            if (hit && hit.point.y > pos.y) pos.copy(hit.point);
+          }
+          return { pos, radius: s.radius };
+        },
+        holdsChanged: () => { const u = this.lastUpdate; if (u) this.update(u.b, u.constructing, u.color, u.points); },
+        quiet: (on) => { this.quiet = on; },
+        flashBarrier: (k) => { this.barrierFlash.value = Math.min(1.6, this.barrierFlash.value + k); },
+        night: () => this.night,
+        sound: battleSfx,
+      });
+    }
 
     const controls = new OrbitControls(this.camera, renderer.domElement);
     if (import.meta.env.DEV) (window as unknown as { __vr: unknown }).__vr = this;
@@ -224,7 +273,9 @@ export class VillageRenderer {
 
   // ---------- public ----------
 
-  update(b: Buildings, constructing: Partial<Record<BuildingId, number>>, color: number, points = 0): void {
+  update(real: Buildings, constructing: Partial<Record<BuildingId, number>>, color: number, points = 0): void {
+    this.lastUpdate = { b: real, constructing, color, points };
+    const b = { ...real, ...(this.theatre?.held() ?? {}) } as Buildings;
     this.color = color;
     for (const id of ALL) this.updateSlot(id, b[id], constructing[id] !== undefined);
     this.updatePeople(points);
@@ -233,6 +284,34 @@ export class VillageRenderer {
     this.updateAura();
     this.updateLabels(b, constructing);
     this.updateBuilders(constructing);
+  }
+
+  /** The attacks on this village, their reports, and the clock: acted out in the scene. */
+  setBattle(input: TheatreInput): void {
+    this.theatre?.set(input);
+  }
+
+  /** Play a battle report again in the village. */
+  replayBattle(report: TheatreReport, fromX: number, fromY: number): void {
+    this.theatre?.replay(report, fromX, fromY);
+  }
+
+  /** Whether there is a fight (or an army on its way) to watch. */
+  battleOn(): boolean {
+    return !!this.theatre?.busy && !!this.theatre.focusPoint();
+  }
+
+  /** Swing the camera round to where the fighting is. */
+  watchBattle(): void {
+    const p = this.theatre?.focusPoint();
+    if (!p) return;
+    const c = this.controls;
+    const off = this.camera.position.clone().sub(c.target);
+    c.target.set(p.x * 0.7, 0, p.z * 0.7);
+    this.camera.position.copy(c.target).add(off);
+    this.camera.zoom = Math.max(this.camera.zoom, 1.6);
+    this.camera.updateProjectionMatrix();
+    c.update();
   }
 
   /** Moonlight, lit windows and lantern-carrying villagers. */
@@ -300,6 +379,8 @@ export class VillageRenderer {
   }
 
   dispose(): void {
+    this.theatre?.dispose();
+    this.theatre = null;
     this.aura?.dispose();
     this.barrier?.traverse((o) => { if (o instanceof THREE.Mesh) (o.material as THREE.Material).dispose(); });
     this.disposed = true;
@@ -521,7 +602,7 @@ export class VillageRenderer {
       transparent: true,
       depthWrite: false,
       side: THREE.DoubleSide,
-      uniforms: { uTime: this.barrierTime, uColor: { value: new THREE.Color(0xa98bff) } },
+      uniforms: { uTime: this.barrierTime, uColor: { value: new THREE.Color(0xa98bff) }, uFlash: this.barrierFlash },
       vertexShader: `
         varying vec3 vN; varying vec3 vView; varying float vH;
         void main() {
@@ -532,13 +613,13 @@ export class VillageRenderer {
           gl_Position = projectionMatrix * viewMatrix * wp;
         }`,
       fragmentShader: `
-        uniform float uTime; uniform vec3 uColor;
+        uniform float uTime; uniform vec3 uColor; uniform float uFlash;
         varying vec3 vN; varying vec3 vView; varying float vH;
         void main() {
           float rim = pow(1.0 - abs(dot(normalize(vN), normalize(vView))), 2.2);
           float bands = 0.5 + 0.5 * sin(vH * 0.35 - uTime * 1.2);
-          float a = rim * (0.3 + 0.14 * bands) + 0.02;
-          gl_FragColor = vec4(mix(uColor, vec3(1.0), rim * 0.35), a);
+          float a = rim * (0.3 + 0.14 * bands) + 0.02 + uFlash * (0.22 * rim + 0.07);
+          gl_FragColor = vec4(mix(uColor, vec3(1.0), min(1.0, rim * 0.35 + uFlash * 0.4)), a);
         }`,
     });
     const dome = new THREE.Mesh(geo, matl);
@@ -692,7 +773,7 @@ export class VillageRenderer {
     for (const m of this.militia) {
       m.t += dt;
       const k = Math.min(1, Math.max(0, (m.t - m.delay) / 9));
-      m.g.visible = m.t > m.delay;
+      m.g.visible = m.t > m.delay && !this.quiet;
       if (k < 1) {
         // running out of the farm towards the wall
         m.g.position.lerpVectors(m.from, m.to, k);
@@ -902,7 +983,9 @@ export class VillageRenderer {
     // spinning, waving, flickering bits
     for (const s of this.slots.values()) {
       s.group.traverse((o) => {
+        if (o.userData.orbit || o.userData.bob) float(o, dt, t);
         if (o.userData.spin) o.rotation.z += dt * 0.9;
+        else if (o.userData.flap) o.rotation.z = Math.sin(t * 15 + o.parent!.id) * 0.75 * o.userData.flap;
         else if (o.userData.flag) o.rotation.y = Math.sin(t * 2.2 + o.id) * 0.35;
         else if (o.userData.fire) {
           const k = 1 + Math.sin(t * 17 + o.id) * 0.12 + Math.sin(t * 7.3) * 0.08;
@@ -914,6 +997,11 @@ export class VillageRenderer {
     if (this.night) for (const l of this.lanterns) l.children[2].scale.setScalar(2.4 + Math.sin(t * 9 + l.id) * 0.25);
     // hover ring pulse
     if (this.ring.visible) (this.ring.material as THREE.MeshBasicMaterial).opacity = 0.55 + Math.sin(t * 5) * 0.3;
+    this.theatre?.step(dt, t);
+    this.barrierFlash.value = Math.max(0, this.barrierFlash.value - dt * 2.2);
+    for (const p of this.people) p.g.visible = !this.quiet;
+    for (const p of this.troops) p.g.visible = !this.quiet;
+    if (this.guards) this.guards.visible = !this.quiet;
     // villagers
     for (const p of this.people) {
       p.t = (p.t + p.speed * dt) % p.len;
@@ -935,6 +1023,7 @@ export class VillageRenderer {
     this.barrierTime.value = t;
     this.aura?.step(dt, t);
     for (const p of this.pulses) p.o.scale.setScalar(1 + 0.3 * Math.sin(t * 3.5 + p.ph));
+    for (const o of this.floaters) float(o, dt, t);
     for (const m of this.motes) {
       const d = m.userData.mote as { x: number; y: number; z: number; phase: number; speed: number };
       const p = t * d.speed + d.phase;

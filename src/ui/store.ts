@@ -3,7 +3,7 @@
 import { computed, signal } from '@preact/signals';
 import type { Action } from '../engine/actions';
 import { BUILDINGS } from '../engine/data/buildings';
-import type { BuildingId, Res } from '../engine/types';
+import type { BuildingId, Res, Report } from '../engine/types';
 import type { PlayerView, VillageView } from '../engine/view';
 import type { HostBase } from '../host/base';
 import { lsGet, lsSet } from '../host/storage';
@@ -54,6 +54,8 @@ export const vid = signal(0);
 export const route = signal<Route>({ name: 'village' });
 export const toasts = signal<Toast[]>([]);
 export const paused = signal(false);
+/** A battle report to play again in the village scene (set from a report, picked up by the village view). */
+export const battleReplay = signal<{ report: Report; at: number } | null>(null);
 export const warp = signal(1);
 /** a rally-point prefill, e.g. when clicking "attack" on the map */
 export const rallyTarget = signal<{ x: number; y: number; kind?: 'attack' | 'support'; units?: Record<string, number> } | null>(null);
@@ -320,6 +322,7 @@ export function stopHost() {
   if (h && 'close' in h) (h as unknown as { close(): void }).close();
   host.value = null;
   view.value = null;
+  battleReplay.value = null;
 }
 
 /** online only: is the connection to the game server up? */

@@ -1,21 +1,36 @@
 // Each statue hero gives its village a look, and its army the matching troops:
 // goblin camps raise goblin stabbers and wolf riders, sorcerer towers raise
-// spellguards and storm riders, druid groves raise thornguards and stag riders.
+// spellguards and storm riders, druid groves raise thornguards and stag riders,
+// and a paladin's citadel of the Radiant Order raises pikemen, lancers and knights.
 // They are the same units underneath (same costs, stats and rules), so a village's
 // whole army simply takes the new form when its first hero is trained.
 
 import type { UnitId } from '../types';
 import { UNITS } from './units';
 
-export type VillageTheme = 'classic' | 'sorcerer' | 'druid' | 'goblin' | 'necromancer';
+export type VillageTheme = 'classic' | 'paladin' | 'sorcerer' | 'druid' | 'goblin' | 'necromancer';
 
 export function themeOfHero(hero: UnitId | null | undefined): VillageTheme {
-  return hero === 'sorcerer' || hero === 'druid' || hero === 'goblin' || hero === 'necromancer' ? hero : 'classic';
+  return hero === 'paladin' || hero === 'sorcerer' || hero === 'druid' || hero === 'goblin' || hero === 'necromancer' ? hero : 'classic';
 }
 
 type Names = Partial<Record<UnitId, [name: string, plural: string]>>;
 
 export const THEMED_UNITS: Record<Exclude<VillageTheme, 'classic'>, Names> = {
+  paladin: {
+    spear: ['Pikeman', 'Pikemen'],
+    sword: ['Man-at-Arms', 'Men-at-Arms'],
+    axe: ['Crusader', 'Crusaders'],
+    archer: ['Longbowman', 'Longbowmen'],
+    scout: ['Outrider', 'Outriders'],
+    light: ['Lancer', 'Lancers'],
+    marcher: ['Horse Archer', 'Horse Archers'],
+    heavy: ['Knight', 'Knights'],
+    ram: ['Siege Ram', 'Siege Rams'],
+    catapult: ['Trebuchet', 'Trebuchets'],
+    noble: ['Lord', 'Lords'],
+    militia: ['Yeomanry', 'Yeomanry'],
+  },
   goblin: {
     spear: ['Goblin Stabber', 'Goblin Stabbers'],
     sword: ['Goblin Cutthroat', 'Goblin Cutthroats'],

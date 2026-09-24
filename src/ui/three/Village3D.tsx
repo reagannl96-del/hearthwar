@@ -3,6 +3,7 @@ import { BUILDINGS } from '../../engine/data/buildings';
 import type { BuildingId, Buildings, Units } from '../../engine/types';
 import { VillageScene } from '../art/VillageScene';
 import { VillageRenderer, webglAvailable, type MarchInfo } from './VillageRenderer';
+import type { TheatreInput, TheatreReport } from './battle/theatre';
 import type { Theme } from './kit';
 
 interface Props {
@@ -25,6 +26,12 @@ interface Props {
   now?: number;
   /** the militia has been called up */
   militia?: boolean;
+  /** attacks on this village and their reports, acted out in the scene */
+  battle?: TheatreInput;
+  /** a report to play again (a new `at` replays it) */
+  replay?: { report: TheatreReport; at: number; fromX: number; fromY: number } | null;
+  /** the replay has been handed to the scene (so it is not played again next time) */
+  onReplayed?: () => void;
   onToggleNight?: () => void;
 }
 
@@ -38,6 +45,8 @@ export function Village3D(p: Props) {
   pick.current = p.onPick;
   const [tip, setTip] = useState<{ id: BuildingId; x: number; y: number } | null>(null);
   const [failed, setFailed] = useState(false);
+  const [fighting, setFighting] = useState(false);
+  const replayed = useRef(0);
 
   useEffect(() => {
     if (!gl || !host.current) return;
@@ -60,6 +69,21 @@ export function Village3D(p: Props) {
       r.current = null;
     };
   }, [p.winter, p.volcanic, p.theme]);
+
+  useEffect(() => {
+    if (!p.battle) return;
+    r.current?.setBattle(p.battle);
+    const on = !!r.current?.battleOn();
+    if (on !== fighting) setFighting(on);
+  }, [p.battle]);
+
+  useEffect(() => {
+    const rp = p.replay;
+    if (!rp || rp.at === replayed.current || !r.current) return;
+    replayed.current = rp.at;
+    r.current.replayBattle(rp.report, rp.fromX, rp.fromY);
+    p.onReplayed?.();
+  }, [p.replay, p.theme, p.winter]);
 
   useEffect(() => {
     r.current?.update(p.buildings, p.building, p.color, p.points);
@@ -109,6 +133,11 @@ export function Village3D(p: Props) {
           </button>
         )}
       </div>
+      {fighting && (
+        <button type="button" class="village3d-watch" onClick={() => r.current?.watchBattle()} title="Swing the view round to the fighting">
+          ⚔ Watch
+        </button>
+      )}
       <div class="village3d-hint">Drag to move · scroll to zoom · right-drag to turn</div>
     </div>
   );

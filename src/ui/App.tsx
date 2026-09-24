@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { navOrder, saveNavOrder } from './navOrder';
 import { Icon } from './art/icons';
-import { Clock } from './components/common';
+import { Clock, unitName } from './components/common';
 import { coords, continent, fmt, fmtDur } from './format';
 import { BuildingScreen } from './screens/BuildingScreen';
 import { MapScreen } from './screens/MapScreen';
@@ -103,7 +103,7 @@ function IncomingBanner() {
       <span>
         <b>{attacks.length}</b> incoming {attacks.length === 1 ? 'attack' : 'attacks'} · next hits <b>{next.toName}</b> in{' '}
         <b class="num">{fmtDur((next.arrive - now.value) / warp.value)}</b>
-        {next.detected && <> · lookouts spot <b>{next.detected}</b></>}
+        {next.detected && <> · lookouts spot <b>{unitName(next.detected, true, next.theme)}</b></>}
       </span>
     </button>
   );

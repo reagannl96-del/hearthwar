@@ -91,7 +91,7 @@ const VOLCANIC: Record<number, number> = {
 };
 
 /** Each statue hero gives the village its own look. */
-export type Theme = 'classic' | 'sorcerer' | 'druid' | 'goblin' | 'necromancer';
+export type Theme = 'classic' | 'paladin' | 'sorcerer' | 'druid' | 'goblin' | 'necromancer';
 let theme: Theme = 'classic';
 export function setTheme(t: Theme) {
   theme = t;
@@ -102,11 +102,21 @@ export function getTheme(): Theme {
 
 const THEMES: Record<Theme, Record<number, number>> = {
   classic: {},
-  // violet slate roofs, pale lavender walls, blue-grey stone, purple banners
+  // the Radiant Order: white limestone and ivory plaster, royal-blue slate trimmed in gold,
+  // blue-and-gold banners, pale sandstone paving and a bright, well-kept green
+  paladin: {
+    [C.tile]: 0x2c4f9e, [C.tileDark]: 0x213c7a, [C.tileWarm]: 0x3661b4, [C.thatch]: 0x33579f, [C.thatchDark]: 0x264378,
+    [C.plaster]: 0xf3eee2, [C.plasterWarm]: 0xebe3d0, [C.timber]: 0x5b3e28, [C.timberLight]: 0x8a6a48,
+    [C.stone]: 0xe4ddcb, [C.stoneDark]: 0xbdb39c, [C.stoneLight]: 0xf6f1e4, [C.red]: 0x2c56b0, [C.slate]: 0x243f80, [C.door]: 0x5a3a22,
+    [C.grass]: 0x7aa447, [C.grassLight]: 0x8cb655, [C.grassDark]: 0x628b39, [C.grassRust]: 0x9aa84a,
+    [C.dirt]: 0xdccba2, [C.dirtDark]: 0xc4b186, [C.water]: 0x4a9ad0,
+    0x97a24e: 0x86b04e, 0x7f8d43: 0x6c9640, 0x8b984a: 0x7aa447,
+  },
+  // deep violet slate roofs, moonstone walls, cool starlit stone, violet banners with silver stars
   sorcerer: {
-    [C.tile]: 0x4b2f86, [C.tileDark]: 0x36205f, [C.tileWarm]: 0x5d3b9e, [C.thatch]: 0x3d4f9a, [C.thatchDark]: 0x2d3a73,
-    [C.plaster]: 0xdcd6ee, [C.plasterWarm]: 0xcfc6e6, [C.timber]: 0x2c2340, [C.timberLight]: 0x4a3d66,
-    [C.stone]: 0x9d9bb3, [C.stoneDark]: 0x747290, [C.stoneLight]: 0xc4c2d8, [C.red]: 0x6a3fa0, [C.slate]: 0x3a3163, [C.door]: 0x2a1d40,
+    [C.tile]: 0x432a8c, [C.tileDark]: 0x2e1d63, [C.tileWarm]: 0x5634a6, [C.thatch]: 0x3d4f9a, [C.thatchDark]: 0x2d3a73,
+    [C.plaster]: 0xe4e0f4, [C.plasterWarm]: 0xd6cfec, [C.timber]: 0x2c2340, [C.timberLight]: 0x4a3d66,
+    [C.stone]: 0xa6a6c6, [C.stoneDark]: 0x77779c, [C.stoneLight]: 0xd2d2e8, [C.red]: 0x5b36b0, [C.slate]: 0x3a3163, [C.door]: 0x2a1d40,
     // the ground turns to an enchanted twilight meadow
     [C.grass]: 0x5f7568, [C.grassLight]: 0x708879, [C.grassDark]: 0x4b5f57, [C.grassRust]: 0x8a7aa8,
     [C.dirt]: 0xbcaecb, [C.dirtDark]: 0x9585ad, [C.water]: 0x4f7fd0,
@@ -233,6 +243,7 @@ export function house(o: {
   w: number; d: number; h: number; roofH: number;
   wall?: number; roof?: number; frame?: number | null; door?: boolean; windows?: number; stone?: boolean; chimney?: boolean;
 }): THREE.Group {
+  if (theme === 'paladin') return paladinHouse(o);
   if (theme === 'sorcerer') return sorcererHouse(o);
   if (theme === 'druid') return druidHouse(o);
   if (theme === 'goblin') return goblinHouse(o);
@@ -325,6 +336,7 @@ export function merlonRing(r: number, y: number, count: number, color: number, s
 type TowerOpts = { color?: number; roof?: number | null; merlons?: boolean; banner?: number };
 
 export function roundTower(r: number, h: number, o: TowerOpts = {}): THREE.Group {
+  if (theme === 'paladin') return paladinTower(r, h, o);
   if (theme === 'sorcerer') return sorcererTower(r, h, o);
   if (theme === 'druid') return druidTower(r, h, o);
   if (theme === 'goblin') return goblinTower(r, h, o);
@@ -443,13 +455,140 @@ function windowAt(x: number, y: number, z: number, round = false): THREE.Mesh {
   return w;
 }
 
-/** Sorcerer: tall walls, a steep witch-hat roof with curled ends, a corner turret and a crystal on the ridge. */
+// ---------- the Arcane (sorcerer) ----------
+
+/** Arcane light: a cool cyan and a deep violet, each with its glow. */
+export const ARC = 0x8fe8ff, ARC_EMIT = 0x2a8ab8, VIO = 0xc6a2ff, VIO_EMIT = 0x6a38d0, STAR = 0xf4ecc8, STAR_EMIT = 0x8a7a40;
+
+/** A band of glowing runes set into a round tower's stone (radius r, at height y). */
+export function runeRing(r: number, y: number, color = ARC, emissive = ARC_EMIT): THREE.Group {
+  const g = new THREE.Group();
+  g.add(mesh(new THREE.CylinderGeometry(r, r, 0.1, 18, 1, true), color, { emissive, double: true }).translateY(y));
+  // the glyphs: little lit marks above and below the band
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * Math.PI * 2;
+    const glyph = mesh(new THREE.BoxGeometry(0.1, i % 2 ? 0.34 : 0.22, 0.05), color, { emissive });
+    glyph.position.set(Math.cos(a) * (r + 0.01), y + (i % 3 === 0 ? 0.24 : -0.2), Math.sin(a) * (r + 0.01));
+    glyph.rotation.y = -a + Math.PI / 2;
+    g.add(glyph);
+  }
+  return g;
+}
+
+/** A witch's hat of a roof: a brim, a steep cone and a tip that bends over, with a band and a star. */
+export function witchHat(r: number, h: number, color: number, bend = 0.5): THREE.Group {
+  const g = new THREE.Group();
+  g.add(cyl(r * 1.22, r * 1.22, 0.14, color, 14));
+  const low = h * 0.58;
+  g.add(cyl(r * 0.46, r, low, color, 14, 0, 0.12));
+  g.add(cyl(r * 0.86, r * 0.93, 0.22, C.gold, 14, 0, 0.3));
+  const tip = cone(r * 0.46, h * 0.5, color, 12);
+  tip.position.y = low + 0.1;
+  tip.rotation.z = -bend;
+  g.add(tip);
+  const star = mesh(new THREE.OctahedronGeometry(Math.max(0.18, r * 0.16), 0), STAR, { emissive: STAR_EMIT });
+  star.position.set(Math.sin(bend) * h * 0.5 + 0.05, low + 0.1 + Math.cos(bend) * h * 0.5, 0);
+  g.add(star);
+  return g;
+}
+
+/** A crystal that floats, turns and bobs, shards circling it. */
+export function floatingCrystal(s = 1, color = VIO, emissive = VIO_EMIT): THREE.Group {
+  const g = new THREE.Group();
+  const c = mesh(new THREE.OctahedronGeometry(0.5 * s, 0), color, { emissive });
+  c.scale.set(1, 1.9, 1);
+  g.add(c);
+  g.add(mesh(new THREE.IcosahedronGeometry(0.85 * s, 1), color, { emissive, opacity: 0.18 }));
+  for (let i = 0; i < 3; i++) {
+    const a = (i / 3) * Math.PI * 2;
+    const sh = mesh(new THREE.OctahedronGeometry(0.16 * s, 0), ARC, { emissive: ARC_EMIT });
+    sh.scale.set(1, 1.6, 1);
+    sh.position.set(Math.cos(a) * 1.05 * s, (i - 1) * 0.3 * s, Math.sin(a) * 1.05 * s);
+    g.add(sh);
+  }
+  g.userData.dynamic = true;
+  g.userData.orbit = 0.8;
+  g.userData.bob = 0.22 * s;
+  return g;
+}
+
+/** A crystal lamp on a dark iron post, a violet pennant with a silver star beneath it. */
+export function arcaneLamp(h: number): THREE.Group {
+  const g = new THREE.Group();
+  g.add(cyl(0.24, 0.32, 0.4, C.stoneDark, 6));
+  g.add(cyl(0.07, 0.09, h, 0x2c2340, 6, 0, 0.4));
+  g.add(mesh(new THREE.TorusGeometry(0.3, 0.04, 4, 14).rotateX(Math.PI / 2), C.gold).translateY(h + 0.4));
+  const pennant = box(0.04, 1.0, 0.55, C.red, 0, h - 0.75, 0.3);
+  g.add(pennant);
+  const star = mesh(new THREE.OctahedronGeometry(0.12, 0), STAR, { emissive: STAR_EMIT });
+  star.position.set(0.04, h - 0.3, 0.3);
+  g.add(star);
+  const c = floatingCrystal(0.34, ARC, ARC_EMIT);
+  c.position.y = h + 0.95;
+  g.add(c);
+  return g;
+}
+
+/** A rock adrift in the air: a grassy top, crystals growing on it, a thread of water falling from its lip. */
+export function floatingIsle(s: number, r: () => number, tree?: THREE.Object3D): THREE.Group {
+  const g = new THREE.Group();
+  const rock = cone(1.7 * s, 3.2 * s, 0x6d6a82, 7);
+  rock.rotation.x = Math.PI;
+  g.add(rock);
+  g.add(cone(1.0 * s, 1.6 * s, 0x5a5770, 6, 0.5 * s, -2.6 * s, 0.3 * s).rotateX(Math.PI));
+  g.add(cyl(1.75 * s, 1.7 * s, 0.4 * s, C.grass, 7));
+  const n = 2 + Math.floor(r() * 3);
+  for (let i = 0; i < n; i++) {
+    const a = r() * Math.PI * 2, d = r() * 1.1 * s;
+    const c = mesh(new THREE.OctahedronGeometry(0.25 * s, 0), i % 2 ? VIO : ARC, { emissive: i % 2 ? VIO_EMIT : ARC_EMIT });
+    c.scale.set(1, 2 + r(), 1);
+    c.position.set(Math.cos(a) * d, 0.4 * s + 0.5 * s, Math.sin(a) * d);
+    c.rotation.z = (r() - 0.5) * 0.6;
+    g.add(c);
+  }
+  if (tree) { tree.position.set(-0.5 * s, 0.35 * s, -0.3 * s); g.add(tree); }
+  const fall = mesh(new THREE.BoxGeometry(0.35 * s, 7 * s, 0.08).translate(0, -3.5 * s, 0), 0x9fd4ff, { emissive: 0x2a5a9a, opacity: 0.45 });
+  fall.position.set(1.55 * s, 0.1, 0);
+  g.add(fall);
+  g.userData.dynamic = true;
+  g.userData.bob = 0.45 * s;
+  return g;
+}
+
+/** A ring of glowing runes that turns slowly about a spire, tilted, so it seems to wheel. */
+export function orbitRing(r: number, tilt: number, speed: number, color = ARC, emissive = ARC_EMIT): THREE.Group {
+  const g = new THREE.Group();
+  const ring = new THREE.Group();
+  ring.add(mesh(new THREE.TorusGeometry(r, 0.07, 4, 48), color, { emissive }));
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2;
+    const gl = mesh(new THREE.BoxGeometry(0.2, 0.34, 0.06), color, { emissive });
+    gl.position.set(Math.cos(a) * r, Math.sin(a) * r, 0);
+    gl.rotation.z = a;
+    ring.add(gl);
+  }
+  ring.rotation.x = Math.PI / 2 + tilt;
+  g.add(ring);
+  g.userData.dynamic = true;
+  g.userData.orbit = speed;
+  return g;
+}
+
+/** Sorcerer: moonstone walls on a slate plinth, a glowing rune band, a steep violet roof with curled ends,
+ *  a corner turret in a crooked hat, round lit windows, a starlit door and a crystal floating over the ridge. */
 function sorcererHouse(o: HouseOpts): THREE.Group {
   const g = new THREE.Group();
   const { w, d, h } = o;
   const roofH = o.roofH * 1.9;
   const wall = o.wall ?? (o.stone ? C.stone : C.plaster);
   g.add(extrude([[-w / 2, 0], [w / 2, 0], [w / 2, h], [0, h + roofH], [-w / 2, h]], d, wall));
+  const plinth = Math.min(1.0, h * 0.32);
+  g.add(box(w + 0.16, plinth, d + 0.16, C.stoneDark));
+  g.add(mesh(new THREE.BoxGeometry(w + 0.2, 0.09, d + 0.2).translate(0, plinth + 0.05, 0), ARC, { emissive: ARC_EMIT }));
+  // an oculus in the gable, glowing violet
+  const oc = mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.1, 12).rotateX(Math.PI / 2), VIO, { emissive: VIO_EMIT });
+  oc.position.set(0, h + roofH * 0.42, d / 2 + 0.04);
+  g.add(oc);
   const half = w / 2 + 0.35;
   const theta = Math.atan2(roofH, w / 2);
   const len = half / Math.cos(theta) + 0.2;
@@ -467,18 +606,35 @@ function sorcererHouse(o: HouseOpts): THREE.Group {
     g.add(c);
   }
   g.add(box(w + 0.1, 0.18, d + 0.1, C.gold, 0, h - 0.18, 0));
-  // a small turret on the front corner
+  // a small turret on the front corner, in a crooked hat, a rune band round its middle
   if (w > 3.5) {
     const tx = w / 2 - 0.55, tz = d / 2 - 0.55;
-    g.add(cyl(0.55, 0.6, h + roofH * 0.55, wall, 8, tx, 0, tz));
-    g.add(cone(0.75, 1.8, C.tileDark, 8, tx, h + roofH * 0.55, tz));
+    const th = h + roofH * 0.55;
+    g.add(cyl(0.55, 0.62, th, C.stone, 8, tx, 0, tz));
+    const band = runeRing(0.57, th * 0.6);
+    band.position.set(tx, 0, tz);
+    g.add(band);
+    const hat = witchHat(0.62, 2.1, C.tileDark, 0.55);
+    hat.position.set(tx, th, tz);
+    g.add(hat);
   }
   // a crystal floating over the ridge
-  const cr = mesh(new THREE.OctahedronGeometry(0.28, 0), 0xb58cff, { emissive: 0x5a2fb0 });
-  cr.scale.set(1, 1.8, 1);
-  cr.position.set(0, h + roofH + 0.9, 0);
+  const cr = floatingCrystal(0.5);
+  cr.position.set(0, h + roofH + 1.0, 0);
   g.add(cr);
-  if (o.door !== false) g.add(box(Math.min(1.2, w * 0.22), Math.min(2.2, h * 0.66), 0.2, C.door, 0, 0, d / 2 + 0.05));
+  if (o.door !== false) {
+    // an arched door under a silver star, a crystal lantern beside it
+    const dw = Math.min(1.2, w * 0.22), dh = Math.min(2.2, h * 0.66);
+    g.add(box(dw, dh - dw / 2, 0.2, C.door, 0, 0, d / 2 + 0.05));
+    g.add(mesh(new THREE.CylinderGeometry(dw / 2, dw / 2, 0.2, 10, 1, false, 0, Math.PI).rotateX(Math.PI / 2).rotateZ(Math.PI / 2), C.door).translateY(dh - dw / 2).translateZ(d / 2 + 0.05));
+    const st = mesh(new THREE.OctahedronGeometry(0.15, 0), STAR, { emissive: STAR_EMIT });
+    st.position.set(0, dh + 0.3, d / 2 + 0.1);
+    g.add(st);
+    const lamp = mesh(new THREE.OctahedronGeometry(0.16, 0), ARC, { emissive: ARC_EMIT });
+    lamp.scale.set(1, 1.5, 1);
+    lamp.position.set(dw / 2 + 0.35, dh * 0.8, d / 2 + 0.22);
+    g.add(lamp, box(0.06, 0.06, 0.3, C.timber, dw / 2 + 0.35, dh * 0.8 + 0.28, d / 2 + 0.1));
+  }
   const nw = o.windows ?? Math.max(0, Math.floor(w / 2.4));
   for (let i = 0; i < nw; i++) {
     const x = -w / 2 + ((i + 1) * w) / (nw + 1);
@@ -566,6 +722,160 @@ function goblinHouse(o: HouseOpts): THREE.Group {
   return g;
 }
 
+// ---------- the Radiant Order (paladin) ----------
+
+/** Stained glass: jewel colours that glow a little by day and a lot at night. */
+export const GLASS = [
+  { c: 0x6f9cff, e: 0x2a4ab0 },
+  { c: 0xffd36a, e: 0x9a6a10 },
+  { c: 0xff7a6a, e: 0x9a2a1a },
+  { c: 0x9fe0ff, e: 0x2a7aa0 },
+];
+
+/** A tall arched window of stained glass in a white stone frame, facing +Z. */
+export function lancet(x: number, y: number, z: number, w = 0.55, h = 1.1, k = 0): THREE.Group {
+  const g = new THREE.Group();
+  const gl = GLASS[k % GLASS.length];
+  g.add(box(w + 0.2, h + 0.2, 0.12, C.stoneLight, 0, -0.1, -0.02));
+  const pane = mesh(new THREE.BoxGeometry(w, h, 0.1).translate(0, h / 2, 0), gl.c, { emissive: gl.e });
+  g.add(pane);
+  const arch = mesh(new THREE.CylinderGeometry(w / 2, w / 2, 0.1, 10, 1, false, 0, Math.PI).rotateX(Math.PI / 2).rotateZ(Math.PI / 2), gl.c, { emissive: gl.e });
+  arch.position.set(0, h, 0);
+  g.add(arch);
+  g.add(box(0.05, h, 0.12, C.gold, 0, 0, 0.02));
+  g.position.set(x, y, z);
+  return g;
+}
+
+/** A blue kite shield with a golden sun: the Order's arms. */
+export function heraldry(s = 1): THREE.Group {
+  const g = new THREE.Group();
+  const shield = extrude([[-0.5, 0.35], [0.5, 0.35], [0.5, -0.1], [0, -0.75], [-0.5, -0.1]], 0.08, 0x2c56b0);
+  g.add(shield);
+  const rim = extrude([[-0.56, 0.41], [0.56, 0.41], [0.56, -0.12], [0, -0.83], [-0.56, -0.12]], 0.05, C.gold);
+  rim.position.z = -0.03;
+  g.add(rim);
+  const sun = mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.06, 12).rotateX(Math.PI / 2), 0xffd35a, { emissive: 0x8a5a10 });
+  sun.position.set(0, -0.08, 0.06);
+  g.add(sun);
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    const ray = box(0.05, 0.12, 0.04, 0xffd35a, Math.cos(a) * 0.28, -0.08 + Math.sin(a) * 0.28 - 0.06, 0.06);
+    ray.rotation.z = a - Math.PI / 2;
+    g.add(ray);
+  }
+  g.scale.setScalar(s);
+  return g;
+}
+
+/**
+ * Paladin: ivory walls on a limestone plinth, a steep royal-blue roof with a gilded
+ * ridge and finials, tall stained-glass windows, a heraldic shield on the gable and
+ * flower boxes under the windows.
+ */
+function paladinHouse(o: HouseOpts): THREE.Group {
+  const g = new THREE.Group();
+  const { w, d, h } = o;
+  const roofH = o.roofH * 1.35;
+  const wall = o.wall ?? (o.stone ? C.stoneLight : C.plaster);
+  g.add(extrude([[-w / 2, 0], [w / 2, 0], [w / 2, h], [0, h + roofH], [-w / 2, h]], d, wall));
+  // a limestone plinth and corner quoins
+  g.add(box(w + 0.24, 0.6, d + 0.24, C.stoneDark, 0, 0, 0));
+  for (const x of [-w / 2, w / 2]) for (const z of [-d / 2, d / 2]) g.add(box(0.34, h, 0.34, C.stone, x, 0, z));
+  // the roof slabs
+  const half = w / 2 + 0.4;
+  const theta = Math.atan2(roofH, w / 2);
+  const len = half / Math.cos(theta) + 0.2;
+  for (const side of [-1, 1]) {
+    const slab = box(len, 0.26, d + 0.8, o.roof ?? C.tile);
+    slab.geometry.translate(0, -0.13, 0);
+    slab.rotation.z = -side * theta;
+    slab.position.set(side * (half / 2) + side * Math.sin(theta) * 0.13, h + roofH - (half / 2) * Math.tan(theta) + Math.cos(theta) * 0.13, 0);
+    g.add(slab);
+  }
+  // a gilded ridge, and a gold finial at each gable
+  g.add(box(0.26, 0.22, d + 0.9, C.gold, 0, h + roofH - 0.02, 0));
+  for (const z of [d / 2 + 0.35, -d / 2 - 0.35]) {
+    g.add(blob(0.16, C.gold, 0, h + roofH + 0.2, z));
+    g.add(cone(0.07, 0.55, C.gold, 5, 0, h + roofH + 0.3, z));
+  }
+  // a gold string course under the eaves
+  g.add(box(w + 0.14, 0.14, d + 0.14, C.gold, 0, h - 0.14, 0));
+  // the Order's arms on the front gable
+  if (w > 3.2) {
+    const arms = heraldry(Math.min(1.1, w * 0.16));
+    arms.position.set(0, h + roofH * 0.42, d / 2 + 0.06);
+    g.add(arms);
+  }
+  if (o.door !== false) {
+    const dw = Math.min(1.25, w * 0.22), dh = Math.min(2.1, h * 0.64);
+    g.add(box(dw + 0.3, dh + 0.25, 0.16, C.stoneLight, 0, 0, d / 2 + 0.03));
+    g.add(box(dw, dh, 0.2, C.door, 0, 0, d / 2 + 0.06));
+    const top = mesh(new THREE.CylinderGeometry(dw / 2, dw / 2, 0.2, 10, 1, false, 0, Math.PI).rotateX(Math.PI / 2).rotateZ(Math.PI / 2), C.door);
+    top.position.set(0, dh, d / 2 + 0.06);
+    g.add(top);
+    for (const y of [dh * 0.3, dh * 0.7]) g.add(box(dw * 0.8, 0.07, 0.05, C.gold, 0, y, d / 2 + 0.17));
+  }
+  const nw = o.windows ?? Math.max(0, Math.floor(w / 2.4));
+  for (let i = 0; i < nw; i++) {
+    const x = -w / 2 + ((i + 1) * w) / (nw + 1);
+    if (Math.abs(x) < 1 && o.door !== false) continue;
+    const win = lancet(x, h * 0.3, d / 2 + 0.06, 0.5, Math.min(1.3, h * 0.42), i);
+    g.add(win);
+    // a flower box under it
+    g.add(box(0.8, 0.22, 0.3, C.timber, x, h * 0.3 - 0.35, d / 2 + 0.2));
+    for (const fx of [-0.25, 0, 0.25]) g.add(blob(0.13, i % 2 ? 0xe05a7a : 0xf2c04a, x + fx, h * 0.3 - 0.08, d / 2 + 0.24));
+  }
+  if (o.chimney) g.add(box(0.7, roofH + 1.2, 0.7, C.stone, w * 0.22, h, -d * 0.2));
+  return g;
+}
+
+/** Paladin tower: white stone with a gold band, a tall royal-blue spire and a golden sun on its tip. */
+function paladinTower(r: number, h: number, o: TowerOpts): THREE.Group {
+  const g = new THREE.Group();
+  const color = o.color ?? C.stoneLight;
+  g.add(cyl(r, r * 1.1, h, color, 12));
+  g.add(cyl(r * 1.18, r * 1.18, 0.55, C.stone, 12, 0, h - 0.3));
+  g.add(cyl(r * 1.2, r * 1.2, 0.16, C.gold, 12, 0, h + 0.25));
+  // a band of stained glass slits
+  for (let i = 0; i < 3; i++) {
+    const a = (i / 3) * Math.PI * 2 + 0.5;
+    const s = lancet(0, 0, 0, 0.32, 0.8, i);
+    s.position.set(Math.cos(a) * r * 1.02, h * 0.55, Math.sin(a) * r * 1.02);
+    s.rotation.y = -a + Math.PI / 2;
+    g.add(s);
+  }
+  if (o.roof === null) {
+    // crenellated, each merlon capped in gold
+    g.add(merlonRing(r * 1.1, h + 0.3, 8, color, r * 0.42));
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      g.add(box(r * 0.44, 0.08, r * 0.44, C.gold, Math.cos(a) * r * 1.1, h + 0.3 + r * 0.46, Math.sin(a) * r * 1.1));
+    }
+  } else {
+    const ch = r * 2.2;
+    g.add(cone(r * 1.22, ch, o.roof ?? C.tile, 12, 0, h + 0.4));
+    g.add(cyl(0.07, 0.07, 1.1, C.gold, 5, 0, h + 0.4 + ch - 0.2));
+    g.add(blob(0.18, C.gold, 0, h + 0.4 + ch + 0.5, 0));
+    const sun = mesh(new THREE.TorusGeometry(0.34, 0.07, 5, 14), 0xffd35a, { emissive: 0x8a5a10 });
+    sun.position.set(0, h + 0.4 + ch + 0.95, 0);
+    g.add(sun);
+  }
+  if (o.banner !== undefined) {
+    // a long blue banner hung down the tower's face, a gold sun on it
+    const flag = new THREE.Group();
+    flag.add(box(r * 0.95, h * 0.42, 0.05, o.banner, 0, 0, 0));
+    flag.add(cone(r * 0.48, 0.5, o.banner, 3, 0, -0.5, 0).rotateZ(Math.PI));
+    const disc = mesh(new THREE.CylinderGeometry(r * 0.22, r * 0.22, 0.04, 10).rotateX(Math.PI / 2), 0xffd35a, { emissive: 0x6a4a10 });
+    disc.position.set(0, h * 0.26, 0.04);
+    flag.add(disc);
+    flag.add(box(r * 1.05, 0.08, 0.08, C.gold, 0, h * 0.42, 0));
+    flag.position.set(0, h * 0.4, r * 1.06);
+    g.add(flag);
+  }
+  return g;
+}
+
 const GHOST_GREEN = 0x5cff9a, GHOST_EMIT = 0x1f9a4a;
 
 /** Necromancer house: the old stone house under a steep black roof, iron spikes on the ridge, windows lit ghost-green. */
@@ -591,17 +901,36 @@ function necroTower(r: number, h: number, o: TowerOpts): THREE.Group {
   return g;
 }
 
-/** Sorcerer tower: slender, tall and needle-roofed, with a crystal above. */
+/** Sorcerer tower: slender and tapering on a slate plinth, banded with glowing runes, in a crooked
+ *  witch's hat (or crenellated, crystals on the merlons), a crystal floating over it. */
 function sorcererTower(r: number, h: number, o: TowerOpts): THREE.Group {
   const g = new THREE.Group();
   const color = o.color ?? C.stone;
-  const hh = h * 1.15;
-  g.add(cyl(r * 0.82, r * 0.95, hh, color, 10));
-  g.add(cyl(r * 0.95, r * 0.95, 0.35, C.gold, 10, 0, hh - 0.2));
-  g.add(cone(r * 1.15, r * 3.4, C.tile, 10, 0, hh + 0.1));
-  const cr = mesh(new THREE.OctahedronGeometry(r * 0.28, 0), 0xb58cff, { emissive: 0x5a2fb0 });
-  cr.scale.set(1, 1.8, 1);
-  cr.position.set(0, hh + r * 3.4 + r * 0.7, 0);
+  const hh = h * 1.12;
+  g.add(cyl(r * 1.08, r * 1.12, 0.6, C.stoneDark, 10));
+  g.add(cyl(r * 0.8, r * 0.98, hh, color, 10));
+  g.add(runeRing(r * 0.95, hh * 0.3));
+  g.add(runeRing(r * 0.86, hh * 0.72, VIO, VIO_EMIT));
+  g.add(cyl(r * 0.98, r * 0.82, 0.45, C.stoneLight, 10, 0, hh - 0.4));
+  let top = hh;
+  if (o.roof === null) {
+    g.add(merlonRing(r * 0.92, hh, 8, C.stoneLight, r * 0.36));
+    for (let i = 0; i < 8; i += 2) {
+      const a = (i / 8) * Math.PI * 2;
+      const c = mesh(new THREE.OctahedronGeometry(r * 0.13, 0), VIO, { emissive: VIO_EMIT });
+      c.scale.set(1, 1.8, 1);
+      c.position.set(Math.cos(a) * r * 0.92, hh + r * 0.52, Math.sin(a) * r * 0.92);
+      g.add(c);
+    }
+    top = hh + r * 0.6;
+  } else {
+    const hat = witchHat(r * 0.98, r * 2.6, o.roof ?? C.tile, 0.5);
+    hat.position.y = hh;
+    g.add(hat);
+    top = hh + r * 2.6;
+  }
+  const cr = floatingCrystal(r * 0.42);
+  cr.position.set(0, top + r * 0.9, 0);
   g.add(cr);
   for (let i = 0; i < 2; i++) {
     const a = i * Math.PI + 0.5;

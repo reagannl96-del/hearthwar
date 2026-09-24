@@ -5,7 +5,8 @@ import { Icon } from '../art/icons';
 import { Village3D } from '../three/Village3D';
 import { Btn, Countdown, Empty, Progress, Section, UnitList } from '../components/common';
 import { fmt } from '../format';
-import { act, go, isNightNow, now, prefs, setPrefs, view, village } from '../store';
+import { act, battleReplay, go, host, isNightNow, liveRes, now, paused, prefs, setPrefs, view, village, warp } from '../store';
+import type { TheatreInput } from '../three/battle/theatre';
 import { isVolcanic, isWinter } from '../../engine/world';
 import { CommandRow } from './RallyScreen';
 
@@ -26,6 +27,29 @@ export function VillageScreen() {
     .slice(0, 6);
   const recruiting = (['barracks', 'stable', 'workshop', 'academy', 'statue'] as RecruitBuilding[]).filter((b) => v.recruit[b].length > 0);
   const supportTotal = v.support.length;
+  // attacks on this village, and what happened when they landed, for the scene to act out
+  const t = now.value;
+  const battle: TheatreInput = {
+    now: t,
+    rate: paused.value ? 0 : warp.value,
+    village: {
+      id: v.id, x: v.x, y: v.y, buildings: v.buildings, units: v.units,
+      support: v.support.map((s) => ({ units: s.units, theme: s.theme })),
+      hide: v.hide, res: liveRes(v, t), theme: themeOfHero(v.hero),
+    },
+    incoming: pv.incoming.filter((c) => c.toVid === v.id && c.kind === 'attack').map((c) => ({
+      id: c.id, fromVid: c.fromVid, fromX: c.fromX, fromY: c.fromY, toX: c.toX, toY: c.toY,
+      depart: c.depart, arrive: c.arrive, theme: c.theme, kinds: c.kinds, ownerName: c.ownerName,
+    })),
+    reports: host.value!.reports()
+      .filter((r) => r.kind === 'defense' && r.vid === v.id && r.battle && t - r.t < 10 * 60_000)
+      .slice(0, 8)
+      .map((r) => ({ id: r.id, t: r.t, battle: r.battle! })),
+  };
+  const rp = battleReplay.value;
+  const replay = rp && rp.report.vid === v.id && rp.report.battle
+    ? { report: { id: rp.report.id, t: rp.report.t, battle: rp.report.battle }, at: rp.at, fromX: rp.report.battle.attacker.x, fromY: rp.report.battle.attacker.y }
+    : null;
   return (
     <div class="village-layout">
       <div class="scene-col">
@@ -48,6 +72,9 @@ export function VillageScreen() {
             now={now.value}
             militia={!!v.militiaUntil && v.militiaUntil > now.value}
             theme={themeOfHero(v.hero)}
+            battle={battle}
+            replay={replay}
+            onReplayed={() => { battleReplay.value = null; }}
             onToggleNight={() => setPrefs({ sceneTime: night ? 'day' : 'night' })}
           />
         </div>

@@ -16,12 +16,15 @@ import { TRIBE_MAX_MEMBERS, tribeFull, acceptInvite, answerApplication, applicat
 import { tribeName } from '../data/names';
 import type { BattleData, BuildingId, Command, Player, Res, Tribe, UnitId, Units, Village, VillageRole, World } from '../types';
 import { RES_KEYS } from '../types';
-import { farmMax, popFree, queuedLevel, recruitQueueEnd, storageOf, unitAvailable, updateVillage } from '../village';
+import { farmMax, loyaltyRegen, popFree, queuedLevel, recruitQueueEnd, storageOf, unitAvailable, updateVillage } from '../village';
 import { aiThinkInterval } from '../world';
 
 type P = NonNullable<Player['ai']>['personality'];
 
 // ---------- build plans ----------
+
+/** A minute of game time, for the waits below. */
+const MIN = 60_000;
 
 const BASE_PLAN: [BuildingId, number][] = [
   ['timber', 1], ['claypit', 1], ['ironmine', 1], ['timber', 2], ['claypit', 2], ['main', 2], ['timber', 3], ['claypit', 3],
@@ -412,24 +415,30 @@ function nobles(w: World, p: Player, v: Village): void {
   if (info.canTrain > 0 && !busy && resGte(v.res, nobleCost)) {
     if (applyAction(w, p.id, { type: 'recruit', vid: v.id, unit: 'noble', count: 1 }).ok) return;
   }
+  // enough noblemen for a train (alive, away or in training): no more crowns for now
+  const owned = info.used - Math.max(0, p.villages.length - 1);
+  if (owned >= NOBLES_WANTED) return;
   const cap = storageOf(v);
   const flush = RES_KEYS.every((k) => v.res[k] > cap * 0.75);
-  if ((info.canTrain <= 0 && info.coinsNeeded > 0) || (flush && info.canTrain < 3)) {
+  if ((info.canTrain <= 0 && info.coinsNeeded > 0) || (flush && info.canTrain < 2)) {
     const need = { wood: COIN_COST.wood + nobleCost.wood * 0.3, clay: COIN_COST.clay + nobleCost.clay * 0.3, iron: COIN_COST.iron + nobleCost.iron * 0.3 };
     if (resGte(v.res, need)) applyAction(w, p.id, { type: 'mintCoin', vid: v.id, count: 1 });
   }
 }
 
+/** noblemen an AI keeps ready: a full train, and one to spare */
+const NOBLES_WANTED = 6;
+
 interface NobleMemory { target: number; since: number }
 const nobleTargets = new WeakMap<Player, NobleMemory>();
 
 /** hours between noble trains: a person saves up, scouts, and picks the moment */
-const CONQUEST_GAP_H: Record<string, number> = { hard: 5, normal: 8, easy: 12, peaceful: 12 };
+const CONQUEST_GAP_H: Record<string, number> = { hard: 6, normal: 10, easy: 14, peaceful: 14 };
 
 /** Every village held is more to look after, so each next conquest takes a little longer to prepare. */
 function conquestReady(w: World, p: Player): boolean {
   const last = p.ai!.lastConquest;
-  const gapH = (CONQUEST_GAP_H[w.config.difficulty] ?? 8) * (1 + 0.25 * Math.max(0, p.villages.length - 1));
+  const gapH = (CONQUEST_GAP_H[w.config.difficulty] ?? 10) * (1 + 0.35 * Math.max(0, p.villages.length - 1));
   return last === undefined || w.now - last >= gapH * 3_600_000;
 }
 
@@ -449,33 +458,43 @@ function conquestDrive(w: World, p: Player): void {
   const target = w.villages[mem.target];
   if (!target) return;
   const intel = p.intel[target.id];
+  const wall = intel?.buildings?.wall ?? intel?.wall ?? 0; // unknown walls are assumed 0 until a report says otherwise
+  // enough noblemen to bring the loyalty to nothing in one train (each takes 20 to 35)
+  const loyal = Math.min(100, target.loyalty + ((w.now - target.loyaltyAt) / 3_600_000) * loyaltyRegen(w.config.speed));
+  const need = Math.max(1, Math.ceil(loyal / 22));
   let sent = false;
   for (const home of homes) {
     if (distance(home.x, home.y, target.x, target.y) > 22) continue;
     const n = home.units.noble ?? 0;
-    if (n >= 2) {
-      // a proper noble train: every nobleman lands back to back
-      const per = Math.min(Math.floor((home.units.axe ?? 0) / n), 60);
-      const waves: Units[] = [];
-      for (let i = 0; i < n; i++) waves.push(per > 0 ? { noble: 1, axe: per } : { noble: 1 });
-      if (sendTrain(w, p.id, home.id, target.id, waves).ok) { sent = true; continue; }
+    if (n < need) continue; // a nobleman or two alone would only be thrown away: save up for a whole train
+    const count = Math.min(n, need + 1, 5);
+    // every nobleman rides with an escort, and the rest of the army goes first to clear the way
+    const escort: Units = {};
+    for (const u of ['axe', 'light', 'heavy', 'marcher'] as UnitId[]) {
+      const k = Math.min(Math.floor((home.units[u] ?? 0) * 0.06), u === 'axe' ? 60 : 25);
+      if (k > 0) escort[u] = k;
     }
-    for (let i = 0; i < n; i++) {
-      const escort: Units = { noble: 1 };
-      const wall = intel?.wall ?? 0; // unknown walls are assumed 0 until a report says otherwise
-      const need = wall > 0 ? 25 + wall * 25 : 15;
-      for (const u of ['axe', 'light', 'heavy', 'marcher'] as UnitId[]) {
-        const have = home.units[u] ?? 0;
-        if (have <= 0) continue;
-        const take = Math.min(have, Math.ceil(need / Math.max(1, UNITS[u].attack / 40)));
-        escort[u] = take;
-        break;
-      }
-      if (wall >= 3 && (home.units.ram ?? 0) > 0) escort.ram = Math.min(home.units.ram!, 5 + wall * 3);
-      const r = sendTroops(w, { ownerId: p.id, fromVid: home.id, toVid: target.id, kind: 'attack', units: escort, tag: 'noble' });
-      if (!r.ok) break;
-      sent = true;
+    const clear: Units = {};
+    for (const u of ['axe', 'light', 'heavy', 'marcher'] as UnitId[]) {
+      const left = (home.units[u] ?? 0) - (escort[u] ?? 0) * count;
+      if (left > 0) clear[u] = left;
     }
+    if (wall > 0 && (home.units.ram ?? 0) > 0) clear.ram = Math.min(home.units.ram!, 10 + wall * 12);
+    // will the clearing wave win? against what we know is there (and it must be a real army if we know nothing)
+    const sim = resolveBattle({
+      att: clear, attTech: home.tech, attItem: null, defStacks: [{ units: intel?.units ?? {}, tech: {} }], defItems: [],
+      wall, luck: 0, morale: 1,
+    });
+    const strong = sim.winner === 'attacker' && (intel?.units !== undefined || sim.attStrength >= 2500 + target.points * 3);
+    if (!hasUnits(clear) || !hasUnits(escort) || !strong) {
+      // not this one, not now: look elsewhere for a while
+      (ai.avoid ??= {})[target.id] = w.now + WAR_WAIT.tooStrong;
+      nobleTargets.delete(p);
+      continue;
+    }
+    const waves: Units[] = [clear];
+    for (let i = 0; i < count; i++) waves.push({ noble: 1, ...escort });
+    if (sendTrain(w, p.id, home.id, target.id, waves).ok) { sent = true; break; }
   }
   if (!sent) return;
   ai.memory[target.id] = w.now;
@@ -487,8 +506,10 @@ function chooseNobleTarget(w: World, p: Player, from: Village): Village | null {
   let bestScore = -Infinity;
   for (const v of villagesNear(w, from.x, from.y, 18)) {
     if (v.ownerId === p.id) continue;
+    if ((p.ai!.avoid?.[v.id] ?? 0) > w.now) continue;
     const d = distance(from.x, from.y, v.x, v.y);
-    let score = v.points / 10 - d * 4;
+    const known = p.intel[v.id];
+    let score = v.points / 10 - d * 4 - (known?.buildings?.wall ?? known?.wall ?? 0) * 6 - unitsCount(known?.units ?? {}) * 0.05;
     if (v.ownerId === null) {
       if (v.points < 60) continue;
       score += 40;
@@ -658,7 +679,6 @@ const unitWorth = (units: Units) => {
   return n;
 };
 /** How long a ruler waits on things of war, in real time (a person's patience, not a count of looks). */
-const MIN = 60_000;
 const WAR_WAIT = {
   /** a scouting plan is dropped if no report comes back in time */
   plan: 20 * MIN,

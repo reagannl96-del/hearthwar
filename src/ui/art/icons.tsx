@@ -52,6 +52,10 @@ type Pal = {
 };
 
 const PAL: Record<VillageTheme, Pal> = {
+  paladin: {
+    blade: '#e4ecf2', bladeLt: '#ffffff', bladeDk: '#8a9aa8', wood: '#6e4a2a', woodLt: '#a8784a', woodDk: '#43291a',
+    accent: '#2c56b0', accentLt: '#6f98e0', trim: GOLD, trimLt: GOLD_LT, trimDk: GOLD_DK, gem: '#fff1b0', roof: '#2c4f9e', shot: '#f3eee2',
+  },
   classic: {
     blade: STEEL, bladeLt: STEEL_LT, bladeDk: STEEL_DK, wood: WOOD, woodLt: WOOD_LT, woodDk: WOOD_DK,
     accent: RED, accentLt: RED_LT, trim: GOLD, trimLt: GOLD_LT, trimDk: GOLD_DK, gem: BLUE_LT, roof: ROOF, shot: STONE,
@@ -952,7 +956,7 @@ const paths: Record<string, () => JSX.Element> = {
 
 // every troop in each village's style: 'spear' is the classic, 'goblin_spear' the goblin one
 for (const [u, art] of Object.entries(UNIT_ART) as [UnitId, Art][]) {
-  for (const t of ['classic', 'goblin', 'sorcerer', 'druid', 'necromancer'] as VillageTheme[]) paths[t === 'classic' ? u : `${t}_${u}`] = () => art(PAL[t], t);
+  for (const t of ['classic', 'paladin', 'goblin', 'sorcerer', 'druid', 'necromancer'] as VillageTheme[]) paths[t === 'classic' ? u : `${t}_${u}`] = () => art(PAL[t], t);
 }
 
 /** The icon name for a troop as a village of this theme fields it (heroes look the same everywhere). */
