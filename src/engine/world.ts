@@ -6,11 +6,11 @@ import { pushEvent } from './events';
 import { HOUR, res, villagePoints } from './formulas';
 import { fractalNoise, nextRandom, pick, randInt, shuffle } from './rng';
 import { invalidateSpatial } from './spatial';
-import type { AIState, BonusType, BuildingId, Player, PlayerStats, Village, World, WorldConfig } from './types';
+import type { AIState, BonusType, BuildingId, Player, PlayerStats, UnitId, Village, World, WorldConfig } from './types';
 import { commandsOf, removeCommand } from './cmdindex';
 import { addReport, news, withdrawSupport } from './commands';
 import { villageHero } from './actions';
-import { normalizeTribes } from './tribes';
+import { dropFromTribe, normalizeTribes } from './tribes';
 import { scheduleRoundEnd } from './round';
 import { createVillage, updateVillage } from './village';
 import { managerUnlocked, switchOffManager } from './manager';
@@ -465,17 +465,36 @@ export function realmGrowth(w: World): void {
   if (w.finished) return;
   const tick = barbInterval(w);
   const size = w.config.size;
-  const rulers = Object.values(w.players).filter((p) => p.kind === 'ai' && !p.eliminated).length;
-  // newcomers trickle in: a couple a day on a standard realm, and never more than
-  // about a third on top of the rulers the realm started with
-  const cap = Math.max(4, Math.round(w.config.aiCount * 1.3));
-  const rulerGap = Math.min(24 * HOUR, Math.max(3 * HOUR, (1800 * HOUR) / w.config.speed));
-  const crowding = Math.max(0, 1 - rulers / cap);
-  if (w.config.aiCount > 0 && nextRandom(w) < (tick / rulerGap) * crowding) {
-    const p = foundAiRuler(w);
+  const living = Object.values(w.players).filter((p) => p.kind === 'ai' && !p.eliminated);
+  const rulers = living.length;
+  // rulers come and go as on a real server. Newcomers turn up at random, about one every
+  // hour and a quarter while the realm is at or under its usual size (slower on slow
+  // realms), thinning out to nothing once it is about 15% over
+  const usual = w.config.aiCount;
+  const room = rulers <= usual ? 1 : Math.max(0, 1 - (rulers - usual) / Math.max(1, usual * 0.15));
+  const arriveGap = ARRIVE_GAP * Math.max(1, Math.sqrt(150 / w.config.speed));
+  if (usual > 0 && nextRandom(w) < (tick / arriveGap) * room) {
+    // a late arrival comes with a start that fits the realm's age, so it is not simply eaten
+    const head = w.now < DAY_MS / 2 ? 0 : Math.min(14, 4 + Math.floor(w.now / DAY_MS) * 2);
+    const p = foundAiRuler(w, head);
     if (p) {
       const v = w.villages[p.villages[0]];
       news(w, `${p.name} has arrived in the realm and founded ${v.name}.`, 'player', v.id);
+    }
+  }
+  // and now and then someone gives up: mostly rulers who are struggling (down to their last
+  // village after losing others, or failing again and again), now and then anyone (life happens)
+  for (const p of living) {
+    if (w.now - p.createdAt < DAY_MS) continue;
+    const ai = p.ai;
+    const lostLately = Object.values(ai?.lost ?? {}).some((at) => w.now - at < DAY_MS);
+    const struggling = p.villages.length <= 1 && (lostLately || (ai?.cold ?? 0) >= 2);
+    const perHour = struggling ? 0.02 : 0.0012;
+    if (nextRandom(w) < perHour * (tick / HOUR)) {
+      const name = p.name;
+      const n = p.villages.length;
+      abandonRealm(w, p);
+      news(w, n > 0 ? `${name} has left the realm; ${n === 1 ? 'their village falls' : `their ${n} villages fall`} to the barbarians.` : `${name} has left the realm.`, 'player');
     }
   }
   // a new barbarian village now and then (a few a day on a standard realm), only while
@@ -512,6 +531,47 @@ export function reinforceRulers(w: World, want: number): number {
   }
   if (n > 0) news(w, `${n} new rulers have arrived in the realm and settled the open land.`, 'player');
   return n;
+}
+
+/** On average, a newcomer turns up this often (real time) while the realm has room. */
+const ARRIVE_GAP = 75 * 60_000;
+const DAY_MS = 24 * HOUR;
+
+/**
+ * A computer ruler leaves the realm: its villages stand empty as barbarian villages,
+ * exactly as they are (buildings and the troops at home stay), its armies on the road
+ * and its support abroad are gone, other rulers' support goes home, and it leaves its tribe.
+ */
+export function abandonRealm(w: World, p: Player): void {
+  for (const c of commandsOf(w, p.id)) removeCommand(w, c);
+  for (const id in w.villages) {
+    const host = w.villages[id];
+    if (host.support.some((st) => st.ownerId === p.id)) host.support = host.support.filter((st) => st.ownerId !== p.id);
+  }
+  for (const vid of p.villages) {
+    const v = w.villages[vid];
+    if (!v) continue;
+    updateVillage(w, v, w.now);
+    for (const st of [...v.support]) withdrawSupport(w, st.ownerId, v.id, st.fromVid);
+    v.ownerId = null;
+    v.name = 'Barbarian village';
+    v.buildQueue = [];
+    for (const rb in v.recruit) v.recruit[rb as keyof typeof v.recruit] = [];
+    v.research = [];
+    v.scavenge = [null, null, null, null];
+    v.outPop = 0;
+    v.merchantsOut = 0;
+    v.loyalty = 100;
+    v.loyaltyAt = w.now;
+    v.grownAt = w.now;
+    for (const h of [...HEROES, 'noble', 'militia'] as UnitId[]) delete v.units[h];
+  }
+  p.villages = [];
+  p.points = 0;
+  p.eliminated = true;
+  dropFromTribe(w, p.id);
+  invalidateSpatial();
+  w.mapRev++;
 }
 
 /** Found an AI ruler at a spot with real elbow room; null when the realm has none left. */
