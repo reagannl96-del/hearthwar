@@ -1179,6 +1179,29 @@ export function buildWall(level: number, color: number): THREE.Group {
   gate.add(box(GATE_HALF * 2 * R, 0.5, 0.3, C.woodDark, 0, h - 0.4, thick / 2 + 0.2));
   gate.position.set(0, 0, R);
   g.add(gate);
+  if (level >= 20) {
+    for (let i = 0; i < towers; i++) {
+      const a = start + ((end - start) * i) / (towers - 1);
+      const th = tier === 3 ? 6 : 8, tr = tier === 3 ? 2.3 : 2.7;
+      const pole = new THREE.Group();
+      pole.add(cyl(0.06, 0.06, 2.4, C.woodDark, 5));
+      const fl = box(1.2, 0.7, 0.05, color, 0.62, 1.5, 0);
+      fl.userData.flag = true;
+      pole.add(fl);
+      pole.add(box(1.2, 0.08, 0.06, 0xe9b83a, 0.62, 1.48, 0));
+      pole.add(cone(0.1, 0.25, 0xe9b83a, 5, 0, 2.4));
+      pole.userData.dynamic = true;
+      pole.position.set(Math.cos(a) * (R + tr * 0.4), th + tr * 2.7 * (tier === 4 ? 1 : 0.2) + 0.2, Math.sin(a) * (R + tr * 0.4));
+      g.add(pole);
+    }
+    // the crest over the gate: a great golden shield
+    const crest = new THREE.Group();
+    crest.add(cyl(1.3, 1.3, 0.2, 0xe9b83a, 12).rotateX(Math.PI / 2));
+    crest.add(cyl(1.0, 1.0, 0.24, color, 12).rotateX(Math.PI / 2));
+    crest.add(blob(0.35, 0xe9b83a, 0, 0, 0.12));
+    crest.position.set(0, h + 3.0, R + thick / 2 + 0.5);
+    g.add(crest);
+  }
   const baked = bake(g, { building: 'wall' });
   void torches;
   if (tier === 4) {

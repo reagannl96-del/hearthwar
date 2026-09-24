@@ -76,6 +76,21 @@ function float(o: THREE.Object3D, dt: number, t: number): void {
   }
 }
 
+/** Window glass behind drawn shutters: at night it glows only faintly. */
+const SHUTTERED = 0x2a2019;
+
+/** Not every window burns bright at night: some of them are shuttered, chosen by where they are so it never flickers. */
+function shutterSome(obj: THREE.Object3D, id: BuildingId): void {
+  const lit = mat(C.window), dim = mat(SHUTTERED);
+  let i = id.length * 7;
+  obj.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh || m.material !== lit) return;
+    i = (i * 1103515245 + 12345) & 0x7fffffff;
+    if (i % 100 < 45) m.material = dim;
+  });
+}
+
 const AIM_RAY = new THREE.Raycaster();
 const DOWN = new THREE.Vector3(0, -1, 0);
 const HIT_MAT = new THREE.MeshBasicMaterial({ visible: false });
@@ -203,7 +218,7 @@ export class VillageRenderer {
     if (!opts.showcase) {
       const composer = new EffectComposer(renderer);
       composer.addPass(new RenderPass(this.scene, this.camera));
-      this.bloom = new UnrealBloomPass(new THREE.Vector2(512, 512), 0.85, 0.55, 0.86);
+      this.bloom = new UnrealBloomPass(new THREE.Vector2(512, 512), 0.6, 0.5, 0.9);
       composer.addPass(this.bloom);
       composer.addPass(new OutputPass());
       this.composer = composer;
@@ -369,7 +384,9 @@ export class VillageRenderer {
     }
     // windows glow warm at night
     mat(C.window).emissive.set(n ? 0xffa53a : 0x000000);
-    mat(C.window).emissiveIntensity = n ? 2.4 : 1;
+    mat(C.window).emissiveIntensity = n ? 1.5 : 1;
+    mat(SHUTTERED).emissive.set(n ? 0xc0703a : 0x000000);
+    mat(SHUTTERED).emissiveIntensity = n ? 0.35 : 1;
     for (const l of this.lanterns) l.visible = n;
     for (const s of this.slots.values()) s.group.traverse((o) => { if (o.userData.nightOnly) o.visible = n; });
     this.placeNightLights();
@@ -418,7 +435,7 @@ export class VillageRenderer {
     spots.push(new THREE.Vector3(0, 3.5, WALL_R - 4)); // the gate
     this.nightLights.forEach((l, i) => {
       const p = spots[i];
-      l.intensity = this.night && p ? 24 : 0;
+      l.intensity = this.night && p ? (i === 0 ? 14 : 7) : 0;
       if (p) l.position.copy(p);
     });
   }
@@ -481,7 +498,7 @@ export class VillageRenderer {
 
   private updateSlot(id: BuildingId, level: number, building: boolean): void {
     const tier = visualTier(id, level);
-    const key = `${tier}|${building ? 1 : 0}|${id === 'rally' || id === 'main' || id === 'watchtower' || id === 'wall' || id === 'barracks' ? this.color : ''}`;
+    const key = `${tier}|${BUILDINGS[id].max > 1 && level >= BUILDINGS[id].max ? 'M' : ''}|${building ? 1 : 0}|${id === 'rally' || id === 'main' || id === 'watchtower' || id === 'wall' || id === 'barracks' ? this.color : ''}`;
     const cur = this.slots.get(id);
     if (cur && cur.key === key) return;
     if (cur) {
@@ -524,6 +541,7 @@ export class VillageRenderer {
     } else {
       const built = buildModel(id, Math.max(level, building && level === 0 ? 1 : level), this.color);
       const raw = built.obj;
+      shutterSome(raw, id);
       if (building) raw.add(scaffold(built.w + 0.6, built.d + 0.6, Math.max(3, Math.min(built.h - 2, 9))));
       if (level <= 0 && naturalAtZero) {
         // an untouched site outside the walls
@@ -1084,7 +1102,7 @@ export class VillageRenderer {
         }
       });
     }
-    this.fireLight.intensity = this.lastBuildings && this.lastBuildings.rally > 0 ? (18 + Math.sin(t * 13) * 4 + Math.sin(t * 5.1) * 3) * (this.night ? 3 : 1) : 0;
+    this.fireLight.intensity = this.lastBuildings && this.lastBuildings.rally > 0 ? (18 + Math.sin(t * 13) * 4 + Math.sin(t * 5.1) * 3) * (this.night ? 1.8 : 1) : 0;
     if (this.night) for (const l of this.lanterns) l.children[2].scale.setScalar(2.4 + Math.sin(t * 9 + l.id) * 0.25);
     // hover ring pulse
     if (this.ring.visible) (this.ring.material as THREE.MeshBasicMaterial).opacity = 0.55 + Math.sin(t * 5) * 0.3;

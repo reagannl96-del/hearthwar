@@ -3,6 +3,8 @@
 
 import * as THREE from 'three';
 import type { BuildingId } from '../../engine/types';
+import { BUILDINGS as BUILDINGS_DATA } from '../../engine/data/buildings';
+import { addMastery } from './mastery';
 import {
   ARC, ARC_EMIT, C, GLASS, STAR, STAR_EMIT, VIO, VIO_EMIT, arcaneLamp, blob, box, cone, cyl, darker, extrude, floatingCrystal, floatingIsle,
   getTheme, heraldry, house, lancet, mat, merlonRing, mesh, orbitRing, rng, roundTower, runeRing, witchHat, type Theme,
@@ -41,6 +43,9 @@ export function buildModel(id: BuildingId, level: number, color: number): Built 
   const t = visualTier(id, level);
   const b = themed(id, t, baseModel(id, t, color));
   hangSign(id, b, getTheme());
+  // at its highest level every building earns a finishing touch in the village's style
+  const max = BUILDINGS_DATA[id].max;
+  if (max > 1 && level >= max && id !== 'wall') addMastery(id, b.obj);
   return b;
 }
 
