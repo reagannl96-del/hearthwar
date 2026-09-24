@@ -7,7 +7,8 @@ import { BBEditor } from '../bbcode/Editor';
 import { FORUM_MAX_TEXT } from '../../engine/tribes';
 import { ARCHIVE_CAP } from '../../engine/commands';
 import { Btn, Empty, PlayerLink, Res, Section, VillageLink, UnitIcon, unitName } from '../components/common';
-import { fmt, fmtAgo, fmtClock } from '../format';
+import { fmt, fmtAgo, fmtClock, fmtDur } from '../format';
+import { currentCache } from '../caches';
 import { act, battleReplay, host, now, rallyTarget, view, warp, usePane } from '../store';
 import { AttackViewer } from './AttackViewer';
 
@@ -31,6 +32,13 @@ function ArchiveGlyph({ out, size = 16 }: { out?: boolean; size?: number }) {
     </svg>
   );
 }
+
+/** A report about a resource cache: a battle there, or word of how it ended. */
+const aboutCache = (r: { battle?: BattleData; kind: Report['kind']; title: string }) => !!r.battle?.cache || (r.kind === 'info' && /resource cache/i.test(r.title));
+/** The report of the cache you held to the end: your stores filled to the brim. */
+const cachePrize = (r: { kind: Report['kind']; title: string; res?: Report['res'] }) => r.kind === 'info' && !!r.res && /^You held the resource cache/.test(r.title);
+/** A battle at a resource cache can be watched whoever won: the attacker's, or one your stationed troops fought in. */
+const watchCache = (r: Report, me: number) => !!r.battle?.cache && ((r.kind === 'attack' && r.battle.attacker.playerId === me) || r.kind === 'support');
 
 const archive = (r: Report, keep: boolean) =>
   act({ type: 'archiveReport', id: r.id, archived: keep }, keep ? 'Report archived.' : 'Report moved back to the inbox.');
@@ -102,6 +110,7 @@ export function ReportsScreen({ id }: { id?: number }) {
             {list.slice(0, 200).map((r) => (
               <li class={`report-item ${r.read ? '' : 'is-unread'}`}>
                 <span class={`dot dot-${r.color}`} />
+                {aboutCache(r) && <Icon name="cache" size={16} class="report-kind" title="Resource cache" />}
                 <button type="button" class="link grow" onClick={() => pane.go({ name: 'reports', id: r.id })}>{r.title}</button>
                 {r.battle?.loot && <Haul loot={r.battle.loot.wood + r.battle.loot.clay + r.battle.loot.iron} capacity={r.battle.capacity} />}
                 <span class="muted small">{fmtAgo(r.t, now.value)}</span>
@@ -170,20 +179,24 @@ function ReportView({ r, onBox }: { r: Report; onBox: (b: Box) => void }) {
             </Btn>
           </div>
         )}
-        {r.battle && r.battle.winner === 'attacker' && r.battle.attacker.playerId === view.value!.me.id && r.kind !== 'defense' && (
+        {r.battle && watchCache(r, view.value!.me.id) ? (
+          <div class="rep-watch">
+            <Btn small onClick={() => setWatching(true)}>⚔ Watch the battle</Btn>
+          </div>
+        ) : r.battle && r.battle.winner === 'attacker' && r.battle.attacker.playerId === view.value!.me.id && r.kind !== 'defense' && (
           <div class="rep-watch">
             <Btn small onClick={() => setWatching(true)}>⚔ Watch your attack</Btn>
           </div>
         )}
         {watching && r.battle && <AttackViewer r={r} onClose={() => setWatching(false)} />}
         {r.text && <p class="rep-text">{r.text}</p>}
-        {r.res && (
+        {r.res && (cachePrize(r) ? <CachePrize res={r.res} /> : (
           <div class="rep-block">
             <h2 class="rep-sub">Goods</h2>
             <span class="cost">{(['wood', 'clay', 'iron'] as ResKey[]).map((k) => <Res k={k} n={r.res![k]} />)}</span>
           </div>
-        )}
-        {r.battle && <Battle b={r.battle} kind={r.kind} />}
+        ))}
+        {r.battle && <Battle b={r.battle} kind={r.kind} t={r.t} />}
       </article>
       {view.value!.me.tribeId != null && <ShareReport key={r.id} r={r} />}
     </div>
@@ -251,9 +264,9 @@ export function SharedReportCard({ r }: { r: SharedReport }) {
       {open && (
         <div class="shared-body">
           {r.text && <p class="rep-text">{r.text}</p>}
-          {r.res && <span class="cost">{(['wood', 'clay', 'iron'] as ResKey[]).map((k) => <Res k={k} n={r.res![k]} />)}</span>}
+          {r.res && (cachePrize(r) ? <CachePrize res={r.res} /> : <span class="cost">{(['wood', 'clay', 'iron'] as ResKey[]).map((k) => <Res k={k} n={r.res![k]} />)}</span>)}
           {watchable && <div class="rep-watch"><Btn small onClick={() => setWatching(true)}>⚔ Watch the battle</Btn></div>}
-          {r.battle && <Battle b={r.battle} kind={r.kind} shared />}
+          {r.battle && <Battle b={r.battle} kind={r.kind} t={r.t} shared />}
         </div>
       )}
       {watching && r.battle && <AttackViewer r={{ id: -Math.round(r.t % 1e9), t: r.t, kind: r.kind, title: r.title, color: r.color, read: true, battle: r.battle }} onClose={() => setWatching(false)} />}
@@ -374,7 +387,57 @@ export function EffectFactors({ effects, wall }: { effects?: string[]; wall?: nu
   );
 }
 
-function Battle({ b, kind, shared }: { b: BattleData; kind: Report['kind']; shared?: boolean }) {
+/** What holding the cache to the end brought in: every resource, and the lot together. */
+function CachePrize({ res }: { res: NonNullable<Report['res']> }) {
+  const total = res.wood + res.clay + res.iron;
+  return (
+    <div class="rep-block cache-prize">
+      <Icon name="cache" size={56} />
+      <div class="cache-prize-body">
+        <h2 class="rep-sub">The cache's hoard</h2>
+        <span class="cost cache-prize-res">{(['wood', 'clay', 'iron'] as ResKey[]).map((k) => <Res k={k} n={res[k]} />)}</span>
+        <span class="muted small">{total > 0 ? <><b class="num">{fmt(total)}</b> resources in all: the warehouse is full to the brim.</> : 'The warehouse was already full to the brim.'}</span>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * A battle at a resource cache: who holds it after the fight (the one thing only a battle
+ * there tells), how long it had left, and what to do next if you won.
+ */
+function CacheLine({ b, t, mine }: { b: BattleData; t?: number; mine: boolean }) {
+  const pane = usePane();
+  const c = b.cache!;
+  const pv = view.value!;
+  const live = currentCache(host.value!.world);
+  const running = !!live && live.id === b.defender.vid && live.endsAt === c.endsAt && live.endsAt > now.value;
+  const won = mine && b.winner === 'attacker' && Object.entries(b.attUnits).some(([u, n]) => u !== 'scout' && (n ?? 0) > 0);
+  const holder = c.holderId === pv.me.id ? 'you' : c.holder;
+  return (
+    <div class="rep-cache">
+      <Icon name="cache" size={34} />
+      <div class="rep-cache-body">
+        <div class="rep-cache-head">
+          <b>Resource cache</b> · {holder ? <>held by <b>{holder}</b> after this battle</> : <>nobody holds it yet</>}
+        </div>
+        <div class="muted small">
+          Guards level <b class="num">{c.level}</b>
+          {t !== undefined && <> · <b class="num">{fmtDur(Math.max(0, c.endsAt - t) / warp.value)}</b> left at the time of the battle</>}
+          {running ? <> · <b class="num">{fmtDur((c.endsAt - now.value) / warp.value)}</b> left now</> : t !== undefined && <> · it is over now</>}
+        </div>
+        {won && (
+          <div class="rep-cache-claim">
+            <span class="good-text">You have a claim: send support to hold it.</span>
+            {running && <Btn small variant="ghost" onClick={() => { rallyTarget.value = { x: b.defender.x, y: b.defender.y, kind: 'support' }; pane.go({ name: 'building', id: 'rally', tab: 'send' }); }}><Icon name="support" size={14} /> Send support</Btn>}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Battle({ b, kind, shared, t }: { b: BattleData; kind: Report['kind']; shared?: boolean; t?: number }) {
   const pane = usePane();
   const pv = view.value!;
   const myTribe = pv.me.tribeId;
@@ -391,6 +454,8 @@ function Battle({ b, kind, shared }: { b: BattleData; kind: Report['kind']; shar
         <Icon name={attWon ? 'attack' : 'shield'} size={22} />
         <span>{attWon ? 'The attacker has won' : 'The defender has won'}</span>
       </div>
+
+      {b.cache && <CacheLine b={b} t={t} mine={!shared && b.attacker.playerId === pv.me.id} />}
 
       <div class="rep-factors">
         <LuckMeter luck={b.luck} />
@@ -418,7 +483,7 @@ function Battle({ b, kind, shared }: { b: BattleData; kind: Report['kind']; shar
 
       <div class="rep-block">
         <SideTable
-          role="Defender" side={b.defender} cols={cols} win={!attWon}
+          role="Defender" side={b.cache && b.defender.playerId === null ? { ...b.defender, playerName: 'Cache guards' } : b.defender} cols={cols} win={!attWon}
           rows={[
             { label: 'Quantity', units: b.defUnits },
             { label: 'Losses', units: b.defLost, tone: 'loss' },
@@ -431,7 +496,7 @@ function Battle({ b, kind, shared }: { b: BattleData; kind: Report['kind']; shar
         <div class="rep-block">
           <h2 class="rep-sub">Espionage</h2>
           <dl class="rep-facts">
-            {b.scout.res && (
+            {b.scout.res && !b.cache && (
               <>
                 <dt>Resources scouted</dt>
                 <dd class="cost">{(['wood', 'clay', 'iron'] as ResKey[]).map((k) => <Res k={k} n={b.scout!.res![k]} />)}</dd>
@@ -522,7 +587,7 @@ function Battle({ b, kind, shared }: { b: BattleData; kind: Report['kind']; shar
 
       {kind === 'attack' && mine && !shared && (
         <div class="row gap rep-actions">
-          <Btn onClick={() => { rallyTarget.value = { x: b.defender.x, y: b.defender.y, kind: 'attack', units: b.attUnits as Record<string, number> }; pane.go({ name: 'building', id: 'rally', tab: 'send' }); }}><Icon name="attack" size={16} /> Attack again with the same troops</Btn>
+          <Btn onClick={() => { rallyTarget.value = { x: b.defender.x, y: b.defender.y, kind: 'attack', units: b.attUnits as Record<string, number>, ...(b.cache ? { cat: 'wall' as const } : {}) }; pane.go({ name: 'building', id: 'rally', tab: 'send' }); }}><Icon name="attack" size={16} /> Attack again with the same troops</Btn>
           <Btn variant="ghost" onClick={() => pane.go({ name: 'map', focus: b.defender.vid })}><Icon name="map" size={16} /> Show on map</Btn>
         </div>
       )}

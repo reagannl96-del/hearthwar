@@ -483,3 +483,134 @@ export function jungleSprite(variant: number): HTMLCanvasElement {
     }
   });
 }
+
+// ---------- the resource cache ----------
+
+const cacheSprites = new Map<Ground, HTMLCanvasElement>();
+/** Trodden earth under the depot, by the land it stands in. */
+const DEPOT_GROUND: Record<Ground, [string, string]> = {
+  grass: ['#b8945a', '#8f6f3e'], snow: ['#e3e9ed', '#b9c4cc'], ash: ['#6e625a', '#4d433d'], sand: ['#dcc088', '#b39456'], jungle: ['#8f7a4c', '#6a5732'],
+};
+const INK = '#2a180a';
+
+/**
+ * A resource cache on the map: a strongbox heaped with gold, timber, brick and iron,
+ * crates and a lumber pile beside it inside a ring of stakes, and a gold pennant over it.
+ * A square canvas (128 px) with the depot standing on its bottom edge; drawn big and
+ * bright so it reads as treasure even a few pixels wide.
+ */
+export function cacheSprite(ground: Ground = 'grass'): HTMLCanvasElement {
+  const hit = cacheSprites.get(ground);
+  if (hit) return hit;
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d')!;
+  g.lineJoin = 'round';
+  g.lineCap = 'round';
+  const [earth, rim] = DEPOT_GROUND[ground];
+  const outline = (w = 3) => { g.strokeStyle = INK; g.lineWidth = w; g.stroke(); };
+  // the trodden yard
+  g.fillStyle = 'rgba(40,24,8,0.28)';
+  g.beginPath(); g.ellipse(66, 106, 58, 19, 0, 0, TAU); g.fill();
+  g.fillStyle = earth;
+  g.beginPath(); g.ellipse(64, 102, 56, 19, 0, 0, TAU); g.fill();
+  g.strokeStyle = rim; g.lineWidth = 3; g.stroke();
+  // a ring of sharpened stakes: the back half first
+  const stake = (a: number) => {
+    const x = 64 + Math.cos(a) * 54, y = 101 + Math.sin(a) * 18;
+    g.fillStyle = Math.sin(a) < 0 ? '#6a4524' : '#8a5a2e';
+    g.beginPath();
+    g.moveTo(x - 3, y + 2); g.lineTo(x - 3, y - 11); g.lineTo(x, y - 16); g.lineTo(x + 3, y - 11); g.lineTo(x + 3, y + 2); g.closePath();
+    g.fill(); outline(1.6);
+  };
+  const stakes: number[] = [];
+  for (let i = 0; i < 26; i++) {
+    const a = (i / 26) * TAU;
+    if (Math.abs(a - Math.PI / 2) < 0.28) continue; // the gate, facing the viewer
+    stakes.push(a);
+  }
+  for (const a of stakes) if (Math.sin(a) < 0) stake(a);
+  // the pennant pole
+  g.fillStyle = '#5a3a1e';
+  g.beginPath(); g.rect(97, 14, 4, 80); g.fill(); outline(1.6);
+  g.fillStyle = '#f0bd45';
+  g.beginPath(); g.moveTo(101, 16); g.lineTo(124, 22); g.lineTo(110, 27); g.lineTo(124, 33); g.lineTo(101, 36); g.closePath(); g.fill(); outline(2);
+  g.fillStyle = '#b8392b';
+  g.beginPath(); g.arc(108, 26, 3, 0, TAU); g.fill();
+  g.fillStyle = '#fde38a';
+  g.beginPath(); g.arc(99, 13, 3.4, 0, TAU); g.fill(); outline(1.4);
+  // crates, stacked on the left
+  const crate = (x: number, y: number, s: number) => {
+    g.fillStyle = '#b8864e';
+    g.beginPath(); g.rect(x, y, s, s * 0.8); g.fill(); outline(2);
+    g.fillStyle = '#d6a868';
+    g.beginPath(); g.moveTo(x, y); g.lineTo(x + s * 0.3, y - s * 0.28); g.lineTo(x + s * 1.3, y - s * 0.28); g.lineTo(x + s, y); g.closePath(); g.fill(); outline(2);
+    g.fillStyle = '#8a5f32';
+    g.beginPath(); g.moveTo(x + s, y); g.lineTo(x + s * 1.3, y - s * 0.28); g.lineTo(x + s * 1.3, y + s * 0.52); g.lineTo(x + s, y + s * 0.8); g.closePath(); g.fill(); outline(2);
+    g.strokeStyle = '#6e4220'; g.lineWidth = 1.6;
+    g.beginPath(); g.moveTo(x + 2, y + 2); g.lineTo(x + s - 2, y + s * 0.8 - 2); g.moveTo(x + s - 2, y + 2); g.lineTo(x + 2, y + s * 0.8 - 2); g.stroke();
+  };
+  crate(14, 78, 20);
+  crate(20, 60, 17);
+  // the lumber pile on the right
+  const log = (x: number, y: number) => {
+    g.fillStyle = '#a86b36';
+    g.beginPath(); g.rect(x - 16, y - 5, 16, 10); g.fill(); outline(1.8);
+    g.fillStyle = '#ecc690';
+    g.beginPath(); g.ellipse(x, y, 4.2, 5.2, 0, 0, TAU); g.fill(); outline(1.8);
+    g.strokeStyle = '#a86b36'; g.lineWidth = 1;
+    g.beginPath(); g.ellipse(x, y, 1.8, 2.3, 0, 0, TAU); g.stroke();
+  };
+  for (const [x, y] of [[106, 92], [114, 92], [110, 83]] as [number, number][]) log(x, y);
+  // the strongbox: lid thrown back, the hoard heaped over the brim
+  g.fillStyle = '#5c3719';
+  g.beginPath(); g.moveTo(38, 70); g.lineTo(42, 44); g.quadraticCurveTo(43, 38, 50, 38); g.lineTo(78, 38); g.quadraticCurveTo(85, 38, 86, 44); g.lineTo(90, 70); g.closePath(); g.fill(); outline(3);
+  g.fillStyle = '#3e2410';
+  g.beginPath(); g.moveTo(45, 68); g.lineTo(48, 47); g.lineTo(80, 47); g.lineTo(83, 68); g.closePath(); g.fill();
+  // the heap, glowing gold
+  const glow = g.createRadialGradient(64, 62, 2, 64, 62, 34);
+  glow.addColorStop(0, 'rgba(255,236,150,0.95)');
+  glow.addColorStop(1, 'rgba(255,200,60,0)');
+  g.fillStyle = glow;
+  g.beginPath(); g.arc(64, 62, 34, 0, TAU); g.fill();
+  g.fillStyle = '#f0bd45';
+  g.beginPath(); g.moveTo(34, 76); g.quadraticCurveTo(40, 54, 64, 52); g.quadraticCurveTo(88, 54, 94, 76); g.closePath(); g.fill(); outline(2.6);
+  // a log, a brick and an iron bar poking out of the gold
+  g.save(); g.translate(44, 58); g.rotate(-0.45);
+  g.fillStyle = '#a86b36'; g.beginPath(); g.rect(-4, -5, 26, 10); g.fill(); outline(2);
+  g.fillStyle = '#ecc690'; g.beginPath(); g.ellipse(-4, 0, 4, 5, 0, 0, TAU); g.fill(); outline(2);
+  g.restore();
+  g.save(); g.translate(78, 54); g.rotate(0.35);
+  g.fillStyle = '#c2603e'; g.beginPath(); g.rect(-9, -6, 18, 11); g.fill(); outline(2);
+  g.strokeStyle = '#e08a62'; g.lineWidth = 2; g.beginPath(); g.moveTo(-5, -2); g.lineTo(5, -2); g.stroke();
+  g.restore();
+  g.fillStyle = '#b9c4cc';
+  g.beginPath(); g.moveTo(54, 68); g.lineTo(58, 58); g.lineTo(72, 58); g.lineTo(76, 68); g.closePath(); g.fill(); outline(2);
+  g.strokeStyle = '#eef3f6'; g.lineWidth = 2; g.beginPath(); g.moveTo(60, 61); g.lineTo(68, 61); g.stroke();
+  for (const [x, y] of [[46, 70], [83, 69], [64, 53]] as [number, number][]) {
+    g.fillStyle = '#fde38a'; g.beginPath(); g.arc(x, y, 4.2, 0, TAU); g.fill(); outline(1.8);
+  }
+  // the box itself
+  g.fillStyle = '#a86b36';
+  g.beginPath(); g.roundRect(34, 74, 60, 28, 3); g.fill(); outline(3);
+  g.strokeStyle = '#6e4220'; g.lineWidth = 2;
+  g.beginPath(); g.moveTo(36, 88); g.lineTo(92, 88); g.stroke();
+  g.fillStyle = '#a8741a';
+  for (const x of [40, 82]) { g.beginPath(); g.rect(x, 76, 6, 26); g.fill(); outline(1.6); }
+  g.fillStyle = '#f0bd45';
+  g.beginPath(); g.roundRect(32, 70, 64, 8, 2); g.fill(); outline(2.6);
+  g.fillStyle = '#fde38a';
+  g.beginPath(); g.rect(36, 72, 18, 2.4); g.fill();
+  g.fillStyle = '#f0bd45';
+  g.beginPath(); g.moveTo(58, 78); g.lineTo(70, 78); g.lineTo(70, 88); g.lineTo(64, 93); g.lineTo(58, 88); g.closePath(); g.fill(); outline(2);
+  g.fillStyle = INK; g.beginPath(); g.arc(64, 84, 2.2, 0, TAU); g.fill();
+  // clay bricks and iron ingots set out in front
+  g.fillStyle = '#c2603e';
+  for (const [x, y] of [[22, 100], [30, 100], [26, 94]] as [number, number][]) { g.beginPath(); g.rect(x, y, 9, 6); g.fill(); outline(1.6); }
+  g.fillStyle = '#b9c4cc';
+  for (const [x, y] of [[92, 104], [101, 104]] as [number, number][]) { g.beginPath(); g.moveTo(x, y + 5); g.lineTo(x + 2, y); g.lineTo(x + 8, y); g.lineTo(x + 10, y + 5); g.closePath(); g.fill(); outline(1.6); }
+  // the front half of the stakes
+  for (const a of stakes) if (Math.sin(a) >= 0) stake(a);
+  cacheSprites.set(ground, c);
+  return c;
+}

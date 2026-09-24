@@ -8,7 +8,7 @@ import type { VillageTheme } from '../../engine/data/themes';
 
 type IconName = 'wood' | 'clay' | 'iron' | 'pop' | 'storage' | 'time' | 'points' | 'loyalty' | 'coin' | 'merchant' | 'hide'
   | UnitId | `b_${BuildingId}`
-  | 'attack' | 'support' | 'return' | 'report' | 'map' | 'village' | 'quest' | 'rank' | 'settings' | 'overview' | 'pause' | 'play' | 'ff' | 'bell' | 'close' | 'copy' | 'check' | 'link' | 'star' | 'shield' | 'trade' | 'news' | 'prev' | 'next' | 'flag' | 'tribe';
+  | 'cache' | 'attack' | 'support' | 'return' | 'report' | 'map' | 'village' | 'quest' | 'rank' | 'settings' | 'overview' | 'pause' | 'play' | 'ff' | 'bell' | 'close' | 'copy' | 'check' | 'link' | 'star' | 'shield' | 'trade' | 'news' | 'prev' | 'next' | 'flag' | 'tribe';
 
 const S = (props: { children: preact.ComponentChildren; size: number; class?: string; title?: string }) => (
   <svg viewBox="0 0 24 24" width={props.size} height={props.size} class={`icon ${props.class ?? ''}`} aria-hidden={props.title ? undefined : 'true'} role={props.title ? 'img' : undefined}>
@@ -1764,6 +1764,43 @@ const paths: Record<string, () => JSX.Element> = {
       <rect x="11.4" y="2.2" width="4.4" height="3" rx=".5" fill={CLAY} transform="rotate(10 13.6 3.7)" />
       <path d="M15.4 6.8 17.2 3.4 19.6 5.6 18.2 8Z" fill={STEEL} />
       <path d="M8 16.4h8" stroke="#8a6230" stroke-width="1" />
+    </Ink>
+  ),
+
+  // ---- a resource cache: an open strongbox heaped with timber, brick, iron and a little gold ----
+  cache: () => (
+    <Ink>
+      {/* the lid, thrown back */}
+      <path d="M4 11 5.2 3.6C5.4 2.6 6.2 2 7.2 2h9.6c1 0 1.8.6 2 1.6L20 11Z" fill={WOOD_DK} />
+      <path d="M6 10.2 6.9 4.6c.1-.6.5-.9 1.1-.9h8c.6 0 1 .3 1.1.9l.9 5.6Z" fill="#4a2c14" stroke-width=".6" />
+      {/* the hoard heaped over the brim: gold, a log, a brick and an iron bar */}
+      <path d="M3.6 12.8c.5-2.8 3-4.9 5.8-5.4 1.7-.3 3.5-.3 5.2 0 2.8.5 5.3 2.6 5.8 5.4Z" fill={GOLD} />
+      <g transform="rotate(-24 6.6 7.4)">
+        <rect x="1.8" y="5.8" width="9.6" height="3.2" rx="1.6" fill={WOOD} />
+        <path d="M5 6.9h5" stroke={WOOD_LT} stroke-width=".8" />
+        <ellipse cx="3.3" cy="7.4" rx="1.3" ry="1.6" fill={GRAIN} stroke-width=".7" />
+      </g>
+      <g transform="rotate(18 16.4 6.6)">
+        <rect x="13.2" y="4.9" width="6.4" height="3.4" rx=".5" fill={CLAY} />
+        <path d="M14.4 6.1h4" stroke={CLAY_LT} stroke-width=".9" />
+      </g>
+      <path d="M8.8 12 10 8.6h4.8L16 12Z" fill={STEEL} />
+      <path d="M10.6 9.6h3" stroke={STEEL_LT} stroke-width=".9" />
+      <circle cx="6.8" cy="11.2" r="1.5" fill={GOLD} stroke-width=".8" />
+      <circle cx="17.6" cy="10.9" r="1.5" fill={GOLD} stroke-width=".8" />
+      {/* the chest */}
+      <rect x="2.6" y="13" width="18.8" height="8.4" rx="1.2" fill={WOOD} />
+      <path d="M3.2 17.6h17.6" stroke={WOOD_DK} stroke-width=".9" />
+      <path d="M7.2 15.4h2.2M7.4 19.6h2.6" stroke={WOOD_LT} stroke-width=".9" />
+      <rect x="4.2" y="13.4" width="2" height="8" fill={GOLD_DK} stroke-width=".7" />
+      <rect x="17.8" y="13.4" width="2" height="8" fill={GOLD_DK} stroke-width=".7" />
+      <rect x="2" y="11.8" width="20" height="2.4" rx=".8" fill={GOLD} />
+      <path d="M3.6 12.7h5" stroke={GOLD_LT} stroke-width=".9" />
+      <path d="M10 14.2h4v3.4l-2 1.5-2-1.5Z" fill={GOLD} />
+      <circle cx="12" cy="16" r=".75" fill={O} stroke="none" />
+      {/* a coin spilled at its foot, and a glint */}
+      <circle cx="21.2" cy="21" r="1.6" fill={GOLD} stroke-width=".8" />
+      <Sparkle x={20.8} y={4.2} />
     </Ink>
   ),
 

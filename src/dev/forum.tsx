@@ -16,6 +16,7 @@ import type { ActionResult, World } from '../engine/types';
 import { createWorld, defaultConfig, inRealm, isDesert, isJungle, spawnPlayer } from '../engine/world';
 import { fractalNoise } from '../engine/rng';
 import { setupHeroes } from './heroSandbox';
+import { setupCache } from './cacheSandbox';
 import { HostBase } from '../host/base';
 import { App } from '../ui/App';
 import { go, host, now, vid, view } from '../ui/store';
@@ -70,6 +71,8 @@ as(me.id, { type: 'forumReply', thread: t1, text: `[quote=Bram]Nukes land 06:00[
 as(bram.id, { type: 'forumThread', title: 'Welcome, new members', text: 'Read the [b]rules[/b] first. Farm barbarians near your home and post your coordinates here.' });
 // ?heroes: villages in every wild land, battles fought by the heroes of the wilds, and a hidden attack on the road
 if (q.has('heroes')) setupHeroes(w, me.id, cora.id);
+// ?cache: a resource cache a few fields from home, with battles fought over it (see cacheSandbox.ts)
+if (q.has('cache')) setupCache(w, me.id, cora.id);
 
 const h = new SandboxHost(w, me.id);
 host.value = h;

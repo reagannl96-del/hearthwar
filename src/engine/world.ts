@@ -6,6 +6,7 @@ import { pushEvent } from './events';
 import { HOUR, res, villagePoints } from './formulas';
 import { fractalNoise, nextRandom, pick, randInt, shuffle } from './rng';
 import { flagFor } from './data/flags';
+import { cacheTick } from './caches';
 import { isDesert, isJungle, isVolcanic, isWinter, regionAt } from './regions';
 
 export { isDesert, isJungle, isVolcanic, isWinter, regionAt };
@@ -508,7 +509,8 @@ export function realmGrowth(w: World): void {
   // (saves from before barbTarget use the island's own area: enough land, no flood)
   const target = w.barbTarget ?? Math.round((w.round ? Math.PI * (size / 2 - 4) ** 2 : size * size) * w.config.barbDensity);
   let barbs = 0;
-  for (const id in w.villages) if (w.villages[id].ownerId === null) barbs++;
+  for (const id in w.villages) if (w.villages[id].ownerId === null && !w.villages[id].cache) barbs++;
+  cacheTick(w);
   if (barbs < target && nextRandom(w) < tick / barbGap) {
     for (let tries = 0; tries < 60; tries++) {
       if (sproutBarbarian(w, 2)) break;

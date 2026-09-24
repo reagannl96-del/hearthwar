@@ -83,7 +83,7 @@ export const paused = signal(false);
 export const battleReplay = signal<{ report: Report; at: number } | null>(null);
 export const warp = signal(1);
 /** a rally-point prefill, e.g. when clicking "attack" on the map */
-export const rallyTarget = signal<{ x: number; y: number; kind?: 'attack' | 'support'; units?: Record<string, number> } | null>(null);
+export const rallyTarget = signal<{ x: number; y: number; kind?: 'attack' | 'support'; units?: Record<string, number>; cat?: BuildingId } | null>(null);
 export const marketTarget = signal<{ x: number; y: number } | null>(null);
 
 const defaultPrefs: Prefs = { sound: true, notify: false, theme: 'system', confirmAttacks: false, quality: 'auto', mapLines: 'all' };

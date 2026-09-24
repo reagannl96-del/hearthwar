@@ -1,5 +1,6 @@
 import type { ComponentChildren } from 'preact';
 import { useMemo } from 'preact/hooks';
+import { Icon } from '../art/icons';
 import { Empty, Section } from '../components/common';
 import { fmtAgo } from '../format';
 import { host, now, view, usePane } from '../store';
@@ -7,6 +8,9 @@ import { host, now, view, usePane } from '../store';
 type Link = { kind: 'player'; id: number } | { kind: 'tribe'; id: number } | { kind: 'village'; id: number };
 
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** The heralds' cries about a resource cache (found, held, gone unclaimed, or fought over) wear the chest. */
+export const isCacheNews = (text: string) => /resource cache/i.test(text);
 
 export function NewsScreen() {
   const pane = usePane();
@@ -24,7 +28,8 @@ export function NewsScreen() {
     for (const v of map.villages) at.set(`${v.x}|${v.y}`, v.id);
     // longest first, so "The Ashen Ravens" wins over a ruler called "Ashen"
     const keys = [...names.keys()].filter((k) => k.length >= 2).sort((a, b) => b.length - a.length).map(escape);
-    const re = new RegExp(`(\\(\\d+\\|\\d+\\))${keys.length ? `|(${keys.join('|')})` : ''}`, 'g');
+    // coordinates in brackets, "(12|34)", or bare after a word, "at 12|34"
+    const re = new RegExp(`(\\(\\d+\\|\\d+\\)|\\b\\d+\\|\\d+\\b)${keys.length ? `|(${keys.join('|')})` : ''}`, 'g');
     return { names, at, re };
   }, [map.rev]);
 
@@ -43,7 +48,7 @@ export function NewsScreen() {
       const [whole, coords] = m;
       let link: Link | undefined;
       if (coords) {
-        const vid = index.at.get(coords.slice(1, -1));
+        const vid = index.at.get(coords.replace(/[()]/g, ''));
         if (vid !== undefined) link = { kind: 'village', id: vid };
       } else {
         // a ruler's name at the start of a village's name ("Wanderer's hold") is the village, not the ruler,
@@ -70,7 +75,8 @@ export function NewsScreen() {
         {pv.news.length === 0 ? <Empty>The realm is quiet. For now.</Empty> : (
           <ul class="news">
             {pv.news.map((n) => (
-              <li class={`news-item news-${n.kind}`}>
+              <li class={`news-item news-${n.kind}${isCacheNews(n.text) ? ' news-cache' : ''}`}>
+                {isCacheNews(n.text) && <Icon name="cache" size={20} class="news-icon" title="Resource cache" />}
                 <span class="grow">{linked(n.text)}</span>
                 {n.vid !== undefined && <button type="button" class="link small" onClick={() => pane.go({ name: 'map', focus: n.vid })}>map</button>}
                 <span class="muted small">{fmtAgo(n.t, now.value)}</span>

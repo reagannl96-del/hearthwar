@@ -6,6 +6,7 @@ import { Icon } from '../art/icons';
 import { Countdown, Empty, RegionChip, Section, regionTitle } from '../components/common';
 import { fmt } from '../format';
 import { host, now, view, usePane } from '../store';
+import { currentCache } from '../caches';
 import { HEROES, HERO_INFO, UNITS } from '../../engine/data/units';
 import { regionAt, type Region } from '../../engine/regions';
 import type { UnitId } from '../../engine/types';
@@ -79,6 +80,30 @@ function RealmLands() {
             </li>
           );
         })}
+      </ul>
+    </Section>
+  );
+}
+
+/** The resource caches: how one is found, claimed and held, and the one up now. */
+function CacheRules() {
+  const pane = usePane();
+  const live = currentCache(host.value!.world);
+  return (
+    <Section title={<span class="realm-cache-title"><Icon name="cache" size={24} /> Resource caches</span>} class="realm-caches">
+      <p class="muted small">Now and then a hoard of supplies is found out on open ground, and for an hour and a half the realm fights over it.</p>
+      {live && live.endsAt > now.value && (
+        <p class="realm-cache-live">
+          <Icon name="cache" size={18} /> <span>One is up now at <b class="num">{live.x}|{live.y}</b> (guards level <b class="num">{live.level}</b>), <b><Countdown until={live.endsAt} done="ending now" /></b> left.</span>
+          <button type="button" class="link" onClick={() => pane.go({ name: 'map', focus: live.id })}>Show on map</button>
+        </p>
+      )}
+      <ul class="realm-rules small">
+        <li><b>Finding one.</b> One at a time, every 6 to 12 hours, somewhere near where people live. The heralds cry it out and it shows on the map as a chest. Its guards and wall grow stronger with every day of the realm.</li>
+        <li><b>Staking a claim.</b> Win an attack there, against the guards or against whoever holds it. Then station support in it: that is only possible once the guards are gone, and only for rulers who have won a battle there.</li>
+        <li><b>Holding it.</b> The claimant with the most troops (by population) stationed there holds it. When time runs out, the holder's village that sent the most troops has its wood, clay and iron filled to the warehouse's brim, and every army still there marches home.</li>
+        <li><b>Secrecy.</b> Nobody is told who holds it. Every battle report from the cache, scouting runs included, names the holder after the fight, but never the village their troops came from.</li>
+        <li><b>Limits.</b> It can't be conquered (leave the noblemen at home), catapults only hit its wall, and there is nothing to loot and no points to win.</li>
       </ul>
     </Section>
   );
@@ -204,6 +229,8 @@ export function RealmScreen() {
       </Section>
 
       <RealmLands />
+
+      <CacheRules />
 
       <Section title="How the other rulers play">
         <p class="muted small">The realm's computer rulers play by the same rules as you and keep a person's hours: they sleep, they are online in sessions, and they never act faster than someone at the keyboard could. What they do is fixed, so you can plan against it:</p>

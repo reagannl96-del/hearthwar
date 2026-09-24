@@ -117,6 +117,8 @@ export interface Village {
   merchantsOut: number;
   /** barbarians: last time growth was applied */
   grownAt?: number;
+  /** a resource cache (not a village anyone can own): its guard level, when it ends, and who has won a battle there */
+  cache?: { level: number; endsAt: number; claims: number[] };
   /** the hero this village's statue is sworn to: the first one trained here, for good */
   heroKind?: UnitId;
   /** how its people are holding up, 0..100 (unset = 100): only attacks bring it down, and it comes back on its own */
@@ -196,6 +198,8 @@ export interface BattleData {
   risen?: { side: 'attacker' | 'defender'; n: number };
   /** a paladin laid hands on his side's fallen: how many rose healed */
   healed?: { side: 'attacker' | 'defender'; n: number };
+  /** a battle at a resource cache: who holds it after the fight (never where their troops came from) */
+  cache?: { holder?: string; holderId?: number; endsAt: number; level: number };
   /** a djinn claimed tribute for his side's victory: resources worth a share of the enemy's fallen */
   tribute?: { side: 'attacker' | 'defender'; res: Res };
   /** hero abilities that shaped the battle (barrier, thornwall, sneak, dread, snare, ward) */
@@ -243,6 +247,10 @@ export interface PaladinState {
 }
 
 export interface AIState {
+  /** its plan for the resource cache being fought over: clear it, hold it, or hit the holder at home */
+  cacheGoal?: { vid: number; stage: 'clear' | 'hold' | 'revenge' | 'done'; at: number; tries: number; fought?: boolean };
+  /** a cache this ruler has decided to leave alone */
+  cacheSkip?: number;
   personality: 'farmer' | 'warlord' | 'turtle' | 'expander' | 'opportunist' | 'guardian';
   /** the hero this ruler raises at its statues (each village keeps the one its statue was sworn to) */
   hero?: UnitId;
@@ -480,7 +488,7 @@ export interface Tribe {
   forum?: ForumThread[];
 }
 
-export type GameEventType = 'build' | 'arrive' | 'research' | 'ai' | 'barb' | 'scav' | 'item' | 'sample' | 'end' | 'mgr';
+export type GameEventType = 'build' | 'arrive' | 'research' | 'ai' | 'barb' | 'scav' | 'item' | 'sample' | 'end' | 'mgr' | 'cache';
 
 export interface GameEvent {
   t: number;
@@ -532,6 +540,9 @@ export interface World {
   round?: boolean;
   /** how many barbarian villages the realm holds when full; lost ones are slowly replaced up to this */
   barbTarget?: number;
+  /** the resource cache being fought over, and when the next one turns up */
+  cacheVid?: number;
+  nextCacheAt?: number;
   /** one-off events already run on this realm (e.g. a wave of newcomers), so a restart never repeats them */
   onceDone?: string[];
   /** client-side shadow only: attacks on fellow tribe members, as sent by the server */

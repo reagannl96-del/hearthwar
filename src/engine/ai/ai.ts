@@ -8,7 +8,8 @@ import { isProtected, news, sendTrain, sendTroops, travelTime, withdrawSupport }
 import { BUILDINGS, BUILDING_ORDER } from '../data/buildings';
 import { HEROES, HERO_INFO, UNITS } from '../data/units';
 import { regionAt, type Region } from '../regions';
-import { COIN_COST, distance, farmCap, hasUnits, hideCap, moraleFor, recruitTime, resGte, unitsCarry, unitsCount } from '../formulas';
+import { activeCache, cacheGuarded, cacheGuardEstimate, cacheHolder } from '../caches';
+import { COIN_COST, distance, farmCap, hasUnits, unitsPop, hideCap, moraleFor, recruitTime, resGte, unitsCarry, unitsCount } from '../formulas';
 import { nextRandom } from '../rng';
 import { villagesNear } from '../spatial';
 import { EXCHANGE_RATE, exchangeQuote } from '../market';
@@ -311,6 +312,7 @@ export function aiThink(w: World, p: Player): void {
     war(w, p);
   }
   campaignDrive(w, p);
+  cacheHunt(w, p);
   respondToIncidents(w, p);
   scoutRound(w, p);
   helpAllies(w, p);
@@ -755,6 +757,7 @@ function endCampaign(w: World, p: Player, taken: boolean): void {
 /** May this ruler set out to take this village at all? */
 function campaignTargetOk(w: World, p: Player, v: Village): boolean {
   if (v.ownerId === p.id) return false;
+  if (v.cache) return false; // a resource cache can't be taken
   if (v.ownerId === null) return true;
   const o = w.players[v.ownerId];
   if (!o || o.eliminated || isProtected(w, o.id)) return false;
@@ -1143,7 +1146,7 @@ function farm(w: World, p: Player, v: Village): void {
   let sends = ai.raidBudget ?? 2;
   const cooldown = Math.max(aiThinkInterval(w) * 5, 10 * 60_000);
   const targets = villagesNear(w, v.x, v.y, radius)
-    .filter((t) => t.ownerId === null && (ai.memory[t.id] ?? 0) + cooldown < w.now)
+    .filter((t) => t.ownerId === null && !t.cache && (ai.memory[t.id] ?? 0) + cooldown < w.now)
     .sort((a, b) => distance(v.x, v.y, a.x, a.y) - distance(v.x, v.y, b.x, b.y));
   for (const t of targets) {
     if (sends <= 0) break;
@@ -1196,7 +1199,7 @@ function farm(w: World, p: Player, v: Village): void {
 }
 
 /** A player's village is raided at most this often by one ruler. */
-const PLAYER_RAID_COOLDOWN = 40 * 60_000;
+const PLAYER_RAID_COOLDOWN = 30 * 60_000;
 
 /**
  * How much a barbarian village is likely holding: what the scouts last saw, or,
@@ -1281,7 +1284,7 @@ function defend(w: World, p: Player, v: Village, incoming: Command[] | undefined
   const dodge: Units = {};
   for (const u of OFFENSIVE) if ((v.units[u] ?? 0) > 0 && u !== 'heavy') dodge[u] = v.units[u];
   if (unitsCount(dodge) < 20 || v.buildings.rally < 1) return;
-  const barbs = villagesNear(w, v.x, v.y, 8).filter((t) => t.ownerId === null);
+  const barbs = villagesNear(w, v.x, v.y, 8).filter((t) => t.ownerId === null && !t.cache);
   if (barbs.length === 0) return;
   barbs.sort((a, b) => distance(v.x, v.y, a.x, a.y) - distance(v.x, v.y, b.x, b.y));
   sendTroops(w, { ownerId: p.id, fromVid: v.id, toVid: barbs[0].id, kind: 'attack', units: dodge, tag: 'dodge' });
@@ -1401,13 +1404,13 @@ function war(w: World, p: Player): void {
     // the army of the village running a conquest is spoken for
     if (ai.campaign?.from === v.id) continue;
     if (attackValue(army) < minArmy) continue;
-    if (nextRandom(w) > ai.aggression + 0.15) continue;
+    if (nextRandom(w) > ai.aggression + 0.25) continue;
     // never march out with the enemy at the gates
     if (commandsTo(w, v.id).some((c) => c.kind === 'attack' && c.ownerId !== p.id && c.arrive - w.now < think * 6)) continue;
     const target = pickWarTarget(w, p, v);
     if (!target) continue;
     // every so often a ruler acts on impulse: a blind full or partial attack
-    if (nextRandom(w) < 0.015 * (0.5 + ai.aggression)) {
+    if (nextRandom(w) < 0.025 * (0.5 + ai.aggression)) {
       const share = nextRandom(w) < 0.5 ? 1 : 0.4 + nextRandom(w) * 0.3;
       const send: Units = {};
       for (const k in army) {
@@ -1432,7 +1435,7 @@ function war(w: World, p: Player): void {
  * attacks: after one lands, the rest of the realm leaves them be for a while.
  * A ruler the player attacked may still strike back sooner.
  */
-const HUMAN_BREATHER = 3 * 60 * MIN;
+const HUMAN_BREATHER = 2 * 60 * MIN;
 const PAYBACK_WAIT = 30 * MIN;
 
 function lastHitOn(w: World, humanId: number): number {
@@ -2221,5 +2224,115 @@ function respondToIncidents(w: World, p: Player): void {
       const r = sendTroops(w, { ownerId: p.id, fromVid: home.id, toVid: foe.id, kind: 'attack', units: { scout: Math.min(home.units.scout ?? 0, scoutParty(ai, foe.id)) }, tag: 'scout' });
       if (r.ok) ai.plans![home.id] = { target: foe.id, since: w.now, scoutCmd: (r.data as { id: number }).id };
     }
+  }
+}
+
+// ---------- resource caches ----------
+
+/** How keen each temperament is to fight over a resource cache. */
+const CACHE_KEEN: Record<P, number> = { warlord: 0.85, opportunist: 0.8, expander: 0.6, guardian: 0.4, farmer: 0.4, turtle: 0.25 };
+/** At most this many rulers go after one cache (the rest have their own business). */
+const CACHE_CROWD = 7;
+
+/**
+ * A resource cache is up: a ruler within reach may go for it. It clears it with its best
+ * army (if a battle simulation says it can), then holds it with support from a defensive
+ * village, reinforcing while time allows. If it keeps losing there, it learns who holds it
+ * (as anyone does from the reports) and may strike that ruler's village nearest the cache
+ * instead, guessing that is where the troops came from.
+ */
+function cacheHunt(w: World, p: Player): void {
+  const ai = p.ai!;
+  const c = activeCache(w);
+  if (!c || !c.cache) { delete ai.cacheGoal; return; }
+  if (w.config.difficulty === 'peaceful' || !ai.hostile) return;
+  const left = c.cache.endsAt - w.now;
+  let goal = ai.cacheGoal?.vid === c.id ? ai.cacheGoal : undefined;
+  if (!goal) {
+    if (ai.cacheSkip === c.id || left < 20 * MIN) return;
+    const reach = (ai.traits?.reach ?? 15) + 18; // a prize like this draws rulers from farther than their usual reach
+    const near = p.villages.some((vid) => { const v = w.villages[vid]; return v && distance(v.x, v.y, c.x, c.y) <= reach; });
+    const crowd = Object.values(w.players).filter((o) => o.ai?.cacheGoal?.vid === c.id).length;
+    if (!near || crowd >= CACHE_CROWD || nextRandom(w) > CACHE_KEEN[ai.personality]) { ai.cacheSkip = c.id; return; }
+    goal = ai.cacheGoal = { vid: c.id, stage: 'clear', at: 0, tries: 0 };
+  }
+  if (goal.stage === 'done' || w.now - goal.at < 6 * MIN) return;
+  const mine = (vid: number) => { const v = w.villages[vid]; return v && v.ownerId === p.id ? v : null; };
+  const onTheWay = commandsOf(w, p.id).some((cmd) => cmd.toVid === c.id && (cmd.kind === 'attack' || cmd.kind === 'support'));
+  const claimed = c.cache.claims.includes(p.id);
+  const holder = cacheHolder(w, c);
+
+  // holding (or entitled to): station a defensive army there, and top it up while there is time
+  if (claimed && !cacheGuarded(c)) {
+    goal.stage = 'hold';
+    const stationed = c.support.filter((st) => st.ownerId === p.id).reduce((a, st) => a + unitsPop(st.units), 0);
+    if (holder === p.id && stationed >= 2500) return;
+    const homes = p.villages.map(mine).filter((v): v is Village => !!v)
+      .sort((a, b) => distance(a.x, a.y, c.x, c.y) - distance(b.x, b.y, c.x, c.y));
+    for (const v of homes) {
+      const send: Units = {};
+      for (const u of ['spear', 'sword', 'archer', 'heavy'] as UnitId[]) {
+        const n = Math.floor((v.units[u] ?? 0) * 0.7);
+        if (n > 0) send[u] = n;
+      }
+      // short of defenders (early on), any troops will do to sit on it
+      if (unitsPop(send) < 150) for (const u of ['axe', 'light', 'marcher'] as UnitId[]) {
+        const n = Math.floor((v.units[u] ?? 0) * 0.5);
+        if (n > 0) send[u] = (send[u] ?? 0) + n;
+      }
+      if (unitsPop(send) < 100) continue;
+      if (travelTime(w, v, c, send, p.id, true) > left - 2 * MIN) continue;
+      if (sendTroops(w, { ownerId: p.id, fromVid: v.id, toVid: c.id, kind: 'support', units: send, tag: 'cache' }).ok) { goal.at = w.now; return; }
+    }
+    // no defenders to spare: if someone else holds it now, win it back
+    if (holder === p.id) return;
+  }
+  if (onTheWay) return;
+
+  // after two failed goes, hit the holder where it hurts: their village nearest the cache
+  if (goal.fought && goal.tries >= 2 && holder !== null && holder !== p.id) {
+    const h = w.players[holder];
+    const hv = h?.villages.map((id) => w.villages[id]).filter(Boolean)
+      .sort((a, b) => distance(a.x, a.y, c.x, c.y) - distance(b.x, b.y, c.x, c.y))[0];
+    const tribeMate = h && p.tribeId !== null && h.tribeId === p.tribeId;
+    if (hv && !tribeMate && !isProtected(w, holder) && mayHit(w, p, holder) && nextRandom(w) < (ai.personality === 'warlord' ? 0.75 : 0.5)) {
+      const from = p.villages.map(mine).filter((v): v is Village => !!v)
+        .sort((a, b) => attackValue(offensiveArmy(b)) - attackValue(offensiveArmy(a)))[0];
+      const army = from ? offensiveArmy(from) : {};
+      if (from && attackValue(army) >= 3000 && sendTroops(w, { ownerId: p.id, fromVid: from.id, toVid: hv.id, kind: 'attack', units: army, tag: 'war' }).ok) {
+        noteHit(w, p, hv);
+        news(w, `${p.name}, beaten back at the resource cache, marches on ${hv.name} instead.`, 'player', hv.id);
+      }
+    }
+    goal.stage = 'done';
+    return;
+  }
+  if (goal.tries >= 3) { goal.stage = 'done'; return; }
+
+  // clear it: the strongest army that gets there in time and wins in a simulated battle
+  const guards = cacheGuarded(c) ? cacheGuardEstimate(w, c) : {};
+  // who might be sitting in it: a guess at a held cache's garrison, bigger once the battle is known to be close
+  const held: Units = !cacheGuarded(c) && holder !== null && holder !== p.id ? { spear: 1200 + goal.tries * 800, sword: 800 + goal.tries * 500 } : {};
+  const defence = { ...guards };
+  for (const k in held) defence[k as UnitId] = (defence[k as UnitId] ?? 0) + (held[k as UnitId] ?? 0);
+  let best: { v: Village; army: Units } | null = null;
+  for (const vid of p.villages) {
+    const v = mine(vid);
+    if (!v || v.buildings.rally < 1 || ai.campaign?.from === v.id) continue;
+    const army = offensiveArmy(v);
+    if (attackValue(army) < 1200) continue;
+    if (travelTime(w, v, c, army, p.id) > left - 8 * MIN) continue;
+    const sim = resolveBattle({ att: army, attTech: v.tech, attItem: null, defStacks: [{ units: defence, tech: {} }], defItems: [], wall: c.buildings.wall, luck: 0, morale: 1 });
+    if (sim.winner !== 'attacker' || sim.attStrength < sim.defStrength * 1.2) continue;
+    if (!best || attackValue(army) < attackValue(best.army)) best = { v, army };
+  }
+  if (!best) { goal.tries++; goal.at = w.now; if (goal.tries >= 3 && !goal.fought) goal.stage = 'done'; return; }
+  const send = { ...best.army };
+  const h = attackHero(best.v);
+  if (h) send[h] = 1;
+  if (sendTroops(w, { ownerId: p.id, fromVid: best.v.id, toVid: c.id, kind: 'attack', units: send, catTarget: 'wall', tag: 'cache' }).ok) {
+    goal.tries++;
+    goal.fought = true;
+    goal.at = w.now;
   }
 }

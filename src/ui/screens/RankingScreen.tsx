@@ -91,7 +91,7 @@ function ContinentRanking() {
   let barbs = 0;
   for (const v of map.villages) {
     if (quadrant(v.x, v.y, map.size) !== q) continue;
-    if (v.ownerId === null) { barbs++; continue; }
+    if (v.ownerId === null) { if (!v.cache) barbs++; continue; }
     const e = here.get(v.ownerId) ?? { points: 0, villages: 0 };
     e.points += v.points;
     e.villages++;

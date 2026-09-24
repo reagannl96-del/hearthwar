@@ -23,6 +23,7 @@ import { BattleTheatre, type TheatreInput, type TheatreReport } from './battle/t
 import { battleSfx } from '../sound';
 import type { FlagDesign } from '../../engine/data/flags';
 import { BANNER_WALL, buildGateBanners, disposeBanners, waveBanners } from './flags3d';
+import { buildDepot } from './depot';
 
 /** An army leaving or coming home, as far as the village scene cares. */
 export interface MarchInfo {
@@ -44,6 +45,8 @@ export interface VillageRendererOpts {
   theme?: Theme;
   /** how hard the device works: 'low' drops shadows, the night glow and half the frames */
   quality?: Quality;
+  /** a resource cache: a supply depot inside the wall instead of the village's buildings (only the wall is built) */
+  depot?: boolean;
 }
 
 export type Quality = 'low' | 'medium' | 'high';
@@ -154,6 +157,8 @@ export class VillageRenderer {
   /** the tents of armies stationed here from other villages */
   private camp: THREE.Group | null = null;
   private campKey = '';
+  /** the supply depot of a resource cache (opts.depot) */
+  private depot: THREE.Group | null = null;
   private campLight: THREE.PointLight;
   /** the winter festival's tree, its lights and the villagers round it */
   private festival: THREE.Group | null = null;
@@ -352,7 +357,16 @@ export class VillageRenderer {
     this.lastUpdate = { b: real, constructing, color, points };
     const b = { ...real, ...(this.theatre?.held() ?? {}) } as Buildings;
     this.color = color;
-    for (const id of ALL) this.updateSlot(id, b[id], constructing[id] !== undefined);
+    for (const id of ALL) {
+      // a depot has no buildings, only its wall
+      if (this.opts.depot && id !== 'wall') continue;
+      this.updateSlot(id, b[id], constructing[id] !== undefined);
+    }
+    if (this.opts.depot && !this.depot) {
+      this.depot = buildDepot();
+      this.depot.traverse((o) => { if (o.userData.orbit || o.userData.bob) this.floaters.push(o); });
+      this.scene.add(this.depot);
+    }
     this.updatePeople(points);
     this.lastBuildings = { ...b };
     this.syncBanners();
@@ -497,6 +511,13 @@ export class VillageRenderer {
     door('barracks');
     door('warehouse');
     door('stable');
+    if (this.depot) {
+      // the hoard, the guards' fire and the stores are lit instead
+      for (const [id, y] of [['main', 5], ['barracks', 3], ['warehouse', 3.5], ['academy', 3.5], ['workshop', 3]] as [BuildingId, number][]) {
+        const [x, z] = LAYOUT[id];
+        spots.push(new THREE.Vector3(x, y, z));
+      }
+    }
     spots.push(new THREE.Vector3(0, 3.5, WALL_R - 4)); // the gate
     this.nightLights.forEach((l, i) => {
       const p = spots[i];
@@ -1194,7 +1215,7 @@ export class VillageRenderer {
 
   private animate(dt: number, t: number): void {
     // spinning, waving, flickering bits
-    const roots: THREE.Object3D[] = [...[...this.slots.values()].map((s) => s.group), ...(this.camp ? [this.camp] : [])];
+    const roots: THREE.Object3D[] = [...[...this.slots.values()].map((s) => s.group), ...(this.camp ? [this.camp] : []), ...(this.depot ? [this.depot] : [])];
     for (const root of roots) {
       root.traverse((o) => {
         if (o.userData.orbit || o.userData.bob) float(o, dt, t);

@@ -66,6 +66,8 @@ export interface TheatreVillage {
   hide: number;
   res: Res;
   theme: Theme;
+  /** a resource cache's supply depot: guards and stores, no villagers to come out and dance */
+  depot?: boolean;
 }
 
 export interface TheatreInput {
@@ -1607,11 +1609,11 @@ export class BattleTheatre {
     if (!v) return;
     const t0 = T - battle.t0;
     this.at(battle, t0 + 2.4, () => {
-      this.say('Victory!', '#ffd35a', PARTY_C.clone().setY(14), 4.5);
+      this.say(v.depot ? 'The cache holds!' : 'Victory!', '#ffd35a', PARTY_C.clone().setY(14), 4.5);
       this.sfx('fanfare', 1);
     });
     const doors: BuildingId[] = ['main', 'warehouse', 'market', 'smithy', 'academy', 'rally', 'barracks', 'stable'];
-    for (let i = 0; i < 12; i++) {
+    for (let i = 0; i < (v.depot ? 0 : 12); i++) {
       const f = makeVillager(v.theme, i, true);
       const w: Walker = { f, moves: [], job: 'party', carry: null, loopAt: 0, ph: i * 0.7, gone: false, hidden: false };
       const door = doorstep(doors[i % doors.length], 3.2);

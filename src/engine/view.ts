@@ -204,7 +204,7 @@ export function buildView(w: World, pid: number): PlayerView {
       const home = byId.get(s.fromVid);
       if (!home) continue;
       home.stationed.push({
-        hostVid: host.id, hostName: host.name, hostX: host.x, hostY: host.y, hostOwner: playerName(w, host.ownerId),
+        hostVid: host.id, hostName: host.name, hostX: host.x, hostY: host.y, hostOwner: host.cache ? 'Resource cache' : playerName(w, host.ownerId),
         units: { ...s.units },
       });
     }
@@ -300,6 +300,8 @@ export interface MapVillage {
   bonus?: BonusType;
   /** the village's look (left out for classic villages) */
   theme?: VillageTheme;
+  /** a resource cache: its guard level and when it ends (who holds it is only learned by fighting there) */
+  cache?: { level: number; endsAt: number };
 }
 export interface MapPlayer { id: number; name: string; color: string; tribeId: number | null; points: number; villages: number; kind: 'human' | 'ai' }
 export interface MapTribe { id: number; name: string; tag: string; color: string; diplomacy: Record<number, Diplomacy> }
@@ -317,7 +319,7 @@ export function buildMap(w: World): MapData {
   for (const id in w.villages) {
     const v = w.villages[id];
     const theme = themeOfHero(v.heroKind);
-    villages.push({ id: v.id, x: v.x, y: v.y, name: v.name, ownerId: v.ownerId, points: v.points, bonus: v.bonus, ...(theme !== 'classic' ? { theme } : {}) });
+    villages.push({ id: v.id, x: v.x, y: v.y, name: v.name, ownerId: v.ownerId, points: v.points, bonus: v.bonus, ...(theme !== 'classic' ? { theme } : {}), ...(v.cache ? { cache: { level: v.cache.level, endsAt: v.cache.endsAt } } : {}) });
   }
   const players: Record<number, MapPlayer> = {};
   for (const id in w.players) {
@@ -354,6 +356,8 @@ export interface VillageInfo {
   loyalty?: number;
   /** the village's look, for its troops */
   theme: VillageTheme;
+  /** a resource cache: its guard level and when it ends */
+  cache?: { level: number; endsAt: number };
 }
 
 export function villageInfo(w: World, pid: number, vid: number, fromVid?: number): VillageInfo | null {
@@ -366,6 +370,7 @@ export function villageInfo(w: World, pid: number, vid: number, fromVid?: number
     tribe: owner?.tribeId ? w.tribes[owner.tribeId]?.tag : undefined, bonus: v.bonus, intel: p.intel[v.id],
     note: p.notes[v.id], protected: !!owner && owner.protectedUntil > w.now, own: v.ownerId === pid,
     theme: themeOfHero(v.heroKind),
+    ...(v.cache ? { cache: { level: v.cache.level, endsAt: v.cache.endsAt } } : {}),
   };
   if (v.ownerId === pid) info.loyalty = v.loyalty;
   const from = fromVid !== undefined ? w.villages[fromVid] : undefined;

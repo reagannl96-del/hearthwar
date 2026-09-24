@@ -13,6 +13,7 @@ import { MAX_TEMPLATES, TEMPLATE_NAME_MAX, defaultTplName, loadFarmTemplates, sa
 import { coords, fmt, fmtAgo, fmtDur, parseCoords } from '../format';
 import { act, host, now, rallyTarget, view, warp, usePane } from '../store';
 import { Simulator } from './Simulator';
+import { cacheSupport } from '../caches';
 
 type Tab = 'send' | 'train' | 'troops' | 'commands' | 'farm' | 'scavenge' | 'sim';
 
@@ -78,6 +79,7 @@ function SendTroops({ v }: { v: VillageView }) {
     if (pre) {
       setTarget(coords(pre.x, pre.y));
       if (pre.units) setUnits(pre.units as Units);
+      if (pre.cat) setCat(pre.cat);
       rallyTarget.value = null;
     }
   }, [pre]);
@@ -90,6 +92,8 @@ function SendTroops({ v }: { v: VillageView }) {
     if (n > 0) chosen[u] = n;
   }
   const any = hasUnits(chosen);
+  // a resource cache takes support only from rulers who have won a battle there (their own reports tell)
+  const cacheOk = info?.cache && tid !== undefined ? cacheSupport(h.reports(), { id: tid, endsAt: info.cache.endsAt }, pv.me.id) : null;
   const dur = tid !== undefined && any ? h.travelTime(v.id, tid, chosen) : 0;
   const supportDur = tid !== undefined && any ? h.travelTime(v.id, tid, chosen, true) : 0;
   const send = (kind: 'attack' | 'support') => {
@@ -152,10 +156,17 @@ function SendTroops({ v }: { v: VillageView }) {
           <div class="target-card">
             <div>
               <b>{info.name}</b> <span class="muted">({coords(info.x, info.y)})</span>
-              <div class="muted small">
-                {info.own ? 'Your village' : info.ownerName}{info.tribe ? ` [${info.tribe}]` : ''} · <span class="num">{fmt(info.points)}</span> points
-                {info.protected && ' · under protection'}
-              </div>
+              {info.cache ? (
+                <>
+                  <div class="muted small">Guards level <b class="num">{info.cache.level}</b> · <Countdown until={info.cache.endsAt} done="ending now" /> left</div>
+                  <div class="small cache-note"><Icon name="cache" size={14} /> Resource cache: no noblemen, catapults only hit the wall, nothing to loot.</div>
+                </>
+              ) : (
+                <div class="muted small">
+                  {info.own ? 'Your village' : info.ownerName}{info.tribe ? ` [${info.tribe}]` : ''} · <span class="num">{fmt(info.points)}</span> points
+                  {info.protected && ' · under protection'}
+                </div>
+              )}
               {info.intel?.lastColor && <div class="small">Last report: <span class={`dot dot-${info.intel.lastColor}`} /> {fmtAgo(info.intel.lastAttackT ?? info.intel.t, now.value)}{info.intel.wall !== undefined ? ` · wall ${info.intel.wall}` : ''}</div>}
             </div>
             <div class="right">
@@ -174,9 +185,11 @@ function SendTroops({ v }: { v: VillageView }) {
         {(chosen.catapult ?? 0) > 0 && (
           <label class="field">
             <span>Catapult target</span>
-            <select id="cat-target" value={cat} onChange={(e) => setCat((e.currentTarget as HTMLSelectElement).value as BuildingId)}>
-              <option value="">Random building</option>
-              {BUILDING_ORDER.filter((b) => b !== 'rally').map((b) => <option value={b}>{BUILDINGS[b].name}</option>)}
+            <select id="cat-target" value={info?.cache ? 'wall' : cat} onChange={(e) => setCat((e.currentTarget as HTMLSelectElement).value as BuildingId)}>
+              {info?.cache ? <option value="wall">{BUILDINGS.wall.name} (the only target at a cache)</option> : <>
+                <option value="">Random building</option>
+                {BUILDING_ORDER.filter((b) => b !== 'rally').map((b) => <option value={b}>{BUILDINGS[b].name}</option>)}
+              </>}
             </select>
           </label>
         )}
@@ -184,10 +197,11 @@ function SendTroops({ v }: { v: VillageView }) {
           <Btn variant="danger" disabled={!any || tid === undefined || info?.own} onClick={() => send('attack')}>
             <Icon name="attack" size={16} /> Attack
           </Btn>
-          <Btn variant="ghost" disabled={!any || tid === undefined || !info || info.ownerId === null || (chosen.noble ?? 0) > 0} onClick={() => send('support')}>
+          <Btn variant="ghost" disabled={!any || tid === undefined || !info || (info.ownerId === null && !cacheOk?.ok) || (chosen.noble ?? 0) > 0} title={cacheOk && !cacheOk.ok ? cacheOk.reason : undefined} onClick={() => send('support')}>
             <Icon name="support" size={16} /> Support
           </Btn>
         </div>
+        {cacheOk && !cacheOk.ok && <p class="reason">{cacheOk.reason}</p>}
       </Section>
     </div>
   );
@@ -551,7 +565,7 @@ function FarmAssistant({ v }: { v: VillageView }) {
   }
   const stopRepeats = (target?: number) => act({ type: 'stopRepeats', vid: v.id, target }, target === undefined ? 'Every repeating raid from here is stopped. The troops come home and stay.' : 'Repeat stopped. The troops come home and stay.');
   const rows = map.villages
-    .filter((m) => m.ownerId === null)
+    .filter((m) => m.ownerId === null && !m.cache)
     .map((m) => ({ m, d: distance(v.x, v.y, m.x, m.y) }))
     .filter((r) => r.d <= radius)
     .sort((a, b) => a.d - b.d)

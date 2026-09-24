@@ -43,6 +43,8 @@ function publicVillage(v: Village, now: number): Village {
     research: [], tech: {}, scavengeUnlocked: 0, scavenge: [null, null, null, null], foundedAt: v.foundedAt, outPop: 0,
     merchantsOut: 0,
     heroKind: v.heroKind,
+    // a resource cache shows its level and deadline; who has won there stays secret
+    ...(v.cache ? { cache: { level: v.cache.level, endsAt: v.cache.endsAt, claims: [] } } : {}),
   };
 }
 
@@ -81,6 +83,8 @@ export function publicSnapshot(w: World): PublicSnapshot {
       commands: {},
       events: [],
       accounts: undefined,
+      // when the next resource cache turns up is nobody's business
+      nextCacheAt: undefined,
       news: w.news.slice(0, 60),
     },
   };

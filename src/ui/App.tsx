@@ -2,7 +2,8 @@ import { useEffect, useState } from 'preact/hooks';
 import { navOrder, saveNavOrder } from './navOrder';
 import { captureThreadLink, openThreadLink, takeThreadLink } from './deepLink';
 import { Icon } from './art/icons';
-import { Clock, CopyButton, NewPosts, unitName } from './components/common';
+import { Clock, Countdown, CopyButton, NewPosts, unitName } from './components/common';
+import { cacheSupport, currentCache, firstSight, type CacheView } from './caches';
 import { QUADRANT_NAME, coords, fmt, fmtDur, quadrant } from './format';
 import { BuildingScreen } from './screens/BuildingScreen';
 import { MapScreen } from './screens/MapScreen';
@@ -21,7 +22,7 @@ import { VillageScreen } from './screens/VillageScreen';
 import { ManagerScreen } from './screens/ManagerScreen';
 import { GameOver } from './screens/GameOver';
 import {
-  PaneCtx, applyTheme, mainPane, dismissToast, host, liveRes, now, online, paused, resumeSucceeded, setPaused, setSplit, setWarp, sidePane, split, swapPanes, toasts, view, warp,
+  PaneCtx, applyTheme, mainPane, dismissToast, host, liveRes, now, online, paused, resumeSucceeded, setPaused, setSplit, setWarp, sidePane, split, swapPanes, toast, toasts, view, warp,
   type Route, usePane,
 } from './store';
 
@@ -77,6 +78,20 @@ function Game() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  // a resource cache is up: a banner while it lasts, and a toast the first time this player sees it
+  const cache = currentCache(host.value!.world);
+  const cacheKey = cache ? `${cache.id}:${cache.endsAt}` : '';
+  useEffect(() => {
+    if (!cache || cache.endsAt <= now.value) return;
+    let store: Storage | null = null;
+    try { store = window.localStorage; } catch { /* storage blocked: the banner still shows */ }
+    if (!firstSight(store, v.worldName, cache)) return;
+    const c = cache;
+    toast(`A resource cache has been found at ${c.x}|${c.y} (guards level ${c.level}). Hold it when time runs out to fill your stores.`, 'info', {
+      label: 'Show on map', run: () => pane.go({ name: 'map', focus: c.id }),
+    });
+  }, [cacheKey]);
+
   const r = pane.route.value;
   const wide = useMedia('(min-width: 1100px)');
   const two = split.value && wide;
@@ -95,6 +110,7 @@ function Game() {
         </div>
       )}
       {v.incoming.some((c) => c.kind === 'attack') && <IncomingBanner />}
+      {cache && cache.endsAt > now.value && <CacheBanner c={cache} />}
       {two ? (
         <div class="split">
           <main class="main pane-main" id="main"><PaneView /></main>
@@ -190,6 +206,25 @@ function IncomingBanner() {
         {next.detected && <> · lookouts spot <b>{unitName(next.detected, true, next.theme)}</b></>}
         {stalkedAttack(next) && <> · its troops can't be made out</>}
       </span>
+    </button>
+  );
+}
+
+/** A resource cache is being fought over: where, how strong its guards, and how long it has left. */
+function CacheBanner({ c }: { c: CacheView }) {
+  const pane = usePane();
+  const claim = cacheSupport(host.value!.reports(), c, view.value!.me.id).ok;
+  return (
+    <button type="button" class="banner banner-cache" onClick={() => pane.go({ name: 'map', focus: c.id })} title="Show the resource cache on the map">
+      <Icon name="cache" size={22} />
+      <span class="cb-long">
+        A resource cache at <b class="num">{c.x}|{c.y}</b> · guards level <b class="num">{c.level}</b> · <b><Countdown until={c.endsAt} done="ending now" /></b> left
+        {claim && <span class="cb-claim">you have a claim</span>}
+      </span>
+      <span class="cb-short">
+        Cache <b class="num">{c.x}|{c.y}</b> · lvl <b class="num">{c.level}</b> · <b><Countdown until={c.endsAt} done="ending" /></b>
+      </span>
+      <span class="cb-go" aria-hidden="true">Show on map ›</span>
     </button>
   );
 }

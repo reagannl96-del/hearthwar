@@ -3,6 +3,7 @@
 import { bumpDaily } from './awards';
 import { themeOfHero, unitNameAt } from './data/themes';
 import { computeLoot, resolveBattle, type DefStackInput } from './combat';
+import { cacheGuarded, cacheIntel } from './caches';
 import { BUILDINGS, BUILDING_ORDER } from './data/buildings';
 import { HEROES, HERO_POWERS, ITEM_BY_ID, ITEM_POWERS, MERCHANT_CARRY, MERCHANT_SPEED, OWN_SHIPMENT_SPEED, TRADER_CARRY, TRADER_SPEEDUP, UNITS, isHero, type ItemDef } from './data/units';
 import { pushEvent } from './events';
@@ -139,8 +140,13 @@ export function sendTroops(w: World, o: SendOpts): ActionResult {
     units[u] = n;
   }
   if (!hasUnits(units)) return { ok: false, error: 'Select some troops first.' };
+  if (to.cache) {
+    // a resource cache: never conquered; support only once its guards are gone
+    if (units.noble) return { ok: false, error: 'A resource cache can\'t be conquered: leave the noblemen at home.' };
+    if (o.kind === 'support' && cacheGuarded(to)) return { ok: false, error: 'The cache is still guarded: win an attack there before you send it support.' };
+  }
   if (o.kind === 'support') {
-    if (to.ownerId === null) return { ok: false, error: 'You cannot support barbarian villages.' };
+    if (to.ownerId === null && !to.cache) return { ok: false, error: 'You cannot support barbarian villages.' };
     if (units.noble) return { ok: false, error: 'Noblemen can only be sent in attacks.' };
   } else {
     if (to.ownerId === o.ownerId) return { ok: false, error: 'You cannot attack your own village.' };
@@ -172,7 +178,7 @@ export function sendTroops(w: World, o: SendOpts): ActionResult {
     depart: w.now,
     arrive: w.now + dur,
   };
-  if (o.catTarget && units.catapult) c.catTarget = o.catTarget;
+  if (o.catTarget && units.catapult) c.catTarget = to.cache ? 'wall' : o.catTarget;
   if (o.repeat) c.repeat = true;
   if (o.tag) c.tag = o.tag;
   c.targetOwner = to.ownerId;
@@ -349,7 +355,7 @@ function arriveSupport(w: World, c: Command): void {
   const to = w.villages[c.toVid];
   const home = w.villages[c.fromVid];
   const expectedOwner = c.targetOwner;
-  if (!to || to.ownerId === null || (expectedOwner !== undefined && to.ownerId !== expectedOwner)) {
+  if (!to || (to.ownerId === null && !to.cache) || (expectedOwner !== undefined && to.ownerId !== expectedOwner)) {
     // the village changed hands while the troops were marching: turn around
     if (!home) return;
     const back: Command = {
@@ -371,7 +377,7 @@ function arriveSupport(w: World, c: Command): void {
     addReport(w, c.ownerId, {
       kind: 'support', color: 'blue', vid: to.id,
       title: `Your support reached ${to.name} (${to.x}|${to.y})`,
-      text: `${unitsCount(c.units)} troops are now defending ${playerName(w, to.ownerId)}.`,
+      text: to.cache ? `${unitsCount(c.units)} troops are now stationed at the resource cache.${to.cache.claims.includes(c.ownerId) ? " You hold a claim: the most troops there when time runs out wins it." : " You have no claim yet: win an attack here for your troops to count."}` : `${unitsCount(c.units)} troops are now defending ${playerName(w, to.ownerId)}.`,
     });
     addReport(w, to.ownerId, {
       kind: 'support', color: 'blue', vid: to.id,
@@ -495,7 +501,7 @@ function resolveAttack(w: World, c: Command, hooks: ArrivalHooks): void {
   const morale = w.config.morale && defender ? moraleFor(defender.points, attacker.points) : 1;
   // the village's own morale: its people fight softer when it is shaken (barbarians have none to lose)
   const spiritBefore = target.ownerId !== null ? villageMorale(target, w.now) : 100;
-  const catTarget = c.units.catapult ? pickCatTarget(w, target, c.catTarget) : undefined;
+  const catTarget = c.units.catapult ? (target.cache ? 'wall' : pickCatTarget(w, target, c.catTarget)) : undefined;
   const wallBefore = target.buildings.wall;
 
   const result = resolveBattle({
@@ -651,7 +657,8 @@ function resolveAttack(w: World, c: Command, hooks: ArrivalHooks): void {
   // loot
   let loot: Res | undefined;
   let capacity = 0;
-  if (result.winner === 'attacker' && !result.pureScout) {
+  // (a resource cache has nothing to carry off: its hoard only goes to whoever holds it at the end)
+  if (result.winner === 'attacker' && !result.pureScout && !target.cache) {
     const lootBonus = (attItem?.special === 'loot' ? 1 + ITEM_POWERS.loot : 1) * ((survivors.goblin ?? 0) > 0 ? 1 + HERO_POWERS.plunder : 1);
     capacity = Math.floor(unitsCarry(survivors) * lootBonus);
     const hidden = target.ownerId !== null ? hideCap(target.buildings.hiding) : 0;
@@ -693,10 +700,14 @@ function resolveAttack(w: World, c: Command, hooks: ArrivalHooks): void {
     }
   }
 
+  // a resource cache: winning there stakes a claim (the holder is decided by who then stations the most)
+  if (target.cache && result.winner === 'attacker' && !result.pureScout && !target.cache.claims.includes(c.ownerId)) target.cache.claims.push(c.ownerId);
+  const cacheNews = target.cache ? cacheIntel(w, target) : undefined;
+
   // loyalty
   let loyaltyChange: BattleData['loyalty'];
   let conquered = false;
-  if (result.winner === 'attacker' && (survivors.noble ?? 0) > 0) {
+  if (result.winner === 'attacker' && (survivors.noble ?? 0) > 0 && !target.cache) {
     const before = Math.floor(target.loyalty);
     let drop = 0;
     for (let i = 0; i < survivors.noble!; i++) drop += randInt(w, 20, 35) + (attItem?.special === 'loyalty' ? ITEM_POWERS.loyalty : 0);
@@ -765,6 +776,7 @@ function resolveAttack(w: World, c: Command, hooks: ArrivalHooks): void {
     risen,
     healed,
     tribute,
+    cache: cacheNews,
     effects: result.effects,
   };
   if (home) data.attacker = { ...sideInfo(w, home, c.ownerId) };

@@ -1,3 +1,4 @@
+import { endCache } from './caches';
 // The simulation loop: pops timed events in order and applies them.
 // `advance(world, t)` is deterministic and knows nothing about the UI, so a
 // multiplayer server can run exactly the same code.
@@ -103,11 +104,12 @@ function scavengeReturn(w: World, e: GameEvent): void {
 }
 
 function barbGrowth(w: World): void {
+  // (a resource cache is no barbarian village: it never grows)
   // barbarian villages slowly rebuild over the life of the world
   const ageDays = (w.now * w.config.speed) / 86_400_000;
   const cap = Math.min(3000, 160 + ageDays * 25);
   const barbs: Village[] = [];
-  for (const id in w.villages) if (w.villages[id].ownerId === null) barbs.push(w.villages[id]);
+  for (const id in w.villages) if (w.villages[id].ownerId === null && !w.villages[id].cache) barbs.push(w.villages[id]);
   const n = Math.max(1, Math.round(barbs.length * 0.025));
   for (let i = 0; i < n && barbs.length > 0; i++) {
     const v = barbs[Math.floor(nextRandom(w) * barbs.length)];
@@ -199,6 +201,7 @@ export function processEvent(w: World, e: GameEvent): void {
       break;
     }
     case 'end': finishRound(w); break;
+    case 'cache': endCache(w, e.a); break;
   }
 }
 

@@ -4,10 +4,11 @@ import { hasUnits } from '../../engine/formulas';
 import type { BonusType, UnitId, Units } from '../../engine/types';
 import type { MapData, MapVillage } from '../../engine/view';
 import { lsGet } from '../../host/storage';
-import { forestSprite, jungleSprite, lonePalmSprite, lookOfHero, onVillageArt, palmSprite, spriteBox, villageSprite, villageStage, type Ground } from '../mapSprites';
+import { cacheSprite, forestSprite, jungleSprite, lonePalmSprite, lookOfHero, onVillageArt, palmSprite, spriteBox, villageSprite, villageStage, type Ground } from '../mapSprites';
 import { inRealm, regionAt } from '../../engine/world';
 import { Icon } from '../art/icons';
-import { Btn, CopyButton, UnitList, UnitIcon, unitName } from '../components/common';
+import { Btn, CopyButton, Countdown, UnitList, UnitIcon, unitName } from '../components/common';
+import { cacheIntel, cacheSupport } from '../caches';
 import { loadFarmTemplates, tplName } from '../farmTemplates';
 import { coords, fmt, fmtAgo, fmtDur, parseCoords, quadrant } from '../format';
 import { TribeTag } from './TribeScreen';
@@ -299,7 +300,10 @@ export function MapScreen({ focus, at }: { focus?: number; at?: [number, number]
         else if (owner) fill = owner.color;
         const px = sx(x), py = sy(y);
         let k = 1, sprite: HTMLCanvasElement | null = null;
-        if (z >= 10) {
+        if (v.cache) {
+          // a resource cache: its own depot sprite, never a barbarian village
+          if (z >= 10) sprite = cacheSprite(GROUNDS[zones[y * data.size + x]]);
+        } else if (z >= 10) {
           const ground = GROUNDS[zones[y * data.size + x]];
           const look = v.ownerId === me ? myLooks.get(v.id) ?? 'generic' : 'generic';
           const stage = villageStage(v.points);
@@ -313,6 +317,22 @@ export function MapScreen({ focus, at }: { focus?: number; at?: [number, number]
     }
     for (const { v, px, py, gx, gy, k, sprite, fill, mark } of shown) {
       const zk = z * k;
+      if (v.cache) {
+        // a warm glow on the ground under it (the pulsing ring is laid over the map as it moves)
+        glow(ctx, gx, gy, Math.max(z * 1.05, 12), true, '#ffc43c');
+        if (z < 10 || !sprite) {
+          const s = Math.max(4, z + 1);
+          ctx.fillStyle = CACHE_GOLD;
+          ctx.strokeStyle = 'rgba(40, 20, 0, 0.9)';
+          ctx.lineWidth = 1.5;
+          ctx.fillRect(px + (z - s) / 2, py + (z - s) / 2, s, s);
+          ctx.strokeRect(px + (z - s) / 2 + 0.5, py + (z - s) / 2 + 0.5, s - 1, s - 1);
+        } else {
+          const S = z * CACHE_SIZE;
+          ctx.drawImage(sprite, gx - S / 2, gy + z * 0.46 - S, S, S);
+        }
+        continue;
+      }
       // bonus villages wear a brass ring, but only up close: from afar it would only be noise
       if (v.bonus && z >= BONUS_RING_ZOOM) bonusRing(ctx, gx, gy, zk, 'back');
       if (v.ownerId === me) glow(ctx, gx, gy, Math.max(zk * (v.id === cur.id ? 1.35 : 1.1), 10), v.id === cur.id, v.id === pv.me.homeVid ? '#ffffff' : '#ffc43c');
@@ -330,7 +350,7 @@ export function MapScreen({ focus, at }: { focus?: number; at?: [number, number]
     }
     for (const { v, gx, gy, k, owner, fill } of shown) {
       const zk = z * k;
-      if (z >= 10) {
+      if (z >= 10 && !v.cache) {
         // owner marker, Tribal Wars style, at the island's back-left corner
         const d = Math.max(4, z * 0.16 * Math.max(k, 0.7));
         ctx.fillStyle = fill;
@@ -380,7 +400,7 @@ export function MapScreen({ focus, at }: { focus?: number; at?: [number, number]
         if (lineMode === 'off') continue;
         const targetVid = c.kind === 'return' ? c.origin : c.toVid;
         const tgt = targetVid !== undefined ? byId.get(targetVid) : undefined;
-        if ((c.kind === 'attack' || c.kind === 'return') && (c.tag === 'farm' || (tgt && tgt.ownerId === null))) continue;
+        if ((c.kind === 'attack' || c.kind === 'return') && (c.tag === 'farm' || (tgt && tgt.ownerId === null && !tgt.cache))) continue;
       }
       const from = c.kind === 'return' ? byId.get(c.origin ?? c.toVid) : byId.get(c.fromVid);
       const to = c.kind === 'return' ? byId.get(c.fromVid) : byId.get(c.toVid);
@@ -465,6 +485,15 @@ export function MapScreen({ focus, at }: { focus?: number; at?: [number, number]
         const mine = v.ownerId === pv.me.id;
         const mark = mine ? undefined : markFor(mk, v.id, v.ownerId, owner?.tribeId);
         b.fillStyle = mine ? (v.id === pv.me.homeVid ? '#ffffff' : col['--me']) : mark ?? (owner ? tribeColor(data, pv.me.tribeId, owner.tribeId) : undefined) ?? owner?.color ?? col['--map-barb'];
+        if (v.cache) {
+          // the cache: a bright gold block, bigger than a village, ringed dark so it stands out anywhere
+          b.fillStyle = CACHE_GOLD;
+          b.fillRect(v.x * P - P, v.y * P - P, P * 3, P * 3);
+          b.strokeStyle = 'rgba(40, 20, 0, 0.95)';
+          b.lineWidth = 1.5;
+          b.strokeRect(v.x * P - P + 0.75, v.y * P - P + 0.75, P * 3 - 1.5, P * 3 - 1.5);
+          continue;
+        }
         b.fillRect(v.x * P, v.y * P, P, P);
         if (mine || mark) {
           b.strokeStyle = 'rgba(20, 10, 0, 0.85)';
@@ -482,6 +511,17 @@ export function MapScreen({ focus, at }: { focus?: number; at?: [number, number]
     ctx.fillStyle = col['--map-water'];
     ctx.fillRect(0, 0, S, S);
     ctx.drawImage(store._base, ox * P, oy * P, span * P, span * P, 0, 0, S, S);
+    const cv = data.villages.find((v) => v.cache);
+    if (cv) {
+      // a gold ring round the cache on the minimap, so it can be found at a glance
+      const mx = (cv.x + 0.5 - ox) * k, my = (cv.y + 0.5 - oy) * k;
+      ctx.strokeStyle = 'rgba(40, 20, 0, 0.8)';
+      ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.arc(mx, my, 7, 0, Math.PI * 2); ctx.stroke();
+      ctx.strokeStyle = CACHE_GOLD;
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(mx, my, 7, 0, Math.PI * 2); ctx.stroke();
+    }
     const W = c.clientWidth / zoom, H = c.clientHeight / zoom;
     ctx.strokeStyle = '#fff6dc';
     ctx.lineWidth = 1.5;
@@ -586,6 +626,7 @@ export function MapScreen({ focus, at }: { focus?: number; at?: [number, number]
   };
 
   const selected = sel !== null ? byId.get(sel) : undefined;
+  const cacheV = useMemo(() => data.villages.find((v) => v.cache), [data.rev]);
   const hovered = hover !== null ? byId.get(hover) : undefined;
 
   return (
@@ -649,6 +690,16 @@ export function MapScreen({ focus, at }: { focus?: number; at?: [number, number]
               home={hovered.id === pv.me.homeVid}
             />
           )}
+          {cacheV && canvas.current && (
+            <CacheMark
+              v={cacheV}
+              z={zoom}
+              x={(cacheV.x + 0.5 - center[0]) * zoom + canvas.current.clientWidth / 2}
+              y={(cacheV.y + 0.62 - center[1]) * zoom + canvas.current.clientHeight / 2}
+              w={canvas.current.clientWidth}
+              h={canvas.current.clientHeight}
+            />
+          )}
           {touchUi && <div class={`map-crosshair${aimed ? ' is-on' : ''}`} aria-hidden="true" />}
           {aimed && aimed.id !== hovered?.id && (
             <HoverCard v={aimed} data={data} docked mine={aimed.ownerId === pv.me.id} home={aimed.id === pv.me.homeVid} />
@@ -670,7 +721,9 @@ export function MapScreen({ focus, at }: { focus?: number; at?: [number, number]
         <Legend data={data} />
       </div>
       <aside class="map-side">
-        {selected ? <VillagePanel v={selected} data={data} onClose={() => { setSel(null); setHover(null); }} /> : (
+        {selected ? (selected.cache
+          ? <CachePanel key={selected.id} v={selected} onClose={() => { setSel(null); setHover(null); }} />
+          : <VillagePanel v={selected} data={data} onClose={() => { setSel(null); setHover(null); }} />) : (
           <div class="panel">
             <p class="muted">Click a village to see who rules it, how far away it is, and what your scouts know.</p>
             <p class="muted small">Drag to move · scroll or +/− to zoom · arrow keys pan</p>
@@ -1245,6 +1298,15 @@ function BonusChip({ type }: { type: BonusType }) {
 
 /** The village read-out: floats over the village under the cursor, or sits docked atop the map for the touch crosshair. */
 function HoverCard({ v, data, x, y, mine, home, docked }: { v: MapVillage; data: MapData; x?: number; y?: number; mine: boolean; home: boolean; docked?: boolean }) {
+  if (v.cache) {
+    return (
+      <div class={`map-hover is-cache${docked ? ' is-docked' : ''}`} role={docked ? 'status' : 'tooltip'} style={docked ? undefined : { left: `${x}px`, top: `${y}px` }}>
+        <div class="mh-name"><Icon name="cache" size={16} /> Resource cache</div>
+        <div class="mh-owner">Guards level <b class="num">{v.cache.level}</b> · <Countdown until={v.cache.endsAt} done="ending" /> left</div>
+        <div class="mh-meta"><span class="num">{coords(v.x, v.y)} · {quadrant(v.x, v.y, view.value!.config.size)}</span></div>
+      </div>
+    );
+  }
   const owner = v.ownerId !== null ? data.players[v.ownerId] : null;
   const tribe = owner?.tribeId ? data.tribes[owner.tribeId] : null;
   const m = marks.value;
@@ -1276,6 +1338,7 @@ function Legend({ data }: { data: MapData }) {
       <span><i class="sw" style={{ background: 'var(--me)' }} /> Your other villages</span>
       <span><i class="sw" style={{ background: 'var(--map-barb)' }} /> Barbarians</span>
       <span><i class="sw sw-bonus" /> Bonus village (up close)</span>
+      {data.villages.some((v) => v.cache) && <span><Icon name="cache" size={14} /> Resource cache</span>}
       {pv.me.tribeId != null && <>
         <span><i class="sw" style={{ background: TRIBE_COLORS.own }} /> Tribe</span>
         <span><i class="sw" style={{ background: TRIBE_COLORS.ally }} /> Allies</span>
@@ -1396,6 +1459,102 @@ function VillagePanel({ v, data, onClose }: { v: MapVillage; data: MapData; onCl
     </div>
   );
 }
+
+/** The cache's pulsing ring and, up close, its countdown: laid over the map so they move with it and animate on their own. */
+function CacheMark({ v, x, y, z, w, h }: { v: MapVillage; x: number; y: number; z: number; w: number; h: number }) {
+  if (x < -60 || y < -60 || x > w + 60 || y > h + 60) return null;
+  return (
+    <div class="map-cache-mark" style={{ left: `${x}px`, top: `${y}px`, '--z': `${Math.max(14, z)}px` }} aria-hidden="true">
+      <span class="map-cache-ring" />
+      <span class="map-cache-ring is-late" />
+      {z >= 16 && v.cache && <span class="map-cache-time"><Icon name="cache" size={12} /><Countdown until={v.cache.endsAt} done="ending" /></span>}
+    </div>
+  );
+}
+
+/** A resource cache on the map: the rules in brief, the clock, what your own reports say, and the orders to give. */
+function CachePanel({ v, onClose }: { v: MapVillage; onClose: () => void }) {
+  const pane = usePane();
+  const h = host.value!;
+  const pv = view.value!;
+  const cur = pane.village.value!;
+  const cache = v.cache!;
+  const c = { id: v.id, endsAt: cache.endsAt };
+  const reports = h.reports();
+  const intel = cacheIntel(reports, c, pv.me.id);
+  const support = cacheSupport(reports, c, pv.me.id);
+  const info = h.villageInfo(v.id, cur.id);
+  const there = pv.villages.filter((x) => x.stationed.some((s) => s.hostVid === v.id));
+  const stationed: Units = {};
+  for (const x of there) for (const s of x.stationed) if (s.hostVid === v.id) for (const k in s.units) stationed[k as UnitId] = (stationed[k as UnitId] ?? 0) + (s.units[k as UnitId] ?? 0);
+  const marching = pv.commands.filter((m) => m.dir === 'out' && m.toVid === v.id && (m.kind === 'attack' || m.kind === 'support'));
+  const quick: UnitId[] = ['spear', 'axe', 'scout', 'light', 'heavy', 'ram', 'catapult'];
+  const rally = (kind: 'attack' | 'support') => {
+    rallyTarget.value = { x: v.x, y: v.y, kind, ...(kind === 'attack' ? { cat: 'wall' as const } : {}) };
+    pane.go({ name: 'building', id: 'rally', tab: 'send' });
+  };
+  return (
+    <div class="panel map-info cache-panel">
+      <header>
+        <button type="button" class="icon-btn map-info-close" aria-label="Close" onClick={onClose}><Icon name="close" size={14} /></button>
+        <h3 class="cache-title"><Icon name="cache" size={26} /> Resource cache</h3>
+        <div class="muted small map-info-meta">
+          <span class="num coord-text">{coords(v.x, v.y)}</span>
+          <CopyButton text={coords(v.x, v.y)} label={`Copy coordinates ${coords(v.x, v.y)}`} />
+          <CopyButton text={`[coord]${coords(v.x, v.y)}[/coord]`} label="Copy as BBCode for the forum" class="is-bb">BBCode</CopyButton>
+          <span>· {quadrant(v.x, v.y, pv.config.size)}</span>
+        </div>
+      </header>
+      <div class="cache-clock">
+        <span><Icon name="shield" size={16} /> Guards level <b class="num">{cache.level}</b></span>
+        <span><Icon name="time" size={16} /> <b><Countdown until={cache.endsAt} done="ending now" /></b> left</span>
+      </div>
+      <p class="small cache-rules">Win an attack here to stake a claim, then station support. Whoever holds it when time runs out fills their stores. Who holds it is only revealed in battle reports.</p>
+      {info?.distanceFrom !== undefined && <dl class="facts"><dt>Distance</dt><dd class="num">{info.distanceFrom.toFixed(1)} fields from {cur.name}</dd></dl>}
+      <div class="row gap wrap">
+        <Btn small variant="danger" onClick={() => rally('attack')}><Icon name="attack" size={14} /> Attack</Btn>
+        <Btn small variant="ghost" disabled={!support.ok} title={support.ok ? 'Station troops here to hold the cache' : support.reason} onClick={() => rally('support')}><Icon name="support" size={14} /> Support</Btn>
+        <Btn small variant="ghost" disabled={(cur.units.scout ?? 0) < 1} title="Scouts bring back a report, and every report from the cache names who holds it" onClick={() => act({ type: 'send', vid: cur.id, target: v.id, kind: 'attack', units: { scout: Math.min(cur.units.scout ?? 0, 5) } }, 'Scouts are riding out to the cache.')}>
+          <Icon name="scout" size={14} /> Scout
+        </Btn>
+      </div>
+      {!support.ok && <p class="reason small">{support.reason}</p>}
+      <div class="intel">
+        <h4>What you know</h4>
+        {intel ? (
+          <p class="small">
+            <button type="button" class="link" onClick={() => pane.go({ name: 'reports', id: intel.id })}>Your latest report from here</button> ({fmtAgo(intel.t, now.value)}):{' '}
+            {intel.holder ? <>held by <b>{intel.holderId === pv.me.id ? 'you' : intel.holder}</b> after that battle.</> : <>nobody held it after that battle.</>}
+          </p>
+        ) : <p class="small muted">No battle here yet. Attack or scout it: every report from the cache names who holds it.</p>}
+        {support.ok && <p class="small good-text">You have a claim: send support to hold it.</p>}
+        {hasUnits(stationed) && <div class="small">Your troops there: <UnitList units={stationed} /></div>}
+        {marching.length > 0 && <p class="small">{marching.length} of your {marching.length === 1 ? 'armies is' : 'armies are'} on the way, the first arriving in <b class="num">{fmtDur((Math.min(...marching.map((m) => m.arrive)) - now.value) / warp.value)}</b>.</p>}
+      </div>
+      {there.length > 0 && (
+        <Btn small variant="ghost" onClick={() => { pane.vid.value = there[0].id; pane.go({ name: 'building', id: 'rally', tab: 'troops' }); }}>
+          <Icon name="support" size={14} /> Show my troops there
+        </Btn>
+      )}
+      {info?.travel && (
+        <details class="travel">
+          <summary>Travel times</summary>
+          <table class="level-table">
+            <tbody>
+              {quick.map((u) => (
+                <tr><td><UnitIcon u={u} size={16} /> {unitName(u)}</td><td class="right num">{fmtDur((info.travel![u] ?? 0) / warp.value)}</td></tr>
+              ))}
+            </tbody>
+          </table>
+        </details>
+      )}
+    </div>
+  );
+}
+
+const CACHE_GOLD = '#ffd23f';
+/** The depot sprite's side, in fields. */
+const CACHE_SIZE = 1.3;
 
 function Swatches({ value, onPick }: { value?: string; onPick: (c: string | null) => void }) {
   return (

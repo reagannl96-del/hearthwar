@@ -32,6 +32,7 @@ export function standings(w: World): Standings {
   const byRuler = new Map<number, number>();
   for (const id in w.villages) {
     const v = w.villages[id];
+    if (v.cache) continue; // a resource cache is nobody's village
     if (v.ownerId === null) { barbarians++; continue; }
     const p = w.players[v.ownerId];
     if (!p) continue;
