@@ -267,6 +267,7 @@ export function buildScenery(seed = 11): THREE.Group {
     else if (it.kind === 'barrel') g.add(barrel(it.x, it.z));
     else g.add(crate(it.x, it.z));
   }
+  addLamps(g);
   if (getTheme() === 'goblin') { addSwamp(g, r); addGoblinYard(g, r); }
   if (getTheme() === 'paladin') addTourney(g, r);
   if (getTheme() === 'sorcerer') addArcane(g, r);
@@ -433,7 +434,7 @@ function addGraveyard(g: THREE.Group, r: () => number): void {
   // a gravestone or two by each obelisk inside the walls
   for (const [x, z] of [[-34, 2], [-24, -24], [28, -18], [32, 14], [10, -31], [-5, 31]]) g.add(gravestone(r, x + 2.4, z + 1.2, 0.2));
   // fog lying low over the graves
-  const fogMat = new THREE.MeshBasicMaterial({ color: 0xb8c8bc, transparent: true, opacity: 0.14, depthWrite: false });
+  const fogMat = new THREE.MeshLambertMaterial({ color: 0xb8c8bc, transparent: true, opacity: 0.22, depthWrite: false, alphaMap: softDisc() });
   for (let i = 0; i < 14; i++) {
     const a = r() * Math.PI * 2, d = WALL_R + 8 + r() * 60;
     const m = new THREE.Mesh(new THREE.CircleGeometry(6 + r() * 6, 12), fogMat);
@@ -803,6 +804,40 @@ function addGlade(g: THREE.Group, r: () => number): void {
 
 /** Reeds, cattails and drifting mist for a goblin swamp, kept off the paths and away from buildings. */
 /**
+ * Street lamps round the square, down the main street and along the ring road.
+ * Their glass is the same as the windows', so they light up with the village at night.
+ */
+function addLamps(g: THREE.Group): void {
+  const spots: [number, number][] = [];
+  for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2 + Math.PI / 8; spots.push([Math.cos(a) * 9.4, 3.8 + Math.sin(a) * 9.4]); }
+  for (const z of [15, 23, 31, 39]) for (const x of [-3.4, 3.4]) spots.push([x, z]);
+  for (let i = 0; i < 14; i++) {
+    const a = (i / 14) * Math.PI * 2 + 0.1;
+    if (Math.abs(Math.atan2(Math.sin(a - Math.PI / 2), Math.cos(a - Math.PI / 2))) < 0.3) continue;
+    spots.push([Math.cos(a) * 41.8, Math.sin(a) * 41.8]);
+  }
+  const clearOf = (x: number, z: number) => (Object.keys(LAYOUT) as BuildingId[]).every((id) => {
+    if (id === 'wall' || OUTSIDE.includes(id)) return true;
+    const [bx, bz] = LAYOUT[id];
+    const room = id === 'main' ? 11.5 : id === 'statue' || id === 'rally' || id === 'hiding' ? 4.2 : 8;
+    return Math.hypot(x - bx, z - bz) > room;
+  });
+  for (const [x, z] of spots) {
+    if (!clearOf(x, z)) continue;
+    const l = new THREE.Group();
+    l.add(cyl(0.22, 0.28, 0.3, C.stoneDark, 6));
+    l.add(cyl(0.06, 0.08, 2.6, C.iron, 5, 0, 0.3));
+    l.add(box(0.44, 0.08, 0.44, C.iron, 0, 2.85, 0));
+    const glass = box(0.34, 0.46, 0.34, C.window, 0, 2.93, 0);
+    glass.userData.window = true;
+    l.add(glass);
+    l.add(cone(0.34, 0.3, C.slate, 4, 0, 3.39, 0).rotateY(Math.PI / 4));
+    l.position.set(x, 0, z);
+    g.add(l);
+  }
+}
+
+/**
  * The druids' sacred spring outside the gate: a pool with lilies, a ring of mossy
  * standing stones round it, deer grazing at its edge, giant toadstools, and a
  * great oak at the back.
@@ -933,7 +968,7 @@ function addSwamp(g: THREE.Group, r: () => number): void {
     for (let i = 0; i < 2; i++) reed(x + (r() - 0.5) * 3, z + (r() - 0.5) * 3, 0);
   }
   // low mist banks hanging over the bog
-  const mistMat = new THREE.MeshBasicMaterial({ color: 0xcfd8c4, transparent: true, opacity: 0.16, depthWrite: false });
+  const mistMat = new THREE.MeshLambertMaterial({ color: 0xcfd8c4, transparent: true, opacity: 0.24, depthWrite: false, alphaMap: softDisc() });
   for (let i = 0; i < 14; i++) {
     const a = r() * Math.PI * 2, d = WALL_R + 10 + r() * 60;
     const m = new THREE.Mesh(new THREE.CircleGeometry(6 + r() * 6, 12), mistMat);
@@ -1117,11 +1152,26 @@ export function buildWall(level: number, color: number): THREE.Group {
     g.add(seg);
   }
   const towers = tier === 3 ? 8 : 12;
+  const torches: THREE.Object3D[] = [];
   for (let i = 0; i < towers; i++) {
     const a = start + ((end - start) * i) / (towers - 1);
-    const tw = roundTower(tier === 3 ? 2.3 : 2.7, tier === 3 ? 6 : 8, { roof: tier === 4 ? C.tile : null });
+    const tr = tier === 3 ? 2.3 : 2.7, th = tier === 3 ? 6 : 8;
+    const tw = roundTower(tr, th, { roof: tier === 4 ? C.tile : null });
     tw.position.set(Math.cos(a) * R, 0, Math.sin(a) * R);
     g.add(tw);
+    // a torch on each side of the tower, facing into the village
+    for (const s of [-0.5, 0.5]) {
+      const ta = a + Math.PI + s;
+      const tx = Math.cos(a) * R + Math.cos(ta) * (tr + 0.15), tz = Math.sin(a) * R + Math.sin(ta) * (tr + 0.15);
+      g.add(box(0.12, 0.7, 0.12, C.woodDark, tx, th * 0.62, tz));
+      const flame = mesh(new THREE.ConeGeometry(0.22, 0.6, 6).translate(0, 0.3, 0), 0xffb45a, { emissive: 0xff7a1a });
+      flame.position.set(tx, th * 0.62 + 0.7, tz);
+      flame.userData.dynamic = true;
+      flame.userData.fire = true;
+      flame.userData.nightOnly = true;
+      g.add(flame);
+      torches.push(flame);
+    }
   }
   // gatehouse
   const gate = new THREE.Group();
@@ -1130,6 +1180,7 @@ export function buildWall(level: number, color: number): THREE.Group {
   gate.position.set(0, 0, R);
   g.add(gate);
   const baked = bake(g, { building: 'wall' });
+  void torches;
   if (tier === 4) {
     for (const s of [-1, 1]) {
       const pole = new THREE.Group();
@@ -1149,3 +1200,20 @@ export function buildWall(level: number, color: number): THREE.Group {
 }
 
 export { mat };
+
+let disc: THREE.Texture | null = null;
+/** A soft round fade (white in the middle, clear at the rim), so fog and mist have no hard edge. */
+function softDisc(): THREE.Texture {
+  if (disc) return disc;
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d')!;
+  const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grad.addColorStop(0, '#fff');
+  grad.addColorStop(0.55, '#aaa');
+  grad.addColorStop(1, '#000');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 64, 64);
+  disc = new THREE.CanvasTexture(c);
+  return disc;
+}

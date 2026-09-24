@@ -2,6 +2,10 @@
 // buildings, level badges, villagers, falling leaves, smoke and fire.
 
 import * as THREE from 'three';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { BUILDINGS } from '../../engine/data/buildings';
 import type { BuildingId, Buildings, Units } from '../../engine/types';
@@ -103,6 +107,12 @@ export class VillageRenderer {
   private color = 0xe0a526;
   private viewH = 74;
   private fireLight: THREE.PointLight;
+  /** night: bloom makes every lit window, lantern, fire and crystal glow */
+  private composer: EffectComposer | null = null;
+  private bloom: UnrealBloomPass | null = null;
+  /** night: warm light pooling at the square and the busiest doors (a fixed set, dark by day) */
+  private nightLights: THREE.PointLight[] = [];
+  private nightSky: THREE.Texture | null = null;
   private lastBuildings: Buildings | null = null;
   private season: Season = 'fall';
   private night = false;
@@ -185,6 +195,19 @@ export class VillageRenderer {
     this.scene.add(fill);
     this.fireLight = new THREE.PointLight(0xff8a2a, 0, 22, 1.6);
     this.scene.add(this.fireLight);
+    for (let i = 0; i < 6; i++) {
+      const l = new THREE.PointLight(0xffb45a, 0, 20, 1.6);
+      this.nightLights.push(l);
+      this.scene.add(l);
+    }
+    if (!opts.showcase) {
+      const composer = new EffectComposer(renderer);
+      composer.addPass(new RenderPass(this.scene, this.camera));
+      this.bloom = new UnrealBloomPass(new THREE.Vector2(512, 512), 0.85, 0.55, 0.86);
+      composer.addPass(this.bloom);
+      composer.addPass(new OutputPass());
+      this.composer = composer;
+    }
 
     this.scene.add(buildTerrain());
     const scenery = buildScenery();
@@ -284,6 +307,7 @@ export class VillageRenderer {
     this.updateAura();
     this.updateLabels(b, constructing);
     this.updateBuilders(constructing);
+    this.placeNightLights();
   }
 
   /** The attacks on this village, their reports, and the clock: acted out in the scene. */
@@ -319,18 +343,22 @@ export class VillageRenderer {
     this.night = n;
     const winter = this.season === 'winter';
     const volc = this.season === 'volcanic';
-    const sky = new THREE.Color(n ? (winter ? 0x1c2638 : volc ? 0x2a1614 : 0x1a1d2e) : winter ? 0xdfe7ee : volc ? 0x9a6a58 : 0xe8cf9f);
-    this.scene.background = sky;
+    const sky = new THREE.Color(n ? (winter ? 0x1c2a44 : volc ? 0x2e1816 : 0x1c2240) : winter ? 0xdfe7ee : volc ? 0x9a6a58 : 0xe8cf9f);
+    this.scene.background = n ? this.starSky(sky) : sky;
     (this.scene.fog as THREE.Fog).color = sky;
+    this.container.classList.toggle('is-night', n);
     if (n) {
-      this.hemi.color.set(0x6f82c0);
-      this.hemi.groundColor.set(0x1c1a24);
-      this.hemi.intensity = winter ? 0.75 : 0.55;
-      this.sun.color.set(0x9fb6ff);
-      this.sun.intensity = winter ? 0.9 : 0.7;
-      this.fill.intensity = 0.1;
-      this.renderer.toneMappingExposure = 1.15;
+      // a bright, cool moonlit night: everything reads, and the lamps and windows glow warm against it
+      this.hemi.color.set(winter ? 0x9ab4ff : volc ? 0xb08aa0 : 0x7c94ff);
+      this.hemi.groundColor.set(volc ? 0x3a1a14 : 0x2a2440);
+      this.hemi.intensity = winter ? 1.0 : 0.85;
+      this.sun.color.set(0xbcd0ff);
+      this.sun.intensity = winter ? 1.45 : 1.25;
+      this.fill.color.set(volc ? 0xff6a3a : 0x8a70d0);
+      this.fill.intensity = 0.45;
+      this.renderer.toneMappingExposure = 1.22;
     } else {
+      this.fill.color.set(0xb9c7ff);
       this.hemi.color.set(winter ? 0xf2f6ff : 0xfff0d8);
       this.hemi.groundColor.set(winter ? 0x8a8f99 : 0x5b4a2e);
       this.hemi.intensity = winter ? 1.1 : 1.35;
@@ -341,8 +369,58 @@ export class VillageRenderer {
     }
     // windows glow warm at night
     mat(C.window).emissive.set(n ? 0xffa53a : 0x000000);
-    mat(C.window).emissiveIntensity = n ? 1.3 : 1;
+    mat(C.window).emissiveIntensity = n ? 2.4 : 1;
     for (const l of this.lanterns) l.visible = n;
+    for (const s of this.slots.values()) s.group.traverse((o) => { if (o.userData.nightOnly) o.visible = n; });
+    this.placeNightLights();
+  }
+
+  /** A night sky: deep blue fading to violet at the horizon, scattered with stars. */
+  private starSky(base: THREE.Color): THREE.Texture {
+    if (this.nightSky) return this.nightSky;
+    const c = document.createElement('canvas');
+    c.width = 512; c.height = 512;
+    const g = c.getContext('2d')!;
+    const grad = g.createLinearGradient(0, 0, 0, 512);
+    const top = base.clone().multiplyScalar(0.55), bottom = base.clone().lerp(new THREE.Color(0x4a3a7a), 0.45);
+    grad.addColorStop(0, `#${top.getHexString()}`);
+    grad.addColorStop(1, `#${bottom.getHexString()}`);
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 512, 512);
+    const r = rng(77);
+    for (let i = 0; i < 260; i++) {
+      const a = 0.25 + r() * 0.75;
+      g.fillStyle = `rgba(255, 250, 235, ${a})`;
+      const sz = r() < 0.08 ? 2 : 1;
+      g.fillRect(Math.floor(r() * 512), Math.floor(r() * 400), sz, sz);
+    }
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    this.nightSky = tex;
+    return tex;
+  }
+
+  /** Warm light at the square and the busiest doorsteps, at night only (always the same number of lights, so nothing recompiles). */
+  private placeNightLights(): void {
+    const spots: THREE.Vector3[] = [];
+    const door = (id: BuildingId, out = 4.2) => {
+      const s = this.slots.get(id);
+      if (!s || (this.lastBuildings?.[id] ?? 0) <= 0) return;
+      const [x, z, ry] = LAYOUT[id];
+      const k = buildingScale(id);
+      spots.push(new THREE.Vector3(x + Math.sin(ry) * out * k, 3.2, z + Math.cos(ry) * out * k));
+    };
+    door('main', 6);
+    door('market', 3);
+    door('barracks');
+    door('warehouse');
+    door('stable');
+    spots.push(new THREE.Vector3(0, 3.5, WALL_R - 4)); // the gate
+    this.nightLights.forEach((l, i) => {
+      const p = spots[i];
+      l.intensity = this.night && p ? 24 : 0;
+      if (p) l.position.copy(p);
+    });
   }
 
   zoomBy(f: number): void {
@@ -395,6 +473,8 @@ export class VillageRenderer {
     this.renderer.forceContextLoss();
     this.renderer.domElement.remove();
     this.labelLayer.remove();
+    this.composer?.dispose();
+    this.nightSky?.dispose();
   }
 
   // ---------- building slots ----------
@@ -420,6 +500,7 @@ export class VillageRenderer {
     let h = 4, radius = 5;
     if (id === 'wall') {
       group = buildWall(level, this.color);
+      group.traverse((o) => { if (o.userData.nightOnly) o.visible = this.night; });
       h = level >= 15 ? 11 : level >= 10 ? 9 : 6;
       radius = 3;
       const slot: Slot = { key, group, anchor: new THREE.Vector3(0, h, WALL_R + 1), radius };
@@ -463,6 +544,7 @@ export class VillageRenderer {
     group.traverse((o) => {
       if (o.userData.smoke) this.smoke.push({ src: o, puffs: [] });
     });
+    group.traverse((o) => { if (o.userData.nightOnly) o.visible = this.night; });
     const scale = buildingScale(id);
     group.position.set(x, y, z);
     group.rotation.y = ry;
@@ -497,8 +579,11 @@ export class VillageRenderer {
         s.label = el;
       }
       s.label.hidden = false;
-      s.label.textContent = String(lvl);
+      s.label.innerHTML = up !== undefined
+        ? `<span class="lvl-num">${lvl}<i class="lvl-up">${up}</i></span><span class="lvl-name">${BUILDINGS[id].name}</span>`
+        : `<span class="lvl-num">${lvl}</span><span class="lvl-name">${BUILDINGS[id].name}</span>`;
       s.label.classList.toggle('is-building', up !== undefined);
+      s.label.classList.toggle('is-max', BUILDINGS[id].max > 1 && lvl >= BUILDINGS[id].max);
       s.label.dataset.id = id;
     }
   }
@@ -955,6 +1040,10 @@ export class VillageRenderer {
   private resize(): void {
     const w = Math.max(1, this.container.clientWidth), h = Math.max(1, this.container.clientHeight);
     this.renderer.setSize(w, h, false);
+    if (this.composer) {
+      this.composer.setPixelRatio(this.renderer.getPixelRatio());
+      this.composer.setSize(w, h);
+    }
     const aspect = w / h;
     const vh = this.viewH * (aspect < 1 ? 1.25 : 1);
     this.camera.left = (-vh * aspect) / 2;
@@ -975,7 +1064,8 @@ export class VillageRenderer {
     const t = this.clock.elapsedTime;
     this.controls.update();
     this.animate(dt, t);
-    this.renderer.render(this.scene, this.camera);
+    if (this.composer && this.night) this.composer.render();
+    else this.renderer.render(this.scene, this.camera);
     this.placeLabels();
   };
 

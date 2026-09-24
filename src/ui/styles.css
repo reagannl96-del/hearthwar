@@ -563,28 +563,60 @@ kbd {
 .village3d { position: relative; width: 100%; height: 100%; overflow: hidden; touch-action: none; }
 .village3d-canvas { display: block; width: 100% !important; height: 100% !important; }
 .village3d-labels { position: absolute; inset: 0; pointer-events: none; z-index: 1; overflow: hidden; }
+/* level badges: a dark enamel pill with a brass rim and a little pointer down to the building */
 .lvl-badge {
   position: absolute;
   left: 0;
-  top: 0;
+  top: -7px;
   min-width: 26px;
-  height: 22px;
-  padding: 0 5px;
-  display: grid;
-  place-items: center;
-  font: 800 13px/1 var(--font-body);
-  color: #fff;
-  background: linear-gradient(#6a9a34, #3f6a1c);
-  border: 1.5px solid #243d10;
-  border-radius: 3px;
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.3) inset, 0 2px 4px rgba(0, 0, 0, 0.4);
+  height: 25px;
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  font: 800 14px/1 var(--font-body);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  color: #fff4d6;
+  background: linear-gradient(180deg, rgba(74, 50, 26, 0.95), rgba(30, 19, 10, 0.95));
+  border: 1.5px solid #d9a441;
+  border-radius: 13px;
+  box-shadow: inset 0 1px 0 rgba(255, 228, 160, 0.4), 0 0 0 1px rgba(20, 10, 2, 0.55), 0 4px 10px rgba(0, 0, 0, 0.45);
   pointer-events: auto;
   cursor: pointer;
-  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.55);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.8);
+  white-space: nowrap;
   will-change: transform;
+  transition: box-shadow 0.2s, border-color 0.2s, background 0.2s;
 }
-.lvl-badge.is-building { background: linear-gradient(#e7b04a, #b87a12); border-color: #6b4508; }
-.lvl-badge.is-hover { filter: brightness(1.2); outline: 2px solid #ffe7a3; }
+.lvl-badge::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  width: 8px;
+  height: 8px;
+  background: #1e130a;
+  border-right: 1.5px solid #d9a441;
+  border-bottom: 1.5px solid #d9a441;
+  transform: translateX(-50%) rotate(45deg);
+}
+.lvl-num { display: inline-flex; align-items: baseline; gap: 3px; }
+.lvl-up { font-style: normal; font-size: 11px; color: #ffe08a; }
+.lvl-up::before { content: '▲'; font-size: 8px; margin-right: 1px; position: relative; top: -1px; }
+.lvl-name { max-width: 0; overflow: hidden; opacity: 0; font: 700 12px/1 var(--font-body); color: #f2dcaa; transition: max-width 0.25s ease, opacity 0.2s, margin 0.25s; }
+.lvl-badge.is-hover { border-color: #ffe7a3; z-index: 2; }
+.lvl-badge.is-hover .lvl-name { max-width: 180px; opacity: 1; margin-left: 7px; }
+.lvl-badge.is-building { border-color: #ffc94a; background: linear-gradient(180deg, rgba(140, 90, 20, 0.96), rgba(70, 40, 8, 0.96)); animation: lvl-build 1.6s ease-in-out infinite; }
+.lvl-badge.is-building::after { border-color: #ffc94a; background: #46280a; }
+@keyframes lvl-build { 50% { box-shadow: inset 0 1px 0 rgba(255, 228, 160, 0.4), 0 0 0 1px rgba(20, 10, 2, 0.55), 0 0 14px rgba(255, 196, 74, 0.75); } }
+.lvl-badge.is-max { border-color: #ffe08a; background: linear-gradient(180deg, rgba(150, 110, 30, 0.96), rgba(84, 56, 12, 0.96)); }
+.lvl-badge.is-max .lvl-num::after { content: '★'; font-size: 10px; color: #ffe8a0; margin-left: 2px; }
+.village3d.is-night .lvl-badge { box-shadow: inset 0 1px 0 rgba(255, 228, 160, 0.4), 0 0 0 1px rgba(20, 10, 2, 0.6), 0 0 12px rgba(255, 180, 80, 0.35), 0 4px 10px rgba(0, 0, 0, 0.5); }
+@media (prefers-reduced-motion: reduce) { .lvl-badge.is-building { animation: none; } }
+/* night: a soft vignette pulls the eye to the lit village */
+.village3d.is-night::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse at 50% 55%, transparent 55%, rgba(6, 4, 20, 0.45) 100%); }
 .village3d-tip {
   position: absolute;
   left: 0;
