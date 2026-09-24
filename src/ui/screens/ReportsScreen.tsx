@@ -267,8 +267,8 @@ function columns(b: BattleData): UnitId[] {
   const seen = (u: UnitId) => [b.attUnits, b.defUnits, b.scout?.unitsOutside].some((x) => (x?.[u] ?? 0) > 0);
   return ARMY_ORDER.filter((u) => {
     if ((u === 'archer' || u === 'marcher') && !pv.config.archers) return seen(u);
-    // the paladin keeps his classic column; the other statue heroes only show up when they fought
-    if (u === 'militia' || (isHero(u) && u !== 'paladin')) return seen(u);
+    // a statue hero (the paladin too) only gets a column when one fought, so a druid's village never shows an empty paladin column
+    if (u === 'militia' || isHero(u)) return seen(u);
     return true;
   });
 }
