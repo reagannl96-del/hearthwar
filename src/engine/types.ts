@@ -253,6 +253,8 @@ export interface AIState {
   plans?: Record<number, { target: number; since: number; scoutCmd: number }>;
   /** target village -> until when it is left alone (scouted and not worth it, or too strong) */
   avoid?: Record<number, number>;
+  /** target village -> scouting parties it has killed in a row (each one sends a bigger party next) */
+  scoutFails?: Record<number, number>;
   /** what each village is built for, as a Tribal Wars player would set it up */
   roles?: Record<number, VillageRole>;
   /** which village the ruler looks at next: a person works through their villages a few at a time */

@@ -71,10 +71,10 @@ const RESEARCH: Record<P, UnitId[]> = {
 
 /** desired share of army population per unit */
 const ARMY: Record<P, Partial<Record<UnitId, number>>> = {
-  warlord: { spear: 0.08, axe: 0.45, scout: 0.04, light: 0.3, marcher: 0.06, ram: 0.05, catapult: 0.02 },
-  farmer: { spear: 0.25, sword: 0.1, axe: 0.2, scout: 0.04, light: 0.35, heavy: 0.06 },
-  turtle: { spear: 0.35, sword: 0.3, archer: 0.12, scout: 0.04, heavy: 0.15, light: 0.04 },
-  expander: { spear: 0.2, sword: 0.15, axe: 0.25, scout: 0.04, light: 0.25, ram: 0.04, heavy: 0.07 },
+  warlord: { spear: 0.08, axe: 0.43, scout: 0.08, light: 0.28, marcher: 0.06, ram: 0.05, catapult: 0.02 },
+  farmer: { spear: 0.24, sword: 0.1, axe: 0.19, scout: 0.08, light: 0.33, heavy: 0.06 },
+  turtle: { spear: 0.34, sword: 0.29, archer: 0.12, scout: 0.07, heavy: 0.14, light: 0.04 },
+  expander: { spear: 0.19, sword: 0.14, axe: 0.24, scout: 0.08, light: 0.24, ram: 0.04, heavy: 0.07 },
 };
 
 const TROOP_SHARE: Record<P, number> = { warlord: 0.5, farmer: 0.38, turtle: 0.42, expander: 0.35 };
@@ -83,8 +83,8 @@ const OFFENSIVE: UnitId[] = ['axe', 'light', 'marcher', 'heavy', 'ram', 'catapul
 
 /** Troop recipes by village role. Mixed villages use the ruler's own blend. */
 const ROLE_ARMY: Record<'offense' | 'defense', Partial<Record<UnitId, number>>> = {
-  offense: { axe: 0.55, light: 0.3, marcher: 0.05, scout: 0.02, ram: 0.06, catapult: 0.02 },
-  defense: { spear: 0.45, sword: 0.3, archer: 0.1, heavy: 0.07, light: 0.05, scout: 0.03 },
+  offense: { axe: 0.52, light: 0.28, marcher: 0.05, scout: 0.07, ram: 0.06, catapult: 0.02 },
+  defense: { spear: 0.43, sword: 0.29, archer: 0.1, heavy: 0.07, light: 0.05, scout: 0.06 },
 };
 
 /** How likely each personality is to set a new village up for attack, defence, a mix or at random. */
@@ -110,11 +110,11 @@ export function villageRole(w: World, p: Player, v: Village): VillageRole {
     if (kind === 'random') {
       // a random assortment: a handful of unit types in random amounts
       const pool: UnitId[] = ['spear', 'sword', 'axe', 'archer', 'light', 'marcher', 'heavy', 'ram'];
-      const weights: Partial<Record<UnitId, number>> = { scout: 0.03 };
+      const weights: Partial<Record<UnitId, number>> = { scout: 0.07 };
       let total = 0;
       for (const u of pool) if (nextRandom(w) < 0.55) { const wt = 0.05 + nextRandom(w); weights[u] = wt; total += wt; }
       if (total === 0) { weights.spear = 0.5; weights.axe = 0.5; total = 1; }
-      for (const u of pool) if (weights[u]) weights[u] = (weights[u]! / total) * 0.97;
+      for (const u of pool) if (weights[u]) weights[u] = (weights[u]! / total) * 0.93;
       role.weights = weights;
     }
     ai.roles[v.id] = role;
@@ -395,7 +395,7 @@ function recruit(w: World, p: Player, v: Village): void {
     for (const k of RES_KEYS) if (d.cost[k] > 0) n = Math.min(n, Math.floor(budget[k] / d.cost[k]));
     const chk = recruitCheck(w, v, u, 1);
     n = Math.min(n, chk.max, Math.floor(popLeft / d.pop));
-    if (u === 'scout') n = Math.min(n, 60 + v.buildings.stable * 4 - (army.scout ?? 0));
+    if (u === 'scout') n = Math.min(n, 150 + v.buildings.stable * 12 - (army.scout ?? 0));
     if (n < 1) continue;
     popLeft -= n * d.pop;
     if (applyAction(w, p.id, { type: 'recruit', vid: v.id, unit: u, count: n }).ok) {
@@ -682,8 +682,10 @@ const unitWorth = (units: Units) => {
 const WAR_WAIT = {
   /** a scouting plan is dropped if no report comes back in time */
   plan: 20 * MIN,
-  /** scouts that never came back: something strong is there */
+  /** scouts lost again and again: leave it a while */
   scoutsLost: 60 * MIN,
+  /** scouts lost: try again soon, with more of them */
+  scoutRetry: 15 * MIN,
   /** the report says it would be a bloodbath */
   tooStrong: 45 * MIN,
   /** the report says it is not worth the trip */
@@ -695,6 +697,11 @@ const WAR_WAIT = {
   /** a village this ruler just emptied is left alone for a while: nothing to kill, little to take */
   justCleared: 40 * MIN,
 };
+
+/** How many scouts to send: a good party to start, three times as many after every party that died. */
+function scoutParty(ai: NonNullable<Player['ai']>, target: number): number {
+  return Math.min(300, 15 * 3 ** (ai.scoutFails?.[target] ?? 0));
+}
 
 /** A grudge fades after this long without fresh fighting. */
 const GRUDGE_MS = 60 * 60_000;
@@ -727,12 +734,30 @@ function war(w: World, p: Player): void {
       const reported = intel?.scoutT !== undefined && intel.scoutT >= plan.since;
       if (!reported) {
         if (w.commands[plan.scoutCmd]?.kind === 'attack') continue; // still on the road
-        // the scouts never came back: whatever is there is strong enough to kill them
+        // the scouts never came back: the village keeps scouts of its own. Send more next time, and
+        // after a couple of lost parties, find out the hard way with a probing attack
         delete ai.plans[vid];
-        ai.avoid[plan.target] = w.now + WAR_WAIT.scoutsLost;
+        ai.scoutFails ??= {};
+        const fails = (ai.scoutFails[plan.target] = (ai.scoutFails[plan.target] ?? 0) + 1);
+        if (fails >= 2 && mayHit(w, p, target.ownerId) && attackValue(army) >= minArmy) {
+          const probe: Units = {};
+          for (const k in army) {
+            const n = Math.floor((army[k as UnitId] ?? 0) * 0.5);
+            if (n > 0) probe[k as UnitId] = n;
+          }
+          probe.scout = Math.min(v.units.scout ?? 0, scoutParty(ai, plan.target));
+          if (!probe.scout) delete probe.scout;
+          if (sendTroops(w, { ownerId: p.id, fromVid: v.id, toVid: target.id, kind: 'attack', units: probe, tag: 'war' }).ok) {
+            noteHit(w, p, target);
+            ai.scoutFails[plan.target] = 0;
+            continue;
+          }
+        }
+        ai.avoid[plan.target] = w.now + (fails >= 4 ? WAR_WAIT.scoutsLost : WAR_WAIT.scoutRetry);
         continue;
       }
       delete ai.plans[vid];
+      if (ai.scoutFails) delete ai.scoutFails[plan.target];
       strike(w, p, v, target, army);
       continue;
     }
@@ -757,8 +782,9 @@ function war(w: World, p: Player): void {
     const fresh = p.intel[target.id];
     if (fresh?.scoutT !== undefined && w.now - fresh.scoutT < WAR_WAIT.freshReport) { strike(w, p, v, target, army); continue; }
     const scouts = v.units.scout ?? 0;
-    if (scouts < 3) continue;
-    const r = sendTroops(w, { ownerId: p.id, fromVid: v.id, toVid: target.id, kind: 'attack', units: { scout: Math.min(scouts, 8) }, tag: 'scout' });
+    const party = scoutParty(ai, target.id);
+    if (scouts < Math.min(5, party)) continue;
+    const r = sendTroops(w, { ownerId: p.id, fromVid: v.id, toVid: target.id, kind: 'attack', units: { scout: Math.min(scouts, party) }, tag: 'scout' });
     if (r.ok) ai.plans[vid] = { target: target.id, since: w.now, scoutCmd: (r.data as { id: number }).id };
   }
 }
