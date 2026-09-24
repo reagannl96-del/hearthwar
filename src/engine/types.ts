@@ -304,6 +304,10 @@ export interface AITraits {
   v?: number;
   /** hours it rests between one conquest and the next (plus a little for every village it already holds) */
   patienceH: number;
+  /** conquests a day it goes for when things go its way (a keen warlord 3-6, a careful defender about 1) */
+  tempo?: number;
+  /** how many villages would content it: past that it slows right down (some rulers never stop) */
+  ambition?: number;
   /** how many fields it will march to take a village */
   reach: number;
   /** 0..1: how readily it sends troops to a tribe mate under attack */

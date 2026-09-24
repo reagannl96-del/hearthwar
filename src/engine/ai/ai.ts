@@ -215,8 +215,9 @@ export function activityOf(p: Player): number {
 
 /**
  * Between sessions a person still glances at the game now and then, the way you
- * check your phone: a quick look to keep the builders and the barracks busy, and
- * nothing more (no raids, no war). Now and then even in the night.
+ * check your phone: a quick look to keep the builders and the barracks busy, and to
+ * send the next wave of a conquest under way, and nothing more (no raids, no war).
+ * Now and then even in the night, but no attacks then.
  */
 const GLANCE_AWAKE = 20 * 60_000;
 const GLANCE_ASLEEP = 90 * 60_000;
@@ -241,6 +242,8 @@ function glance(w: World, p: Player): void {
     hero(w, p, v);
     recruit(w, p, v);
   }
+  // a quick look on the phone is enough to send the next noble train (never in the night, though)
+  if (!aiAsleep(w, p)) campaignDrive(w, p);
 }
 
 export function aiThink(w: World, p: Player): void {
@@ -498,7 +501,12 @@ const FAKER: Record<P, number> = { warlord: 0.6, expander: 0.3, farmer: 0.2, tur
 const CAUTION: Record<P, Span> = { warlord: [1.1, 1.3], expander: [1.2, 1.4], farmer: [1.3, 1.5], turtle: [1.4, 1.7], opportunist: [1.2, 1.4], guardian: [1.4, 1.6] };
 const BARB_FIRST: Record<P, number> = { warlord: 0.3, expander: 0.7, farmer: 0.8, turtle: 0.9, opportunist: 0.15, guardian: 0.9 };
 
-const TRAITS_V = 2;
+const TRAITS_V = 3;
+
+/** Conquests a day by temperament, when its battles go well: a speedy realm, so keen rulers take several a day. */
+const TEMPO: Record<P, Span> = { warlord: [3.5, 7], expander: [3.2, 6.5], opportunist: [2.6, 6], farmer: [1.8, 3.4], guardian: [1.3, 2.6], turtle: [1, 2] };
+/** Villages that would content a ruler of each temperament (past them it slows right down). */
+const AMBITION: Record<P, Span> = { warlord: [30, 90], expander: [35, 100], opportunist: [20, 60], farmer: [15, 40], guardian: [12, 30], turtle: [10, 25] };
 
 /** A ruler's own habits, drawn once from its temperament (so no two warlords are quite alike). */
 export function traitsOf(w: World, p: Player): AITraits {
@@ -512,6 +520,9 @@ export function traitsOf(w: World, p: Player): AITraits {
       v: TRAITS_V,
       // and an appetite of its own on top: some are hungrier than their kind, some lazier
       patienceH: Math.round(between(PATIENCE[pers]) * pace * (0.65 + nextRandom(w) * 0.9) * 10) / 10,
+      // its own appetite on top of its kind's: some are far hungrier than others
+      tempo: Math.round((between(TEMPO[pers]) / pace) * (0.7 + nextRandom(w) * 0.6) * 100) / 100,
+      ambition: Math.round(between(AMBITION[pers])),
       reach: Math.round(between(REACH[pers])),
       helper: Math.min(1, Math.max(0, HELPER[pers] + (nextRandom(w) - 0.5) * 0.3)),
       faker: nextRandom(w) < FAKER[pers],
@@ -575,10 +586,11 @@ function attackHero(v: Village): UnitId | null {
  * be read and planned against:
  *
  *  - It starts as soon as it has a nobleman at home and has rested since its last
- *    conquest: its patience (a couple of hours for the hungriest warlords, a day or
- *    more for the most careful defenders), half as long again for every village it
- *    already holds (three quarters again for each), as a person has more and more to look after. A ruler on a
- *    winning streak rests less, one that keeps failing or losing rests more.
+ *    conquest. Every ruler has a tempo, the conquests a day it goes for when its
+ *    battles go its way (a keen warlord 3 to 6, a careful defender about one), and an
+ *    ambition, the villages that would content it (past them it slows right down).
+ *    A winning streak quickens it, setbacks slow it, and like anyone it has days
+ *    when it is on fire and days when it barely plays.
  *  - It picks a village within its reach (10 to 22 fields): a barbarian village of
  *    100 points or more, or a player's village (people's too, their first one
  *    included) that is out of beginner protection, not in its tribe and not an ally
@@ -615,12 +627,30 @@ function campaignReady(w: World, p: Player): boolean {
  */
 export function campaignGapH(w: World, p: Player): number {
   const ai = p.ai!;
-  // (streaks only count once the opening is over)
-  const hot = w.now < 3 * DAY_MS ? 1 : Math.pow(0.8, Math.min(3, ai.streak ?? 0));
-  const cold = 1 + 0.4 * Math.min(4, ai.cold ?? 0);
-  // the opening is slow for everyone: nobody snowballs before the realm has found its feet
-  const floor = Math.max(3, 12 - 4 * (w.now / DAY_MS));
-  return Math.max(floor, traitsOf(w, p).patienceH * (1 + 0.75 * Math.max(0, p.villages.length - 1)) * hot * cold);
+  const t = traitsOf(w, p);
+  const n = p.villages.length;
+  // its pace: a day divided by the conquests it goes for, a little slower as the realm it runs grows
+  let gap = (24 / Math.max(0.3, t.tempo ?? 1)) * (1 + 0.02 * Math.max(0, n - 1));
+  // content with what it has: past its ambition it slows right down
+  if (n >= (t.ambition ?? 99)) gap *= 3;
+  // on a roll it keeps rolling; setbacks slow it down
+  gap *= Math.pow(0.85, Math.min(3, ai.streak ?? 0)) * (1 + 0.35 * Math.min(4, ai.cold ?? 0));
+  // and people have their days: some it is on fire, some it barely plays
+  gap *= dayMood(w, p);
+  // the opening is a little slower for everyone, and no ruler takes villages back to back
+  const floor = Math.max(1.5, 8 - 8 * (w.now / DAY_MS));
+  return Math.max(floor, gap);
+}
+
+/**
+ * How today is going for this ruler, the same all day (from its id and the day, so
+ * it costs no dice): mostly an ordinary day, now and then a day on fire (x0.6 the
+ * rest), now and then a day it barely plays (x3).
+ */
+export function dayMood(w: World, p: Player): number {
+  const day = Math.floor(w.now / DAY_MS);
+  const roll = (((p.id * 2654435761) ^ (day * 40503 + 17)) >>> 0) % 100;
+  return roll < 14 ? 3 : roll > 85 ? 0.6 : 1;
 }
 
 /** A village taken from this ruler in the last few hours, still in someone else's hands. */
@@ -1837,4 +1867,18 @@ export function campaignVerdict(w: World, p: Player, v: Village): string {
   }
   const pick = chooseCampaignTarget(w, p, homes[0]);
   return pick?.id === v.id ? 'picked' : `prefers ${pick ? `${pick.ownerId === null ? 'barb' : 'player'} ${pick.points}pts` : 'nothing'}`;
+}
+
+/** What is holding this ruler's next conquest back right now (for the benches). */
+export function campaignState(w: World, p: Player): string {
+  const ai = p.ai!;
+  if (ai.campaign) return ai.campaign.scoutAt !== undefined ? 'campaign: scouting' : commandsOf(w, p.id).some((c) => c.toVid === ai.campaign!.target && c.kind === 'attack') ? 'campaign: marching' : (w.villages[ai.campaign.from]?.units.noble ?? 0) < 1 ? 'campaign: nobles away' : 'campaign: ready';
+  if (!aiAwake(w, p)) return 'offline';
+  if (!campaignReady(w, p)) return 'resting';
+  const homes = p.villages.map((id) => w.villages[id]).filter((h): h is Village => !!h && (h.units.noble ?? 0) > 0 && h.buildings.rally > 0);
+  if (!homes.length) {
+    const info = nobleInfo(w, p.id);
+    return info.canTrain > 0 ? 'no noble: can train' : info.coinsNeeded > 0 ? 'no noble: needs crowns' : 'no noble: other';
+  }
+  return chooseCampaignTarget(w, p, homes[0]) ? 'target ready' : 'nothing to take';
 }

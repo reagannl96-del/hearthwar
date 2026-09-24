@@ -6,7 +6,7 @@
 //   npx vite build --ssr scripts/conquestbench.ts --outDir .bench --emptyOutDir && node .bench/conquestbench.js [days] [seed] [ais]
 
 import { advance } from '../src/engine/game';
-import { campaignVerdict } from '../src/engine/ai/ai';
+import { campaignState, campaignVerdict } from '../src/engine/ai/ai';
 import { nobleInfo } from '../src/engine/actions';
 import { farmMax, popFree } from '../src/engine/village';
 import { distance } from '../src/engine/formulas';
@@ -51,6 +51,7 @@ const finished = { taken: 0, given: 0, wavesToTake: [] as number[] };
 
 const reinforceDay = Number(process.env.REINFORCE_DAY || 0), reinforceTo = Number(process.env.REINFORCE_TO || 0);
 const newcomers = new Set<number>();
+const states: Record<string, number> = {};
 const gains = new Map<number, string[]>();
 const firstAcademy = new Map<number, number>(), firstGain = new Map<number, number>();
 for (let h = 1; h <= days * 24; h++) {
@@ -73,6 +74,8 @@ for (let h = 1; h <= days * 24; h++) {
       }
     }
   }
+  if (process.env.STATES) for (const p of ais()) if ((p.ai!.traits?.tempo ?? 0) >= 4) { const k = campaignState(w, p); states[k] = (states[k] ?? 0) + 1; }
+  if (process.env.STATES && h % 24 === 0) { console.log('   keen rulers, hours by state: ' + Object.entries(states).sort((a, b) => b[1] - a[1]).map(([k, n]) => k + ' ' + n).join(', ')); for (const k in states) delete states[k]; }
   for (const c of Object.values(w.commands)) {
     if (seenCmd.has(c.id)) continue;
     seenCmd.add(c.id);

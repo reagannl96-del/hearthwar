@@ -21,8 +21,9 @@ describe('AI rulers play at a human pace', () => {
       expect(hours).toBeLessThan(2 * 8 + 2);
       // a person clicking out raids between everything else: not hundreds an hour
       expect(p.stats.attacks / Math.max(1, hours)).toBeLessThan(120);
-      // the first conquests come late on day one; the hungriest ruler has a handful by the end of day two
-      expect(p.villages.length).toBeLessThanOrEqual(5);
+      // a speedy realm: the hungriest rulers take several villages a day once they get going, but never
+      // more than about six a day, and the first conquests only come late on day one
+      expect(p.villages.length).toBeLessThanOrEqual(1 + 2 * 6);
     }
   }, 60_000);
 });
