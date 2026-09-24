@@ -38,16 +38,34 @@ export interface Prefs {
   notify: boolean;
   theme: 'system' | 'light' | 'dark';
   confirmAttacks: boolean;
-  /** village scene season: follow the village's place on the map, or force one */
-  season: 'auto' | 'fall' | 'winter';
-  /** village scene lighting: follow the real clock, or force one */
-  sceneTime: 'auto' | 'day' | 'night';
+  /** 3D village detail: 'auto' picks by the device */
+  quality: 'auto' | 'low' | 'medium' | 'high';
 }
 
-export function isNightNow(p: Prefs): boolean {
-  if (p.sceneTime !== 'auto') return p.sceneTime === 'night';
-  const h = new Date().getHours();
-  return h >= 19 || h < 6;
+/** A day in the realm lasts two hours of server time; the last third of it is night. */
+export const DAY_MS = 2 * 60 * 60_000;
+export const NIGHT_FROM = 2 / 3;
+
+/** Where the realm's day stands at server time `t`: night or day, and how long until that changes. */
+export function dayClock(t: number): { night: boolean; changeIn: number } {
+  const into = ((t % DAY_MS) + DAY_MS) % DAY_MS;
+  const dusk = DAY_MS * NIGHT_FROM;
+  return into < dusk ? { night: false, changeIn: dusk - into } : { night: true, changeIn: DAY_MS - into };
+}
+
+/** Night in the realm at server time `t` (everyone sees the same sky). */
+export const isNightAt = (t: number) => dayClock(t).night;
+
+/** The quality the 3D village actually runs at: 'auto' guesses from the device. */
+export function sceneQuality(p: Prefs): 'low' | 'medium' | 'high' {
+  if (p.quality !== 'auto') return p.quality;
+  if (typeof navigator === 'undefined') return 'high';
+  const nav = navigator as Navigator & { deviceMemory?: number };
+  const cores = nav.hardwareConcurrency ?? 8, mem = nav.deviceMemory ?? 8;
+  const phone = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
+  if (cores <= 4 || mem <= 3) return 'low';
+  if (phone || cores <= 6 || mem <= 4) return 'medium';
+  return 'high';
 }
 
 export const host = signal<HostBase | null>(null);
@@ -65,10 +83,11 @@ export const warp = signal(1);
 export const rallyTarget = signal<{ x: number; y: number; kind?: 'attack' | 'support'; units?: Record<string, number> } | null>(null);
 export const marketTarget = signal<{ x: number; y: number } | null>(null);
 
-const defaultPrefs: Prefs = { sound: true, notify: false, theme: 'system', confirmAttacks: false, season: 'auto', sceneTime: 'auto' };
+const defaultPrefs: Prefs = { sound: true, notify: false, theme: 'system', confirmAttacks: false, quality: 'auto' };
 function loadPrefs(): Prefs {
   try {
-    return { ...defaultPrefs, ...JSON.parse(lsGet('hw-prefs') ?? '{}') };
+    const { season: _s, sceneTime: _t, ...saved } = JSON.parse(lsGet('hw-prefs') ?? '{}');
+    return { ...defaultPrefs, ...saved };
   } catch {
     return defaultPrefs;
   }

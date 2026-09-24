@@ -3,7 +3,14 @@ import { resetNavOrder } from '../navOrder';
 import { SPEED_PRESETS } from '../../engine/world';
 import { Btn, Modal, Section } from '../components/common';
 import { fmtDur } from '../format';
-import { host, paused, prefs, restartRealm, setPaused, setPrefs, setWarp, leaveRealm, toast, view, warp } from '../store';
+import { host, paused, prefs, restartRealm, sceneQuality, setPaused, setPrefs, setWarp, leaveRealm, toast, view, warp } from '../store';
+
+const QUALITY_NOTE = {
+  auto: 'Picked for this device. Change it if the village feels slow or looks rough.',
+  low: 'Low: no shadows or night glow, a lower resolution, fewer villagers and about 30 frames a second. Easiest on older phones and laptops.',
+  medium: 'Medium: softer shadows, a slightly lower resolution and fewer villagers. A good middle ground for most phones.',
+  high: 'High: full resolution, soft shadows and the full night glow. For desktops and recent phones.',
+} as const;
 
 export function SettingsScreen() {
   const h = host.value!;
@@ -71,22 +78,16 @@ export function SettingsScreen() {
           <Btn disabled={speed === pv.config.speed && unitSpeed === pv.config.unitSpeed} onClick={() => { h.setSpeed(speed, unitSpeed); toast('World speed changed.', 'good'); }}>Apply</Btn>
         </Section>
         )}
-        <Section title="Village scene">
-          <p class="muted small">Villages in the snowy north of the map wear winter, and those in the volcanic west stand on ash and lava; everywhere else it is autumn.</p>
-          <div class="row gap wrap">
-            {(['auto', 'fall', 'winter'] as const).map((s) => (
-              <Btn small variant={p.season === s ? 'primary' : 'ghost'} onClick={() => setPrefs({ season: s })}>
-                {s === 'auto' ? 'Season by location' : s === 'fall' ? 'Always autumn' : 'Always winter'}
+        <Section title="Graphics quality">
+          <p class="muted small">If the village runs slowly or your device gets warm, turn this down. Lower settings draw fewer pixels, drop shadows and the night glow, and show fewer villagers.</p>
+          <div class="row gap wrap quality-pick" role="radiogroup" aria-label="Graphics quality">
+            {(['auto', 'low', 'medium', 'high'] as const).map((q) => (
+              <Btn small variant={p.quality === q ? 'primary' : 'ghost'} onClick={() => setPrefs({ quality: q })} aria-pressed={p.quality === q}>
+                {q === 'auto' ? `Auto (${sceneQuality({ ...p, quality: 'auto' })})` : q[0].toUpperCase() + q.slice(1)}
               </Btn>
             ))}
           </div>
-          <div class="row gap wrap">
-            {(['auto', 'day', 'night'] as const).map((s) => (
-              <Btn small variant={p.sceneTime === s ? 'primary' : 'ghost'} onClick={() => setPrefs({ sceneTime: s })}>
-                {s === 'auto' ? 'Day & night follow my clock' : s === 'day' ? 'Always day' : 'Always night'}
-              </Btn>
-            ))}
-          </div>
+          <p class="muted small">{QUALITY_NOTE[p.quality]}</p>
         </Section>
         <Section title="Tabs">
           <p class="muted small">Drag the tabs along the top into whatever order you like. The order is kept in this browser.</p>

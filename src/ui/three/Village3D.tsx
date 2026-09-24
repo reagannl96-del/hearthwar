@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { BUILDINGS } from '../../engine/data/buildings';
 import type { BuildingId, Buildings, Units } from '../../engine/types';
 import { VillageScene } from '../art/VillageScene';
-import { VillageRenderer, webglAvailable, type MarchInfo } from './VillageRenderer';
+import { VillageRenderer, webglAvailable, type MarchInfo, type Quality } from './VillageRenderer';
+import { dayClock } from '../store';
 import type { TheatreInput, TheatreReport } from './battle/theatre';
 import type { Theme } from './kit';
 
@@ -17,6 +18,8 @@ interface Props {
   /** the village lies in the volcanic west */
   volcanic?: boolean;
   night: boolean;
+  /** how much detail the device can take */
+  quality?: Quality;
   /** troops at home; a few of them walk around the village */
   units?: Units;
   /** the village hero's look */
@@ -34,7 +37,6 @@ interface Props {
   replay?: { report: TheatreReport; at: number; fromX: number; fromY: number } | null;
   /** the replay has been handed to the scene (so it is not played again next time) */
   onReplayed?: () => void;
-  onToggleNight?: () => void;
 }
 
 let gl: boolean | null = null;
@@ -59,6 +61,7 @@ export function Village3D(p: Props) {
         season: p.winter ? 'winter' : p.volcanic ? 'volcanic' : 'fall',
         night: p.night,
         theme: p.theme,
+        quality: p.quality,
       });
       r.current.update(p.buildings, p.building, p.color, p.points);
       r.current.setTroops(p.units ?? {});
@@ -71,7 +74,7 @@ export function Village3D(p: Props) {
       r.current?.dispose();
       r.current = null;
     };
-  }, [p.winter, p.volcanic, p.theme]);
+  }, [p.winter, p.volcanic, p.theme, p.quality]);
 
   useEffect(() => {
     if (!p.battle) return;
@@ -134,18 +137,27 @@ export function Village3D(p: Props) {
         <button type="button" title="Rotate left" aria-label="Rotate left" onClick={() => r.current?.rotateBy(-Math.PI / 4)}>⟲</button>
         <button type="button" title="Rotate right" aria-label="Rotate right" onClick={() => r.current?.rotateBy(Math.PI / 4)}>⟳</button>
         <button type="button" title="Reset view" aria-label="Reset view" onClick={() => r.current?.resetView()}>⌂</button>
-        {p.onToggleNight && (
-          <button type="button" title={p.night ? 'Switch to day' : 'Switch to night'} aria-label={p.night ? 'Switch to day' : 'Switch to night'} onClick={p.onToggleNight}>
-            {p.night ? '☀' : '☾'}
-          </button>
-        )}
       </div>
+      {p.now !== undefined && <SkyClock t={p.now} />}
       {fighting && (
         <button type="button" class="village3d-watch" onClick={() => r.current?.watchBattle()} title="Swing the view round to the fighting">
           ⚔ Watch
         </button>
       )}
       <div class="village3d-hint">Drag to move · scroll to zoom · right-drag to turn</div>
+    </div>
+  );
+}
+
+/** The realm's time of day (server time, a two-hour day), and how long until dusk or dawn. */
+function SkyClock({ t }: { t: number }) {
+  const c = dayClock(t);
+  const m = Math.max(1, Math.ceil(c.changeIn / 60_000));
+  const left = m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`;
+  return (
+    <div class={`village3d-sky ${c.night ? 'is-night' : ''}`} title="Day and night follow the server clock: a day lasts two hours, the last 40 minutes of it night.">
+      <span aria-hidden="true">{c.night ? '☾' : '☀'}</span>
+      <span>{c.night ? 'Night' : 'Day'} · {c.night ? 'dawn' : 'dusk'} in {left}</span>
     </div>
   );
 }

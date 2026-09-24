@@ -38,7 +38,11 @@ export interface VillageRendererOpts {
   night?: boolean;
   /** the village hero's look */
   theme?: Theme;
+  /** how hard the device works: 'low' drops shadows, the night glow and half the frames */
+  quality?: Quality;
 }
+
+export type Quality = 'low' | 'medium' | 'high';
 
 interface Slot {
   key: string;
@@ -166,13 +170,19 @@ export class VillageRenderer {
   /** while a battle is on stage, the idle strollers step aside */
   private quiet = false;
   private barrierFlash = { value: 0 };
+  /** the quality setting this scene was made with */
+  private q: Quality;
+  /** on low quality every other frame is skipped (about 30 a second) */
+  private skip = false;
   private lastUpdate: { b: Buildings; constructing: Partial<Record<BuildingId, number>>; color: number; points: number } | null = null;
 
   constructor(private container: HTMLElement, private opts: VillageRendererOpts = {}) {
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    const q = (this.q = opts.quality ?? 'high');
+    const renderer = new THREE.WebGLRenderer({ antialias: q !== 'low', alpha: false, powerPreference: q === 'low' ? 'low-power' : 'high-performance' });
+    // fewer pixels on lesser settings: the biggest saving there is
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, q === 'high' ? 1.75 : q === 'medium' ? 1.25 : 0.85));
+    renderer.shadowMap.enabled = q !== 'low';
+    renderer.shadowMap.type = q === 'high' ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.05;
@@ -202,8 +212,8 @@ export class VillageRenderer {
     const sun = new THREE.DirectionalLight(0xffd29a, 2.6);
     this.sun = sun;
     sun.position.set(-90, 120, 70);
-    sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
+    sun.castShadow = q !== 'low';
+    sun.shadow.mapSize.set(q === 'high' ? 2048 : 1024, q === 'high' ? 2048 : 1024);
     const sc = sun.shadow.camera;
     sc.left = -105; sc.right = 105; sc.top = 105; sc.bottom = -105; sc.near = 10; sc.far = 400;
     sun.shadow.bias = -0.0006;
@@ -224,7 +234,7 @@ export class VillageRenderer {
       this.nightLights.push(l);
       this.scene.add(l);
     }
-    if (!opts.showcase) {
+    if (!opts.showcase && q !== 'low') {
       const composer = new EffectComposer(renderer);
       composer.addPass(new RenderPass(this.scene, this.camera));
       this.bloom = new UnrealBloomPass(new THREE.Vector2(512, 512), 0.6, 0.5, 0.9);
@@ -631,7 +641,8 @@ export class VillageRenderer {
   // ---------- people ----------
 
   private updatePeople(points: number): void {
-    const want = this.opts.showcase ? 14 : Math.min(18, 3 + Math.floor(points / 180));
+    const crowd = this.q === 'low' ? 0.45 : this.q === 'medium' ? 0.75 : 1;
+    const want = this.opts.showcase ? 14 : Math.round(Math.min(18, 3 + Math.floor(points / 180)) * crowd);
     const loops: THREE.Vector3[][] = PEOPLE_LOOPS.map((p) => p.map(([x, z]) => new THREE.Vector3(x, Math.hypot(x, z) > WALL_R ? heightAt(x, z) : 0, z)));
     while (this.people.length < want) {
       const r = rng(this.people.length * 97 + 5);
@@ -1101,6 +1112,7 @@ export class VillageRenderer {
       this.clock.getDelta();
       return;
     }
+    if (this.q === 'low' && (this.skip = !this.skip)) return;
     const dt = Math.min(0.05, this.clock.getDelta());
     const t = this.clock.elapsedTime;
     this.controls.update();

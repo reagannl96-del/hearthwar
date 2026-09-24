@@ -5,7 +5,7 @@ import { Icon } from '../art/icons';
 import { Village3D } from '../three/Village3D';
 import { Btn, Countdown, Empty, Progress, Section, UnitList } from '../components/common';
 import { fmt } from '../format';
-import { act, battleReplay, host, isNightNow, liveRes, now, paused, prefs, setPrefs, view, warp, usePane } from '../store';
+import { act, battleReplay, host, isNightAt, liveRes, now, paused, prefs, sceneQuality, view, warp, usePane } from '../store';
 import type { TheatreInput } from '../three/battle/theatre';
 import { isVolcanic, isWinter } from '../../engine/world';
 import { CommandRow } from './RallyScreen';
@@ -21,7 +21,7 @@ export function VillageScreen() {
   const pv = view.value!;
   const upgrading: Partial<Record<BuildingId, number>> = {};
   for (const j of v.buildQueue) upgrading[j.building] = j.level;
-  const night = isNightNow(prefs.value);
+  const night = isNightAt(now.value);
   const quest = pv.quests.find((q) => q.done) ?? pv.quests[0];
   const moves = [...pv.incoming.filter((c) => c.toVid === v.id), ...pv.commands.filter((c) => c.fromVid === v.id || c.toVid === v.id)]
     .sort((a, b) => a.arrive - b.arrive)
@@ -62,8 +62,9 @@ export function VillageScreen() {
             color={0xe0a526}
             points={v.points}
             villageId={v.id}
-            winter={prefs.value.season === 'auto' ? isWinter(v.x, v.y, pv.config.size) : prefs.value.season === 'winter'}
-            volcanic={prefs.value.season === 'auto' && isVolcanic(v.x, v.y, pv.config.size)}
+            winter={isWinter(v.x, v.y, pv.config.size)}
+            volcanic={isVolcanic(v.x, v.y, pv.config.size)}
+            quality={sceneQuality(prefs.value)}
             night={night}
             units={v.units}
             support={v.support.map((s) => ({ theme: s.theme, units: s.units }))}
@@ -77,7 +78,6 @@ export function VillageScreen() {
             battle={battle}
             replay={replay}
             onReplayed={() => { battleReplay.value = null; }}
-            onToggleNight={() => setPrefs({ sceneTime: night ? 'day' : 'night' })}
           />
         </div>
         {quest && (

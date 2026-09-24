@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import type { BattleData, Buildings, Report } from '../../engine/types';
 import { isVolcanic, isWinter } from '../../engine/world';
 import { Btn } from '../components/common';
-import { host, isNightNow, prefs, view } from '../store';
+import { host, isNightAt, now, prefs, sceneQuality, view } from '../store';
 import { VillageRenderer, webglAvailable } from '../three/VillageRenderer';
 import type { Theme } from '../three/kit';
 
@@ -48,10 +48,10 @@ export function AttackViewer({ r, onClose }: { r: Report; onClose: () => void })
     const theme = (b.defender.theme ?? 'classic') as Theme;
     const size = view.value?.config.size ?? 100;
     const { x, y } = b.defender;
-    const season = prefs.value.season === 'auto' ? (isWinter(x, y, size) ? 'winter' : isVolcanic(x, y, size) ? 'volcanic' : 'fall') : prefs.value.season === 'winter' ? 'winter' : 'fall';
+    const season = isWinter(x, y, size) ? 'winter' : isVolcanic(x, y, size) ? 'volcanic' : 'fall';
     let r3: VillageRenderer;
     try {
-      r3 = new VillageRenderer(box.current, { theme, night: isNightNow(prefs.value), season, labels: false });
+      r3 = new VillageRenderer(box.current, { theme, night: isNightAt(now.value), season, labels: false, quality: sceneQuality(prefs.value) });
     } catch {
       setFailed(true);
       return;
