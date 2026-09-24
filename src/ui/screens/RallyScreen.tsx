@@ -6,9 +6,9 @@ import { ARMY_ORDER, UNITS, UNIT_ORDER, HEROES } from '../../engine/data/units';
 import { SCAVENGE_TIERS, distance, hasUnits, unitsCarry } from '../../engine/formulas';
 import type { BuildingId, UnitId, Units } from '../../engine/types';
 import type { CommandView, VillageView } from '../../engine/view';
-import { lsGet, lsSet } from '../../host/storage';
 import { Icon } from '../art/icons';
 import { Btn, Clock, Cost, Countdown, Empty, NumInput, Progress, Section, Tabs, UnitList, UnitTable, VillageLink, UnitIcon, unitName } from '../components/common';
+import { MAX_TEMPLATES, TEMPLATE_NAME_MAX, defaultTplName, loadFarmTemplates, saveFarmTemplates, tplName, type FarmTemplate } from '../farmTemplates';
 import { coords, fmt, fmtAgo, fmtDur, parseCoords } from '../format';
 import { act, host, now, rallyTarget, view, warp, usePane } from '../store';
 import { Simulator } from './Simulator';
@@ -470,28 +470,27 @@ function CommandsTab() {
 
 // ---------- farm assistant ----------
 
-interface FarmTemplates { a: Units; b: Units }
-
-/** Templates saved on this device, or a first guess from the troops this village has. */
-function loadTemplates(v: VillageView): FarmTemplates {
-  try {
-    const t = JSON.parse(lsGet('hw-farm') ?? '') as FarmTemplates;
-    if (t && t.a && t.b) return t;
-  } catch { /* none saved yet */ }
+/** A first guess for template A from the troops this village has. */
+function guessFarmUnits(v: VillageView): Units {
   const has = (u: UnitId, n: number) => (v.units[u] ?? 0) >= n;
-  const a: Units = has('light', 10) ? { light: 5 } : has('axe', 20) ? { axe: 20 } : has('spear', 20) ? { spear: 15 } : { light: 5 };
-  return { a, b: { spear: 20, axe: 10 } };
+  return has('light', 10) ? { light: 5 } : has('axe', 20) ? { axe: 20 } : has('spear', 20) ? { spear: 15 } : { light: 5 };
 }
+
+const FARM_UNITS: UnitId[] = ['spear', 'sword', 'axe', 'archer', 'scout', 'light', 'marcher', 'heavy'];
 
 function FarmAssistant({ v }: { v: VillageView }) {
   const pane = usePane();
   const h = host.value!;
   const pv = view.value!;
-  const [tpl, setTpl] = useState<FarmTemplates>(() => loadTemplates(v));
+  const [tpls, setTpls] = useState<FarmTemplate[]>(() => loadFarmTemplates(guessFarmUnits(v)));
   const [radius, setRadius] = useState(12);
   const [hideRed, setHideRed] = useState(true);
   const [edit, setEdit] = useState(false);
-  const saveTpl = (t: FarmTemplates) => { setTpl(t); lsSet('hw-farm', JSON.stringify(t)); };
+  const saveTpls = (list: FarmTemplate[]) => { setTpls(list); saveFarmTemplates(list); };
+  const patchTpl = (id: number, p: Partial<FarmTemplate>) => saveTpls(tpls.map((t) => (t.id === id ? { ...t, ...p } : t)));
+  const addTpl = () => saveTpls([...tpls, { id: Math.max(0, ...tpls.map((t) => t.id)) + 1, name: '', units: {} }]);
+  const first = tpls[0];
+  const firstName = tplName(first, 0);
   const map = h.map();
   const busy = new Set(pv.commands.filter((c) => c.kind === 'attack').map((c) => c.toVid));
   const returning = new Map<number, CommandView>();
@@ -520,30 +519,47 @@ function FarmAssistant({ v }: { v: VillageView }) {
     <div class="stack">
       <Section title="Templates" actions={<Btn small variant="ghost" onClick={() => setEdit(!edit)}>{edit ? 'Done' : 'Edit'}</Btn>}>
         <div class="grid-2">
-          {(['a', 'b'] as const).map((k) => (
-            <div class="template">
-              <b class="tpl-key">{k.toUpperCase()}</b>
+          {tpls.map((t, i) => (
+            <div class="template" key={t.id}>
+              {edit ? (
+                <div class="tpl-head">
+                  <input
+                    id={`tpl-name-${t.id}`}
+                    class="tpl-name"
+                    type="text"
+                    maxLength={TEMPLATE_NAME_MAX}
+                    placeholder={defaultTplName(i)}
+                    value={t.name}
+                    aria-label="Template name"
+                    onInput={(e) => patchTpl(t.id, { name: e.currentTarget.value.slice(0, TEMPLATE_NAME_MAX) })}
+                  />
+                  {i > 0 && <Btn small variant="quiet" onClick={() => saveTpls([tpls[i], ...tpls.filter((x) => x.id !== t.id)])} title="Move to first place (the one Repeat sends)">↑ First</Btn>}
+                  <Btn small variant="quiet" disabled={tpls.length <= 1} onClick={() => saveTpls(tpls.filter((x) => x.id !== t.id))} title="Delete this template">Delete</Btn>
+                </div>
+              ) : <b class="tpl-key">{tplName(t, i)}</b>}
               {edit ? (
                 <div class="unit-inputs compact">
-                  {(['spear', 'sword', 'axe', 'archer', 'scout', 'light', 'marcher', 'heavy'] as UnitId[]).filter((u) => pv.config.archers || (u !== 'archer' && u !== 'marcher')).map((u) => (
-                    <label class="unit-input">
+                  {FARM_UNITS.filter((u) => pv.config.archers || (u !== 'archer' && u !== 'marcher')).map((u) => (
+                    <label class="unit-input" title={unitName(u)}>
                       <span class="uname"><UnitIcon u={u} size={18} /></span>
-                      <NumInput id={`tpl-${k}-${u}`} value={tpl[k][u] ?? ''} onInput={(n) => saveTpl({ ...tpl, [k]: { ...tpl[k], [u]: n === '' ? 0 : n } })} />
+                      <NumInput id={`tpl-${t.id}-${u}`} value={t.units[u] || ''} onInput={(n) => patchTpl(t.id, { units: { ...t.units, [u]: n === '' ? 0 : n } })} />
                     </label>
                   ))}
                 </div>
               ) : (
-                <span><UnitList units={tpl[k]} empty="empty" /> <span class="muted small">carries {fmt(unitsCarry(tpl[k]))}</span></span>
+                <span><UnitList units={t.units} empty="empty" /> <span class="muted small">carries {fmt(unitsCarry(t.units))}</span></span>
               )}
-              {!hasUnits(tpl[k]) ? <span class="small muted">Empty: tap Edit to set it up.</span>
-                : canSend(tpl[k]) ? <span class="small good-text">{sendsLeft(tpl[k])} {sendsLeft(tpl[k]) === 1 ? 'send' : 'sends'} possible</span>
-                : <span class="small bad-text">Not enough at home: {short(tpl[k])}</span>}
+              {!hasUnits(t.units) ? <span class="small muted">Empty: tap Edit to set it up.</span>
+                : canSend(t.units) ? <span class="small good-text">{sendsLeft(t.units)} {sendsLeft(t.units) === 1 ? 'send' : 'sends'} possible</span>
+                : <span class="small bad-text">Not enough at home: {short(t.units)}</span>}
             </div>
           ))}
         </div>
+        {edit && tpls.length < MAX_TEMPLATES && <Btn small variant="ghost" class="tpl-add" onClick={addTpl}>+ Add template</Btn>}
         <p class="small farm-home"><span class="muted">At home:</span> <UnitList units={v.units} empty="nobody" /></p>
         <p class="muted small">
-          <b>Repeat</b> sends template A again every time the troops come home, as long as the raids come back without losses.
+          <b>Repeat</b> (↻) sends your first template, {firstName}, again every time the troops come home, as long as the raids come back without losses.
+          {tpls.length > 1 && ' Use ↑ First in Edit to change which one that is.'}
         </p>
       </Section>
       <Section
@@ -581,10 +597,13 @@ function FarmAssistant({ v }: { v: VillageView }) {
                       <td>{it?.lastAttackT ? <span class="small">{fmtAgo(it.lastAttackT, now.value)}{it.lastLoot !== undefined ? <> · <span class="num">{fmt(it.lastLoot)}</span>{full && <b title="Troops came home full — send more"> full</b>}</> : null}</span> : <span class="muted small">never</span>}</td>
                       <td class="right num">{it?.wall ?? '?'}</td>
                       <td class="right num">{known !== undefined ? fmt(known) : '—'}</td>
-                      <td class="right nowrap farm-send">
-                        <Btn small disabled={!canSend(tpl.a)} onClick={() => send(m.id, tpl.a)} title="Send template A">A</Btn>{' '}
-                        <Btn small disabled={!canSend(tpl.b)} onClick={() => send(m.id, tpl.b)} title="Send template B">B</Btn>{' '}
-                        <Btn small variant="ghost" disabled={!canSend(tpl.a)} onClick={() => send(m.id, tpl.a, true)} title="Send A and keep repeating">A↻</Btn>
+                      <td class="right farm-send">
+                        <div class="farm-btns">
+                          {tpls.map((t, i) => (
+                            <Btn small disabled={!canSend(t.units)} onClick={() => send(m.id, t.units)} title={`Send template ${tplName(t, i)}`}><span class="trunc">{tplName(t, i)}</span></Btn>
+                          ))}
+                          <Btn small variant="ghost" disabled={!canSend(first.units)} onClick={() => send(m.id, first.units, true)} title={`Send ${firstName} and keep repeating`}><span class="trunc">{firstName}</span>↻</Btn>
+                        </div>
                       </td>
                     </tr>
                   );

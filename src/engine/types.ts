@@ -234,7 +234,21 @@ export interface PaladinState {
 }
 
 export interface AIState {
-  personality: 'farmer' | 'warlord' | 'turtle' | 'expander';
+  personality: 'farmer' | 'warlord' | 'turtle' | 'expander' | 'opportunist' | 'guardian';
+  /** the hero this ruler raises at its statues (each village keeps the one its statue was sworn to) */
+  hero?: UnitId;
+  /** what sets this ruler apart from others of its temperament (drawn once, kept for good) */
+  traits?: AITraits;
+  /** the village this ruler is trying to take, and how it is going */
+  campaign?: AICampaign;
+  /** when the last campaign ended (taken or given up): the next one waits a while */
+  lastCampaignEnd?: number;
+  /** village id -> when it was taken from this ruler (it wants it back) */
+  lost?: Record<number, number>;
+  /** village it sent support to -> where from and when */
+  support?: Record<number, { from: number; at: number }>;
+  /** village id -> the highest its wall has stood (a battered wall is rebuilt first) */
+  wallWas?: Record<number, number>;
   nextThink: number;
   targetPlayer?: number | null;
   lastWarCheck: number;
@@ -274,6 +288,41 @@ export interface AIState {
   turnedAway?: Record<number, number>;
   /** where the between-session glances got to in the village list */
   glanceCursor?: number;
+}
+
+/** A ruler's own habits, on top of its temperament. */
+export interface AITraits {
+  /** hours it rests between one conquest and the next (plus a little for every village it already holds) */
+  patienceH: number;
+  /** how many fields it will march to take a village */
+  reach: number;
+  /** 0..1: how readily it sends troops to a tribe mate under attack */
+  helper: number;
+  /** sends a couple of fake attacks alongside a real one on a player */
+  faker: boolean;
+  /** how much stronger than the defence its army must be before it attacks (1.1 bold .. 1.7 careful) */
+  caution: number;
+  /** would rather take barbarian villages than players' ones */
+  barbFirst: boolean;
+}
+
+/**
+ * A conquest in progress, the way players do it: scout the village, send a clearing
+ * attack with a nobleman right behind it, and keep coming back (each nobleman takes
+ * 20 to 35 loyalty) until it falls. Given up if it goes badly.
+ */
+export interface AICampaign {
+  target: number;
+  /** the village the noblemen ride from */
+  from: number;
+  since: number;
+  /** noble waves sent so far */
+  waves: number;
+  /** attacks that were beaten back, or scouting that found it too strong */
+  fails: number;
+  /** a scouting party is out: when it left */
+  scoutAt?: number;
+  lastSent?: number;
 }
 
 /** Offensive (all attack troops), defensive (all defence, a few light cavalry to farm), mixed, or a random assortment. */

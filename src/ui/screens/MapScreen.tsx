@@ -8,6 +8,7 @@ import { forestSprite, lookOfHero, onVillageArt, villageSprite, villageStage } f
 import { isVolcanic, isWinter } from '../../engine/world';
 import { Icon } from '../art/icons';
 import { Btn, UnitList, UnitIcon, unitName } from '../components/common';
+import { loadFarmTemplates, tplName } from '../farmTemplates';
 import { coords, fmt, fmtAgo, fmtDur, parseCoords, quadrant } from '../format';
 import { TribeTag } from './TribeScreen';
 import { MARK_COLORS, markFor, marks, setMark, useWorldMarks, type Marks } from '../mapMarks';
@@ -707,14 +708,6 @@ function TribeInvite({ pid, name, tribeId }: { pid: number; name: string; tribeI
   );
 }
 
-function loadTpl(): { a: Units; b: Units } {
-  try {
-    return JSON.parse(lsGet('hw-farm') ?? '');
-  } catch {
-    return { a: { light: 5 }, b: { spear: 20, axe: 10 } };
-  }
-}
-
 function VillagePanel({ v, data, onClose }: { v: MapVillage; data: MapData; onClose: () => void }) {
   const pane = usePane();
   const h = host.value!;
@@ -725,7 +718,7 @@ function VillagePanel({ v, data, onClose }: { v: MapVillage; data: MapData; onCl
   useEffect(() => setNote(info.note ?? ''), [v.id]);
   const owner = v.ownerId !== null ? data.players[v.ownerId] : null;
   const own = v.ownerId === pv.me.id;
-  const tpl = loadTpl();
+  const tpls = loadFarmTemplates();
   const canSend = (u: Units) => hasUnits(u) && Object.entries(u).every(([k, n]) => (cur.units[k as UnitId] ?? 0) >= (n ?? 0));
   const it = info.intel;
   const quick: UnitId[] = ['spear', 'axe', 'scout', 'light', 'heavy', 'ram', 'noble'];
@@ -761,9 +754,10 @@ function VillagePanel({ v, data, onClose }: { v: MapVillage; data: MapData; onCl
           </div>
           {v.ownerId === null && (
             <div class="row gap wrap">
-              <Btn small disabled={!canSend(tpl.a)} onClick={() => act({ type: 'send', vid: cur.id, target: v.id, kind: 'attack', units: tpl.a }, 'Raid sent.')}>Farm A</Btn>
-              <Btn small disabled={!canSend(tpl.b)} onClick={() => act({ type: 'send', vid: cur.id, target: v.id, kind: 'attack', units: tpl.b }, 'Raid sent.')}>Farm B</Btn>
-              <Btn small variant="ghost" disabled={!canSend(tpl.a)} onClick={() => act({ type: 'send', vid: cur.id, target: v.id, kind: 'attack', units: tpl.a, repeat: true }, 'Repeating raid sent.')}>A ↻ repeat</Btn>
+              {tpls.map((t, i) => (
+                <Btn small class="farm-quick" disabled={!canSend(t.units)} title={`Send farm template ${tplName(t, i)}`} onClick={() => act({ type: 'send', vid: cur.id, target: v.id, kind: 'attack', units: t.units }, 'Raid sent.')}><span class="trunc">Farm {tplName(t, i)}</span></Btn>
+              ))}
+              <Btn small variant="ghost" class="farm-quick" disabled={!canSend(tpls[0].units)} title={`Send ${tplName(tpls[0], 0)} and keep repeating`} onClick={() => act({ type: 'send', vid: cur.id, target: v.id, kind: 'attack', units: tpls[0].units, repeat: true }, 'Repeating raid sent.')}><span class="trunc">{tplName(tpls[0], 0)}</span> ↻ repeat</Btn>
             </div>
           )}
           {owner && <Btn small variant="quiet" onClick={() => { marketTarget.value = { x: v.x, y: v.y }; pane.go({ name: 'building', id: 'market', tab: 'send' }); }}>Send resources</Btn>}

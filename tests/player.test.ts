@@ -380,7 +380,8 @@ describe('a human player', () => {
     removeEvents(w, (e) => e.type === 'barb');
     const p = w.players[w.humanId];
     const v = w.villages[p.villages[0]];
-    p.protectedUntil = 0;
+    // long out of protection, past a newcomer's first day
+    p.protectedUntil = -24 * 3_600_000;
     v.units = { spear: 5 };
     v.buildings.main = 10; v.buildings.farm = 10; v.buildings.warehouse = 10;
     v.points = 400;

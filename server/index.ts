@@ -21,7 +21,7 @@ import { privatePacket, publicSnapshot } from '../src/engine/shadow';
 import { invalidateSpatial } from '../src/engine/spatial';
 import type { Difficulty, RoundResult, World } from '../src/engine/types';
 import { recomputeCounters, recomputePlayerPoints } from '../src/engine/village';
-import { SIZE_PRESETS, WORLD_VERSION, createWorld, defaultConfig, migrateWorld, respawnHuman, spawnPlayer } from '../src/engine/world';
+import { SIZE_PRESETS, WORLD_VERSION, createWorld, defaultConfig, migrateWorld, reinforceRulers, respawnHuman, spawnPlayer } from '../src/engine/world';
 import type { ClientMsg, ServerMsg } from '../src/net/protocol';
 
 const env = process.env;
@@ -62,6 +62,8 @@ async function verify(token: string): Promise<{ id: string; name: string } | nul
 // ---------- world ----------
 
 let world: World;
+/** AI rulers the online realm keeps: 70 unless the environment says otherwise (a running realm is topped up on start). */
+const AI_RULERS = Math.max(Number(env.WORLD_AI || 0), 70);
 let clockBase = 0; // world.now = Date.now() - clockBase
 
 async function loadWorld(): Promise<World> {
@@ -70,6 +72,8 @@ async function loadWorld(): Promise<World> {
     if (w && w.version === WORLD_VERSION) {
       recomputeCounters(w);
       migrateWorld(w);
+      const came = reinforceRulers(w, AI_RULERS);
+      if (came > 0) console.log(`${came} AI rulers joined, for ${AI_RULERS} in all.`);
       recomputePlayerPoints(w);
       w.accounts ??= {};
       console.log(`Loaded world "${w.name}" with ${Object.keys(w.accounts).length} players.`);
@@ -92,7 +96,7 @@ function freshWorld(pastRounds: RoundResult[] = []): World {
       speed: Number(env.WORLD_SPEED || 150),
       unitSpeed: Number(env.WORLD_UNIT_SPEED || 80),
       size,
-      aiCount: Math.max(Number(env.WORLD_AI || 0), SIZE_PRESETS.medium.aiCount),
+      aiCount: AI_RULERS,
       difficulty: (env.WORLD_DIFFICULTY as Difficulty) || 'normal',
       roundDays: Number(env.ROUND_DAYS || 14),
     },

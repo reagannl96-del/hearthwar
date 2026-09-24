@@ -63,7 +63,8 @@ export function rock(r: () => number, s = 1, color: number = C.rock): THREE.Mesh
 
 export function crate(x = 0, z = 0, s = 1): THREE.Group {
   const g = new THREE.Group();
-  g.add(box(0.8 * s, 0.8 * s, 0.8 * s, 0xb08452));
+  // body stops just under the lid's top so the two tops aren't coplanar (z-fighting)
+  g.add(box(0.8 * s, 0.78 * s, 0.8 * s, 0xb08452));
   g.add(box(0.84 * s, 0.1 * s, 0.84 * s, C.woodDark, 0, 0.7 * s, 0));
   g.position.set(x, 0, z);
   return g;

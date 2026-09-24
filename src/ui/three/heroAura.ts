@@ -5,7 +5,7 @@
 // Everything here is decoration: no picking, and it keeps clear of the buildings.
 
 import * as THREE from 'three';
-import { blob, box, cone, cyl, mesh } from './kit';
+import { bake, blob, box, cone, cyl, mesh } from './kit';
 import { LAYOUT, WALL_R } from './scene';
 
 export type AuraHero = 'paladin' | 'sorcerer' | 'druid' | 'goblin' | 'necromancer';
@@ -125,6 +125,8 @@ function druidAura(r: () => number, wallLevel: number): Aura {
   const R = WALL_R + (tier >= 3 ? 1.25 : 0.6);
   const start = GATE_A + GATE_HALF + 0.03, end = GATE_A + Math.PI * 2 - GATE_HALF - 0.03;
   const blooms = [0xf4a6c8, 0xfff2f2, 0xe86a8a];
+  // thousands of little pieces: built loose, then baked into one mesh per colour (a handful of draw calls, not thousands)
+  const hedge = new THREE.Group();
   for (let a = start; a < end; a += 0.055 + r() * 0.025) {
     const x = Math.cos(a) * R, z = Math.sin(a) * R;
     const clump = new THREE.Group();
@@ -144,8 +146,9 @@ function druidAura(r: () => number, wallLevel: number): Aura {
     }
     clump.position.set(x, 0, z);
     clump.rotation.y = -a + Math.PI / 2;
-    g.add(clump);
+    hedge.add(clump);
   }
+  g.add(bake(hedge));
   // fireflies over the village
   const flies = risingSparks(22, 0xf4ff9a, 0x9aff3a, 0, 0, WALL_R - 6, 6, r);
   g.add(flies.group);

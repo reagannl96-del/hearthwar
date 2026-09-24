@@ -8,7 +8,7 @@ import { host, view, usePane } from '../store';
 
 type Tab = 'players' | 'tribes' | 'continent' | 'oda' | 'odd';
 
-const PERSONA: Record<string, string> = { farmer: 'Raider', warlord: 'Warlord', turtle: 'Defender', expander: 'Conqueror' };
+const PERSONA: Record<string, string> = { farmer: 'Raider', warlord: 'Warlord', turtle: 'Defender', expander: 'Conqueror', opportunist: 'Opportunist', guardian: 'Guardian' };
 
 export function RankingScreen({ player }: { player?: number }) {
   const pane = usePane();

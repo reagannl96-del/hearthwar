@@ -766,7 +766,19 @@ tr.is-current td { font-weight: 800; background: #f4d9ae !important; }
 .unit-table tr.loss td { color: var(--danger); font-weight: 700; }
 .target-card { display: flex; justify-content: space-between; gap: 12px; padding: 10px 12px; border-radius: 4px; background: var(--parch-hi); border: 1px solid var(--line-strong); }
 .template { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: 4px; background: var(--parch-hi); }
-.tpl-key { font: 800 1.3rem var(--font-display); color: var(--accent); }
+.tpl-key { font: 800 1.3rem var(--font-display); color: var(--accent); overflow-wrap: anywhere; }
+.tpl-head { display: flex; align-items: center; gap: 6px; }
+.tpl-head .tpl-name { flex: 1; min-width: 0; font-weight: 700; }
+.btn.tpl-add { align-self: flex-start; }
+/* each unit's icon sits right beside its box instead of at the far side of a wide cell */
+.template .unit-inputs.compact { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 6px 12px; }
+.template .unit-input { justify-content: flex-start; gap: 6px; }
+.template .num-input input { width: 64px; }
+/* one button per template: compact, long names cut short (the full name is in the tooltip) */
+.farm-btns { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; width: max-content; max-width: min(300px, 55vw); margin-left: auto; }
+.farm-table .farm-send .btn { max-width: 80px; padding-left: 8px; padding-right: 8px; }
+.btn.farm-quick { max-width: 170px; }
+.btn .trunc { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .farm-table td, .farm-table th { padding: 5px 6px; }
 /* the send buttons stay in view (and big enough for a thumb) however far the table scrolls */
 .farm-table td.farm-send, .farm-table th:last-child { position: sticky; right: 0; background: var(--parch-hi); box-shadow: -6px 0 6px -6px rgba(0, 0, 0, 0.25); }

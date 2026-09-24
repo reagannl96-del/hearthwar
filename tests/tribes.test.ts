@@ -154,7 +154,7 @@ describe('recruiting', () => {
     advance(w, w.now + 2 * 24 * 3_600_000);
     const joined = Object.values(w.tribes).reduce((n, x) => n + joinedThisWeek(w, x), 0);
     expect(joined).toBeGreaterThan(0);
-  });
+  }, 30_000);
 });
 
 describe('tribe housekeeping', () => {

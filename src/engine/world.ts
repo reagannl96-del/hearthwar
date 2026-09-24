@@ -173,14 +173,14 @@ function newPlayer(w: World, name: string, kind: 'human' | 'ai', color: string):
   return p;
 }
 
-const PERSONALITIES: AIState['personality'][] = ['farmer', 'warlord', 'turtle', 'expander'];
+const PERSONALITIES: AIState['personality'][] = ['farmer', 'warlord', 'turtle', 'expander', 'opportunist', 'guardian'];
 
 function aiState(w: World, personality: AIState['personality']): AIState {
   return {
     personality,
     nextThink: 0,
     lastWarCheck: 0,
-    aggression: personality === 'warlord' ? 0.8 : personality === 'expander' ? 0.6 : personality === 'farmer' ? 0.4 : 0.2,
+    aggression: personality === 'warlord' ? 0.8 : personality === 'opportunist' ? 0.7 : personality === 'expander' ? 0.6 : personality === 'farmer' ? 0.4 : personality === 'guardian' ? 0.3 : 0.2,
     hostile: w.config.difficulty !== 'peaceful',
     memory: {},
     targetPlayer: null,
@@ -488,6 +488,27 @@ export function realmGrowth(w: World): void {
       if (sproutBarbarian(w, 2)) break;
     }
   }
+}
+
+/**
+ * Bring a running realm up to this many AI rulers at once (the online realm asked for
+ * more company). Newcomers settle where there is room, with a head start that grows
+ * with the realm's age so they are not simply eaten, and beginner protection.
+ * Returns how many arrived.
+ */
+export function reinforceRulers(w: World, want: number): number {
+  if (w.finished) return 0;
+  const have = Object.values(w.players).filter((p) => p.kind === 'ai' && !p.eliminated).length;
+  w.config.aiCount = Math.max(w.config.aiCount, want);
+  const head = Math.min(14, 4 + Math.floor(w.now / (24 * HOUR)) * 2);
+  let n = 0;
+  for (let i = have; i < want; i++) {
+    const p = foundAiRuler(w, head);
+    if (!p) break;
+    n++;
+  }
+  if (n > 0) news(w, `${n} new rulers have arrived in the realm and settled the open land.`, 'player');
+  return n;
 }
 
 /** Found an AI ruler at a spot with real elbow room; null when the realm has none left. */
