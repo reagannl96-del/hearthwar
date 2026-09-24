@@ -262,6 +262,7 @@ export function aiThink(w: World, p: Player): void {
     war(w, p);
   }
   campaignDrive(w, p);
+  scoutRound(w, p);
   helpAllies(w, p);
   tribeLife(w, p);
   tribeRecruiting(w, p);
@@ -563,6 +564,8 @@ function attackHero(v: Village): UnitId | null {
  *  - It scouts first, then sends a clearing attack with its noblemen right behind,
  *    and keeps coming back as the noblemen return (each takes 20 to 35 loyalty, and
  *    loyalty grows back about 20 an hour on a standard realm) until the village falls.
+ *  - A village taken from it is struck back at once (loyalty starts low after a
+ *    conquest), without the usual rest, for the first few hours.
  *  - It gives up when the village turns out too strong for its army, when two of
  *    its attacks are beaten back, when its noblemen are gone, or after a day.
  */
@@ -572,10 +575,20 @@ const CAMPAIGN_FAILS = 2;
 const INTEL_FRESH = 45 * MIN;
 
 function campaignReady(w: World, p: Player): boolean {
+  if (recentLoss(w, p) !== null) return true;
   const last = p.ai!.lastCampaignEnd;
   if (last === undefined) return true;
   const gapH = traitsOf(w, p).patienceH * (1 + 0.5 * Math.max(0, p.villages.length - 1));
   return w.now - last >= gapH * 3_600_000;
+}
+
+/** A village taken from this ruler in the last few hours, still in someone else's hands. */
+function recentLoss(w: World, p: Player): number | null {
+  for (const [k, at] of Object.entries(p.ai!.lost ?? {})) {
+    const v = w.villages[Number(k)];
+    if (w.now - at < 6 * 3_600_000 && v && v.ownerId !== p.id && (p.ai!.avoid?.[v.id] ?? 0) <= w.now) return v.id;
+  }
+  return null;
 }
 
 function endCampaign(w: World, p: Player, taken: boolean): void {
@@ -806,6 +819,39 @@ function tribeEnemy(w: World, p: Player, o: Player): boolean {
     const c = m !== p.id ? w.players[m]?.ai?.campaign : undefined;
     return c !== undefined && w.villages[c.target]?.ownerId === o.id;
   });
+}
+
+/**
+ * Now and then a ruler scouts a player's village nearby that it knows nothing
+ * recent about, as people keep tabs on their neighbours: careful and opportunistic
+ * rulers more often. One small party at a time.
+ */
+function scoutRound(w: World, p: Player): void {
+  const ai = p.ai!;
+  const pers = ai.personality;
+  const every = (pers === 'opportunist' ? 2 : pers === 'turtle' || pers === 'guardian' ? 6 : 3) * 3_600_000;
+  if (w.now - (ai.lastScoutRound ?? -Infinity) < every) return;
+  ai.lastScoutRound = w.now;
+  const reach = traitsOf(w, p).reach;
+  for (const vid of p.villages) {
+    const home = w.villages[vid];
+    if (!home || (home.units.scout ?? 0) < 10 || home.buildings.rally < 1) continue;
+    let best: Village | null = null, bestD = Infinity;
+    for (const t of villagesNear(w, home.x, home.y, reach)) {
+      if (t.ownerId === null || t.ownerId === p.id) continue;
+      const o = w.players[t.ownerId];
+      if (!o || isProtected(w, o.id) || (o.tribeId !== null && o.tribeId === p.tribeId)) continue;
+      if (o.kind === 'human' && (!ai.hostile || !mayHit(w, p, o.id))) continue;
+      const intel = p.intel[t.id];
+      if (intel?.scoutT !== undefined && w.now - intel.scoutT < 12 * 3_600_000) continue;
+      const d = distance(home.x, home.y, t.x, t.y);
+      if (d < bestD) { best = t; bestD = d; }
+    }
+    if (!best) continue;
+    const n = Math.min(home.units.scout ?? 0, scoutParty(ai, best.id));
+    sendTroops(w, { ownerId: p.id, fromVid: home.id, toVid: best.id, kind: 'attack', units: { scout: n }, tag: 'scout' });
+    return;
+  }
 }
 
 // ---------- helping tribe mates ----------
@@ -1335,7 +1381,9 @@ export function aiOnConquest(w: World, v: Village, oldOwner: number | null, newO
   if (np?.ai?.campaign?.target === v.id) endCampaign(w, np, true);
   const op = oldOwner !== null ? w.players[oldOwner] : undefined;
   if (op?.ai) {
-    (op.ai.lost ??= {})[v.id] = w.now;
+    // the first loss starts the clock; losing it again the same day does not restart the counter-attack
+    const lost = (op.ai.lost ??= {});
+    if (lost[v.id] === undefined || w.now - lost[v.id] > DAY_MS) lost[v.id] = w.now;
     op.ai.targetPlayer = newOwner;
     op.ai.grudgeAt = w.now;
     if (op.ai.campaign && w.villages[op.ai.campaign.from]?.ownerId !== op.id) endCampaign(w, op, false);
