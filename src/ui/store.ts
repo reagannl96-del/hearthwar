@@ -232,6 +232,9 @@ function diff(prev: PlayerView | null, next: PlayerView) {
   if (next.tribeInvites > prev.tribeInvites) {
     toast('A tribe has invited you to join.', 'info', { label: 'Show', run: () => go({ name: 'tribe' }) });
   }
+  if ((next.tribeApplications ?? 0) > (prev.tribeApplications ?? 0)) {
+    toast('A ruler has asked to join your tribe.', 'info', { label: 'Show', run: () => go({ name: 'tribe', tab: 'invites' }) });
+  }
   // lost villages
   for (const v of prev.villages) {
     if (Date.now() < quietLossUntil) break;

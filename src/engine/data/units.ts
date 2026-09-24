@@ -219,48 +219,75 @@ export interface ItemDef {
   special?: 'ramx2' | 'catx2' | 'scout' | 'loyalty' | 'speed' | 'loot' | 'ward' | 'raise';
 }
 
+/**
+ * How strong legendary items are. They are a nice edge, never a decider: every
+ * effect stays under a 10% swing.
+ */
+export const ITEM_POWERS = {
+  /** troop items that help in attack and defense */
+  troop: 0.08,
+  /** troop items made for attack: more attack, a little defense */
+  assault: 0.09,
+  assaultDef: 0.03,
+  /** scouts fight this much harder (scout losses follow strength^1.5, so this stays small) */
+  scout: 0.06,
+  /** rams and catapults hit this much harder */
+  siege: 0.05,
+  /** extra loyalty each nobleman takes (a drop is 20-35, so 4-7.5%) */
+  loyalty: 1.5,
+  /** the army marches this much faster */
+  speed: 0.06,
+  /** the army carries this much more loot */
+  loot: 0.08,
+  /** every defender fights this much harder */
+  ward: 0.05,
+  /** this much more of the fallen rise */
+  raise: 0.08,
+};
+const T = ITEM_POWERS.troop, AA = ITEM_POWERS.assault, AD = ITEM_POWERS.assaultDef;
+
 export const ITEMS: ItemDef[] = [
-  { id: 'pike', name: 'Ironwood Pike', description: 'Spearmen fight 25% harder in attack and defense.', unit: 'spear', att: 0.25, def: 0.25 },
-  { id: 'oathblade', name: 'Oathsworn Blade', description: 'Swordsmen fight 25% harder in attack and defense.', unit: 'sword', att: 0.25, def: 0.25 },
-  { id: 'bloodaxe', name: 'Bloodaxe', description: 'Axemen attack with 30% more strength.', unit: 'axe', att: 0.3, def: 0.1 },
-  { id: 'yewbow', name: 'Bow of the Old Yew', description: 'Archers fight 25% harder in attack and defense.', unit: 'archer', att: 0.25, def: 0.25 },
-  { id: 'owleye', name: "Owl's Eye Lens", description: 'Scouts are twice as effective and see everything.', unit: 'scout', special: 'scout' },
-  { id: 'spurs', name: 'Windrunner Spurs', description: 'Light cavalry attack with 30% more strength.', unit: 'light', att: 0.3, def: 0.1 },
-  { id: 'stormbow', name: 'Stormbow', description: 'Mounted archers attack with 30% more strength.', unit: 'marcher', att: 0.3, def: 0.1 },
-  { id: 'aegis', name: 'Aegis of Dawn', description: 'Heavy cavalry fight 25% harder in attack and defense.', unit: 'heavy', att: 0.25, def: 0.25 },
-  { id: 'siegecodex', name: 'Siege Codex', description: 'Rams destroy walls twice as fast.', unit: 'ram', special: 'ramx2' },
-  { id: 'firebrand', name: 'Firebrand Manual', description: 'Catapults deal double building damage.', unit: 'catapult', special: 'catx2' },
-  { id: 'sceptre', name: 'Crown Sceptre', description: 'Noblemen lower loyalty by 10 extra points.', unit: 'noble', special: 'loyalty' },
-  { id: 'banner', name: 'Banner of the March', description: 'The army the paladin leads marches 15% faster.', special: 'speed' },
-  { id: 'saddlebags', name: 'Bottomless Saddlebags', description: 'The army the paladin leads carries 20% more loot.', special: 'loot' },
+  { id: 'pike', name: 'Ironwood Pike', description: 'Spearmen fight 8% harder in attack and defense.', unit: 'spear', att: T, def: T },
+  { id: 'oathblade', name: 'Oathsworn Blade', description: 'Swordsmen fight 8% harder in attack and defense.', unit: 'sword', att: T, def: T },
+  { id: 'bloodaxe', name: 'Bloodaxe', description: 'Axemen attack with 9% more strength (and defend 3% better).', unit: 'axe', att: AA, def: AD },
+  { id: 'yewbow', name: 'Bow of the Old Yew', description: 'Archers fight 8% harder in attack and defense.', unit: 'archer', att: T, def: T },
+  { id: 'owleye', name: "Owl's Eye Lens", description: 'Scouts fight 6% harder.', unit: 'scout', special: 'scout' },
+  { id: 'spurs', name: 'Windrunner Spurs', description: 'Light cavalry attack with 9% more strength (and defend 3% better).', unit: 'light', att: AA, def: AD },
+  { id: 'stormbow', name: 'Stormbow', description: 'Mounted archers attack with 9% more strength (and defend 3% better).', unit: 'marcher', att: AA, def: AD },
+  { id: 'aegis', name: 'Aegis of Dawn', description: 'Heavy cavalry fight 8% harder in attack and defense.', unit: 'heavy', att: T, def: T },
+  { id: 'siegecodex', name: 'Siege Codex', description: 'Rams hit walls 5% harder.', unit: 'ram', special: 'ramx2' },
+  { id: 'firebrand', name: 'Firebrand Manual', description: 'Catapults deal 5% more building damage.', unit: 'catapult', special: 'catx2' },
+  { id: 'sceptre', name: 'Crown Sceptre', description: 'Noblemen lower loyalty by 1.5 extra points.', unit: 'noble', special: 'loyalty' },
+  { id: 'banner', name: 'Banner of the March', description: 'The army the paladin leads marches 6% faster.', special: 'speed' },
+  { id: 'saddlebags', name: 'Bottomless Saddlebags', description: 'The army the paladin leads carries 8% more loot.', special: 'loot' },
   // the sorcerer's
-  { id: 'wardstaff', hero: 'sorcerer', name: 'Staff of Warding', description: 'Defending, every defender in the village fights 10% harder (on top of the arcane barrier).', special: 'ward' },
-  { id: 'stormtome', hero: 'sorcerer', name: 'Tome of Storms', description: 'Storm Riders attack with 30% more strength.', unit: 'light', att: 0.3, def: 0.1 },
-  { id: 'spellblade', hero: 'sorcerer', name: 'Spellbound Blade', description: 'Runeblades fight 25% harder in attack and defense.', unit: 'sword', att: 0.25, def: 0.25 },
-  { id: 'seeingorb', hero: 'sorcerer', name: 'Seeing Orb', description: 'Owl familiars are twice as effective and see everything.', unit: 'scout', special: 'scout' },
-  { id: 'grimoire', hero: 'sorcerer', name: 'Grimoire of Ruin', description: 'Orb throwers deal double building damage.', unit: 'catapult', special: 'catx2' },
-  { id: 'hourglass', hero: 'sorcerer', name: 'Hourglass of Haste', description: 'The army the sorcerer leads marches 15% faster.', special: 'speed' },
+  { id: 'wardstaff', hero: 'sorcerer', name: 'Staff of Warding', description: 'Defending, every defender in the village fights 5% harder (on top of the arcane barrier).', special: 'ward' },
+  { id: 'stormtome', hero: 'sorcerer', name: 'Tome of Storms', description: 'Storm Riders attack with 9% more strength (and defend 3% better).', unit: 'light', att: AA, def: AD },
+  { id: 'spellblade', hero: 'sorcerer', name: 'Spellbound Blade', description: 'Runeblades fight 8% harder in attack and defense.', unit: 'sword', att: T, def: T },
+  { id: 'seeingorb', hero: 'sorcerer', name: 'Seeing Orb', description: 'Owl familiars fight 6% harder.', unit: 'scout', special: 'scout' },
+  { id: 'grimoire', hero: 'sorcerer', name: 'Grimoire of Ruin', description: 'Orb throwers deal 5% more building damage.', unit: 'catapult', special: 'catx2' },
+  { id: 'hourglass', hero: 'sorcerer', name: 'Hourglass of Haste', description: 'The army the sorcerer leads marches 6% faster.', special: 'speed' },
   // the druid's
-  { id: 'oakstaff', hero: 'druid', name: 'Staff of the Old Oak', description: 'Thornguards fight 25% harder in attack and defense.', unit: 'spear', att: 0.25, def: 0.25 },
-  { id: 'heartbow', hero: 'druid', name: 'Heartwood Bow', description: 'Rangers fight 25% harder in attack and defense.', unit: 'archer', att: 0.25, def: 0.25 },
-  { id: 'bearclaw', hero: 'druid', name: 'Bear-Claw Amulet', description: 'Bear Riders fight 25% harder in attack and defense.', unit: 'heavy', att: 0.25, def: 0.25 },
-  { id: 'hawkfeather', hero: 'druid', name: 'Hawk-Feather Charm', description: 'Spirit hawks are twice as effective and see everything.', unit: 'scout', special: 'scout' },
-  { id: 'thornseed', hero: 'druid', name: 'Thornseed Pouch', description: 'Defending, every defender in the village fights 10% harder behind a hedge of thorns.', special: 'ward' },
-  { id: 'rootpath', hero: 'druid', name: 'Rootpath Stone', description: 'The army the druid leads marches 15% faster.', special: 'speed' },
+  { id: 'oakstaff', hero: 'druid', name: 'Staff of the Old Oak', description: 'Thornguards fight 8% harder in attack and defense.', unit: 'spear', att: T, def: T },
+  { id: 'heartbow', hero: 'druid', name: 'Heartwood Bow', description: 'Rangers fight 8% harder in attack and defense.', unit: 'archer', att: T, def: T },
+  { id: 'bearclaw', hero: 'druid', name: 'Bear-Claw Amulet', description: 'Bear Riders fight 8% harder in attack and defense.', unit: 'heavy', att: T, def: T },
+  { id: 'hawkfeather', hero: 'druid', name: 'Hawk-Feather Charm', description: 'Spirit hawks fight 6% harder.', unit: 'scout', special: 'scout' },
+  { id: 'thornseed', hero: 'druid', name: 'Thornseed Pouch', description: 'Defending, every defender in the village fights 5% harder behind a hedge of thorns.', special: 'ward' },
+  { id: 'rootpath', hero: 'druid', name: 'Rootpath Stone', description: 'The army the druid leads marches 6% faster.', special: 'speed' },
   // the goblin chief's
-  { id: 'grabsack', hero: 'goblin', name: "Grabbin' Sack", description: 'The army the goblin chief leads carries 20% more loot.', special: 'loot' },
-  { id: 'rustycleaver', hero: 'goblin', name: 'Rusty Cleaver', description: 'Goblin choppers attack with 30% more strength.', unit: 'axe', att: 0.3, def: 0.1 },
-  { id: 'wolffang', hero: 'goblin', name: 'Wolf-Fang Necklace', description: 'Wolf riders attack with 30% more strength.', unit: 'light', att: 0.3, def: 0.1 },
-  { id: 'sneakglass', hero: 'goblin', name: 'Sneaky Spyglass', description: 'Goblin sneaks are twice as effective and see everything.', unit: 'scout', special: 'scout' },
-  { id: 'bossbonnet', hero: 'goblin', name: "Boss's Big Hat", description: 'Goblin bosses lower loyalty by 10 extra points.', unit: 'noble', special: 'loyalty' },
-  { id: 'boomlog', hero: 'goblin', name: 'Boom-Log', description: 'Log bashers break walls twice as fast.', unit: 'ram', special: 'ramx2' },
+  { id: 'grabsack', hero: 'goblin', name: "Grabbin' Sack", description: 'The army the goblin chief leads carries 8% more loot.', special: 'loot' },
+  { id: 'rustycleaver', hero: 'goblin', name: 'Rusty Cleaver', description: 'Goblin choppers attack with 9% more strength (and defend 3% better).', unit: 'axe', att: AA, def: AD },
+  { id: 'wolffang', hero: 'goblin', name: 'Wolf-Fang Necklace', description: 'Wolf riders attack with 9% more strength (and defend 3% better).', unit: 'light', att: AA, def: AD },
+  { id: 'sneakglass', hero: 'goblin', name: 'Sneaky Spyglass', description: 'Goblin sneaks fight 6% harder.', unit: 'scout', special: 'scout' },
+  { id: 'bossbonnet', hero: 'goblin', name: "Boss's Big Hat", description: 'Goblin bosses lower loyalty by 1.5 extra points.', unit: 'noble', special: 'loyalty' },
+  { id: 'boomlog', hero: 'goblin', name: 'Boom-Log', description: 'Log bashers hit walls 5% harder.', unit: 'ram', special: 'ramx2' },
   // the necromancer's
-  { id: 'soullantern', hero: 'necromancer', name: 'Soul Lantern', description: 'Twice as many of the fallen rise again after a won battle.', special: 'raise' },
-  { id: 'bonescythe', hero: 'necromancer', name: 'Bone Scythe', description: 'Grave reavers attack with 30% more strength.', unit: 'axe', att: 0.3, def: 0.1 },
-  { id: 'deathplate', hero: 'necromancer', name: "Death Knight's Plate", description: 'Death knights fight 25% harder in attack and defense.', unit: 'heavy', att: 0.25, def: 0.25 },
-  { id: 'batwhistle', hero: 'necromancer', name: 'Bat Whistle', description: 'Bat swarms are twice as effective and see everything.', unit: 'scout', special: 'scout' },
-  { id: 'phylactery', hero: 'necromancer', name: "Lich's Phylactery", description: 'Lich lords lower loyalty by 10 extra points.', unit: 'noble', special: 'loyalty' },
-  { id: 'wailingskull', hero: 'necromancer', name: 'Wailing Skull', description: 'Skull catapults deal double building damage.', unit: 'catapult', special: 'catx2' },
+  { id: 'soullantern', hero: 'necromancer', name: 'Soul Lantern', description: 'More of the fallen rise again after a won battle: 10.8 in 100 instead of 10.', special: 'raise' },
+  { id: 'bonescythe', hero: 'necromancer', name: 'Bone Scythe', description: 'Grave reavers attack with 9% more strength (and defend 3% better).', unit: 'axe', att: AA, def: AD },
+  { id: 'deathplate', hero: 'necromancer', name: "Death Knight's Plate", description: 'Death knights fight 8% harder in attack and defense.', unit: 'heavy', att: T, def: T },
+  { id: 'batwhistle', hero: 'necromancer', name: 'Bat Whistle', description: 'Bat swarms fight 6% harder.', unit: 'scout', special: 'scout' },
+  { id: 'phylactery', hero: 'necromancer', name: "Lich's Phylactery", description: 'Lich lords lower loyalty by 1.5 extra points.', unit: 'noble', special: 'loyalty' },
+  { id: 'wailingskull', hero: 'necromancer', name: 'Wailing Skull', description: 'Skull catapults deal 5% more building damage.', unit: 'catapult', special: 'catx2' },
 ];
 
 /** The hero an item belongs to. */

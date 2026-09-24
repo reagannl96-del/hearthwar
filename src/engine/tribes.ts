@@ -3,7 +3,7 @@
 // announcement and a members-only forum.
 
 import { commandsTo } from './cmdindex';
-import { news } from './commands';
+import { addReport, news } from './commands';
 import type { ActionResult, Diplomacy, Player, Tribe, TribeAlert, TribeRight, World, ForumPost, SharedReport } from './types';
 
 export const TRIBE_MAX_MEMBERS = 25;
@@ -15,6 +15,8 @@ export const RIGHT_LABEL: Record<TribeRight, string> = {
   forum: 'Forum moderator',
   internal: 'Internal access',
 };
+/** how far back the rankings count new members ("+3 this week") */
+export const JOIN_WINDOW = 7 * 24 * 3_600_000;
 const FORUM_MAX_THREADS = 60;
 const FORUM_MAX_POSTS = 200;
 
@@ -53,7 +55,37 @@ function joinTribe(w: World, t: Tribe, p: Player): void {
   if (!t.members.includes(p.id)) t.members.push(p.id);
   p.tribeId = t.id;
   t.invites = (t.invites ?? []).filter((i) => i.pid !== p.id);
+  // a ruler in a tribe asks nobody else to take them in
+  for (const id in w.tribes) {
+    const o = w.tribes[id];
+    if (o.applications?.some((a) => a.pid === p.id)) o.applications = o.applications.filter((a) => a.pid !== p.id);
+  }
+  // remember when they came, for the rankings (a few weeks back is plenty)
+  t.joins = [...(t.joins ?? []).filter((at) => w.now - at < JOIN_WINDOW * 4), w.now];
   w.mapRev++;
+}
+
+/** New members over the last week. */
+export function joinedThisWeek(w: World, t: Tribe): number {
+  return (t.joins ?? []).filter((at) => w.now - at < JOIN_WINDOW).length;
+}
+
+/** No room for another member (open invitations hold a seat, as they do for inviting). */
+export function tribeFull(t: Tribe): boolean {
+  return t.members.length + (t.invites?.length ?? 0) >= TRIBE_MAX_MEMBERS;
+}
+
+/** A ruler who lost their last village leaves their tribe (the crown passes on, as when leaving). */
+export function dropFromTribe(w: World, pid: number): void {
+  const p = w.players[pid];
+  if (!p) return;
+  if (p.tribeId != null) removeMember(w, w.tribes[p.tribeId], pid);
+  p.tribeId = null;
+  for (const id in w.tribes) {
+    const t = w.tribes[id];
+    if (t.applications?.some((a) => a.pid === pid)) t.applications = t.applications.filter((a) => a.pid !== pid);
+    if (t.invites?.some((i) => i.pid === pid)) t.invites = t.invites.filter((i) => i.pid !== pid);
+  }
 }
 
 function removeMember(w: World, t: Tribe | undefined, pid: number): void {
@@ -94,9 +126,14 @@ export function createTribe(w: World, pid: number, name: string, tag: string): A
   const t: Tribe = {
     id: w.nextId++, name: n, tag: g, color: p.color, members: [p.id], founderId: p.id, createdAt: w.now,
     description: '', internal: '', rights: {}, invites: [], diplomacy: {}, forum: [],
+    recruiting: p.kind === 'ai', applications: [], joins: [],
   };
   w.tribes[t.id] = t;
   p.tribeId = t.id;
+  for (const id in w.tribes) {
+    const o = w.tribes[id];
+    if (o.applications?.some((a) => a.pid === p.id)) o.applications = o.applications.filter((a) => a.pid !== p.id);
+  }
   news(w, `${p.name} founded the tribe ${t.name} [${t.tag}].`, 'world');
   w.mapRev++;
   return { ok: true, data: t.id };
@@ -218,6 +255,96 @@ export function editTribe(w: World, pid: number, patch: { description?: string; 
     w.mapRev++;
   }
   return { ok: true };
+}
+
+// ---------- recruiting ----------
+
+/** Open or close the tribe to applications (and the "recruiting" badge on the rankings). */
+export function setRecruiting(w: World, pid: number, on: boolean): ActionResult {
+  const t = tribeOf(w, pid);
+  if (!t) return fail('You are not in a tribe.');
+  if (!hasRight(t, pid, 'invite')) return fail('Only recruiters can open or close the tribe.');
+  t.recruiting = !!on;
+  if (!on) {
+    // closing the doors turns away everyone still waiting
+    for (const a of t.applications ?? []) answered(w, t, a.pid, false);
+    t.applications = [];
+  }
+  return { ok: true };
+}
+
+/** Tribes this ruler has asked to join (and is still waiting on). */
+export function applicationsBy(w: World, pid: number): { tribe: Tribe; t: number }[] {
+  const out: { tribe: Tribe; t: number }[] = [];
+  for (const id in w.tribes) {
+    const t = w.tribes[id];
+    const a = t.applications?.find((x) => x.pid === pid);
+    if (a) out.push({ tribe: t, t: a.t });
+  }
+  return out;
+}
+
+/** A tribeless ruler asks a recruiting tribe to take them in (one request at a time). */
+export function applyToTribe(w: World, pid: number, tribeId: number): ActionResult {
+  const p = w.players[pid];
+  const t = w.tribes[tribeId];
+  if (!p || p.eliminated) return fail('You are not in this realm.');
+  if (p.tribeId != null) return fail('You are already in a tribe.');
+  if (!t) return fail('That tribe is gone.');
+  if (!t.recruiting) return fail(`[${t.tag}] is not recruiting right now.`);
+  if (tribeFull(t)) return fail('That tribe is full.');
+  // already invited: then the answer is simply yes
+  if (t.invites?.some((i) => i.pid === pid)) return acceptInvite(w, pid, tribeId);
+  if (t.applications?.some((a) => a.pid === pid)) return fail('You have already asked to join.');
+  // a new request replaces any other one still waiting
+  for (const id in w.tribes) {
+    const o = w.tribes[id];
+    if (o.applications?.some((a) => a.pid === pid)) o.applications = o.applications.filter((a) => a.pid !== pid);
+  }
+  t.applications = [...(t.applications ?? []), { pid, t: w.now }].slice(-40);
+  return { ok: true };
+}
+
+export function withdrawApplication(w: World, pid: number, tribeId: number): ActionResult {
+  const t = w.tribes[tribeId];
+  if (t?.applications) t.applications = t.applications.filter((a) => a.pid !== pid);
+  return { ok: true };
+}
+
+/** A recruiter takes an applicant in, or turns them away. */
+export function answerApplication(w: World, pid: number, applicant: number, accept: boolean): ActionResult {
+  const t = tribeOf(w, pid);
+  if (!t) return fail('You are not in a tribe.');
+  if (!hasRight(t, pid, 'invite')) return fail('Only recruiters can answer requests to join.');
+  if (!t.applications?.some((a) => a.pid === applicant)) return fail('That request is gone.');
+  const who = w.players[applicant];
+  const drop = () => { t.applications = (t.applications ?? []).filter((a) => a.pid !== applicant); };
+  if (!who || who.eliminated) { drop(); return fail('That ruler is no longer in the realm.'); }
+  if (accept) {
+    if (who.tribeId != null) { drop(); return fail(`${who.name} has joined another tribe.`); }
+    // (a full tribe keeps the request, so it can still be declined or accepted once a seat frees up)
+    if (t.members.length >= TRIBE_MAX_MEMBERS) return fail('The tribe is full.');
+  }
+  drop();
+  if (accept) {
+    joinTribe(w, t, who);
+    news(w, `${who.name} joined the tribe ${t.name} [${t.tag}].`, 'player');
+  }
+  answered(w, t, applicant, accept);
+  return { ok: true };
+}
+
+/** Let the applicant know how it went (a report for a person; an AI ruler just remembers). */
+function answered(w: World, t: Tribe, applicant: number, accepted: boolean) {
+  const who = w.players[applicant];
+  if (!who) return;
+  if (who.ai) {
+    if (!accepted) (who.ai.turnedAway ??= {})[t.id] = w.now;
+    return;
+  }
+  addReport(w, applicant, accepted
+    ? { kind: 'info', color: 'blue', title: `Welcome to ${t.name} [${t.tag}]!`, text: `Your request to join was accepted. You are now a member of ${t.name}.` }
+    : { kind: 'info', color: 'yellow', title: `${t.name} [${t.tag}] turned down your request`, text: `The tribe did not take you in this time. Other tribes may be recruiting.` });
 }
 
 export function disbandTribe(w: World, pid: number): ActionResult {
@@ -347,9 +474,13 @@ export function tribeAlerts(w: World, pid: number): TribeAlert[] {
 export function normalizeTribes(w: World): void {
   for (const id in w.tribes) {
     const t = w.tribes[id];
+    for (const m of t.members) {
+      const p = w.players[m];
+      if (p?.eliminated && p.tribeId === t.id) p.tribeId = null;
+    }
     t.members = t.members.filter((m) => w.players[m] && !w.players[m].eliminated);
     if (t.members.length === 0) { delete w.tribes[id]; continue; }
-    t.founderId ??= t.members[0];
+    if (t.founderId === undefined || !t.members.includes(t.founderId)) t.founderId = t.members.find((m) => t.rights?.[m]?.includes('lead')) ?? t.members[0];
     t.createdAt ??= 0;
     t.description ??= '';
     t.internal ??= '';
@@ -357,5 +488,8 @@ export function normalizeTribes(w: World): void {
     t.invites ??= [];
     t.diplomacy ??= {};
     t.forum ??= [];
+    t.applications ??= [];
+    t.joins ??= [];
+    if (t.recruiting === undefined) t.recruiting = w.players[t.founderId]?.kind === 'ai';
   }
 }

@@ -243,6 +243,10 @@ export interface AIState {
   memory: Record<number, number>; // target vid -> last time a farm was sent
   /** human player id -> last time this ruler launched an attack at them */
   lastHit?: Record<number, number>;
+  /** the last quick look between sessions (keeping the queues busy) */
+  lastGlance?: number;
+  /** human player id -> last time they won an attack on this ruler (payback is owed) */
+  provoked?: Record<number, number>;
   /** when the current grudge (targetPlayer) was last renewed */
   grudgeAt?: number;
   /** village id -> a scouting mission waiting for its report */
@@ -260,6 +264,14 @@ export interface AIState {
   /** when this ruler joined (or founded) its current tribe, or last found itself without one */
   tribeSince?: number;
   tribelessSince?: number;
+  /** a tribe leader: when it last sent out an invitation */
+  lastRecruit?: number;
+  /** player id -> when this ruler last invited them (nobody likes being asked every hour) */
+  invited?: Record<number, number>;
+  /** tribe id -> when that tribe turned down this ruler's request to join */
+  turnedAway?: Record<number, number>;
+  /** where the between-session glances got to in the village list */
+  glanceCursor?: number;
 }
 
 /** Offensive (all attack troops), defensive (all defence, a few light cavalry to farm), mixed, or a random assortment. */
@@ -327,6 +339,9 @@ export interface ForumPost { id: number; by: number; t: number; text: string; re
 export interface ForumThread { id: number; title: string; by: number; t: number; posts: ForumPost[]; sticky?: boolean }
 export interface TribeInvite { pid: number; by: number; t: number }
 
+/** A tribeless ruler asking to join a recruiting tribe. */
+export interface TribeApplication { pid: number; t: number }
+
 /** Someone in the tribe is under attack (members with the "internal" right see these). */
 export interface TribeAlert { cid: number; memberId: number; vid: number; vname: string; x: number; y: number; attacker: string; arrive: number }
 
@@ -345,6 +360,12 @@ export interface Tribe {
   /** rights per member; the founder always has them all */
   rights?: Record<number, TribeRight[]>;
   invites?: TribeInvite[];
+  /** open to new members: shown as recruiting on the rankings, and tribeless rulers may ask to join */
+  recruiting?: boolean;
+  /** rulers asking to join (recruiters answer them) */
+  applications?: TribeApplication[];
+  /** when members joined, for the rankings' "growing" figure (the last few weeks only) */
+  joins?: number[];
   /** other tribe id -> relation */
   diplomacy?: Record<number, Diplomacy>;
   forum?: ForumThread[];
@@ -400,6 +421,8 @@ export interface World {
   pastRounds?: RoundResult[];
   /** the realm is the round island (older worlds were square and get grown on load) */
   round?: boolean;
+  /** how many barbarian villages the realm holds when full; lost ones are slowly replaced up to this */
+  barbTarget?: number;
   /** client-side shadow only: attacks on fellow tribe members, as sent by the server */
   tribeAlerts?: TribeAlert[];
 }

@@ -4,7 +4,7 @@ import { hasUnits } from '../../engine/formulas';
 import type { UnitId, Units } from '../../engine/types';
 import type { MapData, MapVillage } from '../../engine/view';
 import { lsGet } from '../../host/storage';
-import { forestSprite, villageSprite } from '../mapSprites';
+import { forestSprite, lookOfHero, onVillageArt, villageSprite, villageStage } from '../mapSprites';
 import { isVolcanic, isWinter } from '../../engine/world';
 import { Icon } from '../art/icons';
 import { Btn, UnitList, UnitIcon, unitName } from '../components/common';
@@ -24,10 +24,6 @@ function cssVar(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || '#888';
 }
 
-function tier(points: number): number {
-  return points < 300 ? 0 : points < 1000 ? 1 : points < 3000 ? 2 : points < 9000 ? 3 : 4;
-}
-
 export function MapScreen({ focus }: { focus?: number }) {
   const h = host.value!;
   const pv = view.value!;
@@ -44,6 +40,13 @@ export function MapScreen({ focus }: { focus?: number }) {
     for (let y = 0; y < data.size; y++) for (let x = 0; x < data.size; x++) a[y * data.size + x] = isWinter(x, y, data.size) ? 1 : isVolcanic(x, y, data.size) ? 2 : 0;
     return a;
   }, [data.size]);
+  // my own villages wear the look of their hero; everyone else's look plain
+  const myLooks = useMemo(() => new Map(pv.villages.map((vv) => [vv.id, lookOfHero(vv.hero)])), [pv.villages]);
+  const [, setArtLoaded] = useState(0);
+  useEffect(() => {
+    const off = onVillageArt(() => setArtLoaded((n) => n + 1));
+    return () => { off(); };
+  }, []);
   const start = (focus !== undefined ? byId.get(focus) : undefined) ?? byId.get(cur.id)!;
   const [center, setCenter] = useState<[number, number]>([start.x + 0.5, start.y + 0.5]);
   const [zoom, setZoom] = useState<number>(() => Number(lsGet('hw-map-zoom')) || 22);
@@ -196,14 +199,16 @@ export function MapScreen({ focus }: { focus?: number }) {
         for (let cx2 = Math.floor(fx0 / 10) * 10; cx2 <= fx1; cx2 += 10)
           ctx.fillText(`K${cy2 / 10}${cx2 / 10}`, sx(cx2) + 4, sy(cy2) + 14);
     }
-    // villages
+    // villages: every island first (back to front), then every marker on top, so a
+    // big island never hides its neighbour's flag, tribe ring or selection
     const me = pv.me.id;
     const myTribe = pv.me.tribeId;
+    const shown: { v: (typeof data.villages)[number]; x: number; y: number; px: number; py: number; owner: (typeof data.players)[number] | null; fill: string; mark: string | undefined }[] = [];
     for (let y = fy0; y <= fy1; y++) {
       for (let x = fx0; x <= fx1; x++) {
         const v = grid.get(y * data.size + x);
         if (!v) continue;
-        const owner = v.ownerId !== null ? data.players[v.ownerId] : null;
+        const owner = v.ownerId !== null ? data.players[v.ownerId] ?? null : null;
         const mark = v.ownerId === me ? undefined : markFor(mk, v.id, v.ownerId, owner?.tribeId);
         let fill = col['--map-barb'];
         const rel = owner ? tribeColor(data, myTribe, owner.tribeId) : undefined;
@@ -211,61 +216,68 @@ export function MapScreen({ focus }: { focus?: number }) {
         else if (mark) fill = mark;
         else if (rel) fill = rel;
         else if (owner) fill = owner.color;
-        const px = sx(x), py = sy(y);
-        const gx = px + z / 2, gy = py + z * (z < 10 ? 0.5 : 0.62);
-        // bonus villages glow orange so they stand out at any zoom
-        if (v.bonus) glow(ctx, gx, gy, Math.max(z * 1.25, 12), true, '#ff8a1f');
-        if (v.ownerId === me) glow(ctx, gx, gy, Math.max(z * (v.id === cur.id ? 1.35 : 1.1), 10), v.id === cur.id, v.id === pv.me.homeVid ? '#ffffff' : '#ffc43c');
-        else if (mark) glow(ctx, gx, gy, Math.max(z * 1.1, 10), false, mark);
-        if (z < 10) {
-          const s = Math.max(2, z - 1);
+        shown.push({ v, x, y, px: sx(x), py: sy(y), owner, fill, mark });
+      }
+    }
+    for (const { v, x, y, px, py, fill, mark } of shown) {
+      const gx = px + z / 2, gy = py + z * (z < 10 ? 0.5 : 0.62);
+      // bonus villages glow orange so they stand out at any zoom
+      if (v.bonus) glow(ctx, gx, gy, Math.max(z * 1.25, 12), true, '#ff8a1f');
+      if (v.ownerId === me) glow(ctx, gx, gy, Math.max(z * (v.id === cur.id ? 1.35 : 1.1), 10), v.id === cur.id, v.id === pv.me.homeVid ? '#ffffff' : '#ffc43c');
+      else if (mark) glow(ctx, gx, gy, Math.max(z * 1.1, 10), false, mark);
+      if (z < 10) {
+        const s = Math.max(2, z - 1);
+        ctx.fillStyle = fill;
+        ctx.fillRect(px + (z - s) / 2, py + (z - s) / 2, s, s);
+      } else {
+        const ground = snow[y * data.size + x];
+        const look = v.ownerId === me ? myLooks.get(v.id) ?? 'generic' : 'generic';
+        const sprite = villageSprite(villageStage(v.points), look, { barb: v.ownerId === null, ground: ground === 1 ? 'snow' : ground === 2 ? 'ash' : 'grass' });
+        // the painted island stands on its field, centred, its walls and towers rising above it
+        const S = z * 1.95;
+        if (sprite) ctx.drawImage(sprite, px + z / 2 - S / 2, py + z - S, S, S);
+      }
+    }
+    for (const { v, px, py, owner, fill } of shown) {
+      if (z >= 10) {
+        // owner marker, Tribal Wars style
+        const d = Math.max(4, z * 0.16);
+        ctx.fillStyle = fill;
+        ctx.strokeStyle = 'rgba(30,15,5,0.8)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(px + d * 0.8, py + d * 0.8, d / 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        if (owner) {
+          ctx.fillStyle = '#3a2614';
+          ctx.fillRect(px + z * 0.78, py + z * 0.02, 1.5, z * 0.3);
           ctx.fillStyle = fill;
-          ctx.fillRect(px + (z - s) / 2, py + (z - s) / 2, s, s);
-        } else {
-          const t = tier(v.points);
-          const sprite = villageSprite(t, v.ownerId === null ? 'barb' : 'player', snow[y * data.size + x] === 1, snow[y * data.size + x] === 2);
-          // the painted village fills its field: the plot is centred on the square, its walls rising above it
-          const S = z * 1.95;
-          ctx.drawImage(sprite, px + z / 2 - S / 2, py + z * 0.62 - S * 0.62, S, S);
-          // owner marker, Tribal Wars style
-          const d = Math.max(4, z * 0.16);
-          ctx.fillStyle = fill;
-          ctx.strokeStyle = 'rgba(30,15,5,0.8)';
+          ctx.fillRect(px + z * 0.78 + 1.5, py + z * 0.03, z * 0.16, z * 0.1);
+        }
+        if (v.bonus) {
+          // a little orange star on the flag post
+          ctx.fillStyle = '#ffb347';
+          ctx.strokeStyle = 'rgba(60, 25, 0, 0.9)';
           ctx.lineWidth = 1;
-          ctx.beginPath();
-          ctx.arc(px + d * 0.8, py + d * 0.8, d / 2, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.stroke();
-          if (owner) {
-            ctx.fillStyle = '#3a2614';
-            ctx.fillRect(px + z * 0.78, py + z * 0.02, 1.5, z * 0.3);
-            ctx.fillStyle = fill;
-            ctx.fillRect(px + z * 0.78 + 1.5, py + z * 0.03, z * 0.16, z * 0.1);
-          }
-          if (v.bonus) {
-            // a little orange star on the flag post
-            ctx.fillStyle = '#ffb347';
-            ctx.strokeStyle = 'rgba(60, 25, 0, 0.9)';
-            ctx.lineWidth = 1;
-            star(ctx, px + z * 0.2, py + z * 0.14, Math.max(3, z * 0.13));
-          }
-          if (owner && myTribe !== null && owner.tribeId === myTribe && v.ownerId !== me) {
-            ctx.strokeStyle = '#3a73c0';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.ellipse(px + z / 2, py + z * 0.6, z * 0.5, z * 0.32, 0, 0, Math.PI * 2);
-            ctx.stroke();
-          }
+          star(ctx, px + z * 0.2, py + z * 0.14, Math.max(3, z * 0.13));
         }
-        if (v.id === sel || (v.id === hover && v.ownerId !== me)) {
-          ctx.strokeStyle = v.id === sel ? 'rgba(255,255,255,0.95)' : 'rgba(255,245,215,0.7)';
-          ctx.lineWidth = v.id === sel ? 2.5 : 1.8;
-          ctx.setLineDash(v.id === sel ? [] : [4, 3]);
+        if (owner && myTribe !== null && owner.tribeId === myTribe && v.ownerId !== me) {
+          ctx.strokeStyle = '#3a73c0';
+          ctx.lineWidth = 2;
           ctx.beginPath();
-          ctx.ellipse(px + z / 2, py + z * (z < 10 ? 0.5 : 0.62), Math.max(z * 0.62, 6), Math.max(z * 0.42, 6), 0, 0, Math.PI * 2);
+          ctx.ellipse(px + z / 2, py + z * 0.6, z * 0.5, z * 0.32, 0, 0, Math.PI * 2);
           ctx.stroke();
-          ctx.setLineDash([]);
         }
+      }
+      if (v.id === sel || (v.id === hover && v.ownerId !== me)) {
+        ctx.strokeStyle = v.id === sel ? 'rgba(255,255,255,0.95)' : 'rgba(255,245,215,0.7)';
+        ctx.lineWidth = v.id === sel ? 2.5 : 1.8;
+        ctx.setLineDash(v.id === sel ? [] : [4, 3]);
+        ctx.beginPath();
+        ctx.ellipse(px + z / 2, py + z * (z < 10 ? 0.5 : 0.62), Math.max(z * 0.62, 6), Math.max(z * 0.42, 6), 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
       }
     }
     // movements

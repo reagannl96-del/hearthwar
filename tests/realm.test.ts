@@ -12,14 +12,14 @@ describe('the realm keeps growing', () => {
     const w = createWorld({ worldName: 'T', playerName: 'P', villageName: 'H', seed: 11, config: { ...defaultConfig(), aiCount: 6, size: 80 } });
     const rulers = () => Object.values(w.players).filter((p) => p.kind === 'ai' && !p.eliminated);
     const before = rulers().length;
-    // two real days of barbarian ticks
-    for (let i = 0; i < 2 * 24 * 60 * 60 / 48; i++) {
+    // a week of barbarian ticks: newcomers trickle in, a couple a day at most
+    for (let i = 0; i < 7 * 24 * 60 * 60 / 48; i++) {
       w.now += 48_000;
       realmGrowth(w);
     }
     const after = rulers();
     expect(after.length).toBeGreaterThan(before);
-    expect(after.length).toBeLessThanOrEqual(12);
+    expect(after.length).toBeLessThanOrEqual(8);
     for (const p of after.slice(before)) {
       expect(p.ai).toBeTruthy();
       expect(p.villages.length).toBe(1);
@@ -36,13 +36,15 @@ describe('the realm keeps growing', () => {
     // clear some barbarians away
     for (const v of barbs().slice(0, 40)) delete w.villages[v.id];
     const start = barbs().length;
-    for (let i = 0; i < 24 * 60 * 60 / 48; i++) {
+    // three days: a few new barbarian villages a day, no flood
+    for (let i = 0; i < 3 * 24 * 60 * 60 / 48; i++) {
       w.now += 48_000;
       realmGrowth(w);
     }
     const all = Object.values(w.villages);
     const fresh = barbs().filter((v) => v.grownAt !== undefined && v.grownAt > 0);
     expect(barbs().length).toBeGreaterThan(start);
+    expect(barbs().length - start).toBeLessThanOrEqual(20);
     for (const v of fresh) {
       expect(all.some((o) => o !== v && Math.abs(o.x - v.x) <= 2 && Math.abs(o.y - v.y) <= 2)).toBe(false);
     }
@@ -188,7 +190,34 @@ describe('heroes, rebalanced', () => {
     const plain = fight({ spear: 100 });
     const barrier = fight({ spear: 100, sorcerer: 1 });
     expect(barrier).toBeGreaterThan((plain + 200) * 1.09);
-    expect(fight({ spear: 100, sorcerer: 1 }, ['wardstaff'])).toBeGreaterThan(barrier * 1.09);
+    // a warding item helps a little (items never swing a fight by 10% or more)
+    const warded = fight({ spear: 100, sorcerer: 1 }, ['wardstaff']);
+    expect(warded).toBeGreaterThan(barrier * 1.04);
+    expect(warded).toBeLessThan(barrier * 1.1);
+  });
+
+  it('every legendary item stays under a 10% swing, even where the engine amplifies it', async () => {
+    const { ITEMS, ITEM_POWERS } = await import('../src/engine/data/units');
+    const { ramDemolish, catDemolish } = await import('../src/engine/combat');
+    for (const i of ITEMS) {
+      expect(i.att ?? 0).toBeLessThan(0.1);
+      expect(i.def ?? 0).toBeLessThan(0.1);
+    }
+    for (const k of ['troop', 'assault', 'assaultDef', 'speed', 'loot', 'ward', 'raise'] as const) expect(ITEM_POWERS[k]).toBeLessThan(0.1);
+    // scout losses scale with strength^1.5
+    expect((1 + ITEM_POWERS.scout) ** 1.5).toBeLessThan(1.1);
+    // a nobleman's drop is 20-35: even on the lowest roll the item adds under 10%
+    expect(ITEM_POWERS.loyalty / 20).toBeLessThan(0.1);
+    // low wall and building levels are cheaper, so extra siege power knocks down a little more than it adds
+    for (const lvl of [10, 20]) {
+      let base = 0, boosted = 0, baseC = 0, boostedC = 0;
+      for (let p = 1; p <= 300; p++) {
+        base += ramDemolish(p, lvl); boosted += ramDemolish(p * (1 + ITEM_POWERS.siege), lvl);
+        baseC += catDemolish(p, lvl, 0); boostedC += catDemolish(p * (1 + ITEM_POWERS.siege), lvl, 0);
+      }
+      expect(boosted / base).toBeLessThan(1.1);
+      expect(boostedC / baseC).toBeLessThan(1.1);
+    }
   });
 
   it('support marching with a druid arrives a quarter sooner', async () => {

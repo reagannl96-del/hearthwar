@@ -1,6 +1,6 @@
 // Pure battle math. Used by the engine and by the in-game battle simulator.
 
-import { HEROES, HERO_INFO, HERO_POWERS, HERO_VS_BONUS, UNITS, type ItemDef, type UnitClass } from './data/units';
+import { HEROES, HERO_INFO, HERO_POWERS, HERO_VS_BONUS, ITEM_POWERS, UNITS, type ItemDef, type UnitClass } from './data/units';
 import { techMultiplier, wallBase, wallMultiplier } from './formulas';
 import type { Res, UnitId, Units } from './types';
 import { RES_KEYS } from './types';
@@ -92,8 +92,8 @@ export function resolveBattle(input: CombatInput): CombatResult {
   // --- scouts fight scouts ---
   const scoutsSent = att.scout ?? 0;
   const defScouts = defStacks.reduce((s, st) => s + (st.units.scout ?? 0), 0);
-  const scoutMultA = attItem?.special === 'scout' ? 2 : 1;
-  const scoutMultD = defItems.some((i) => i.special === 'scout') ? 2 : 1;
+  const scoutMultA = attItem?.special === 'scout' ? 1 + ITEM_POWERS.scout : 1;
+  const scoutMultD = defItems.some((i) => i.special === 'scout') ? 1 + ITEM_POWERS.scout : 1;
   let scoutLost = 0;
   if (scoutsSent > 0) {
     const pa = scoutsSent * scoutMultA;
@@ -157,7 +157,7 @@ export function resolveBattle(input: CombatInput): CombatResult {
   const Atot = A[0] + A[1] + A[2];
 
   const siegeMult = 1;
-  const ramMult = attItem?.special === 'ramx2' ? 2 : 1;
+  const ramMult = attItem?.special === 'ramx2' ? 1 + ITEM_POWERS.siege : 1;
   const ramsSent = main.ram ?? 0;
   const ramPowerSent = ramsSent * ramMult * techMultiplier(attTech.ram);
   let battleWall = Math.max(0, input.wall - Math.floor(ramDemolish(ramPowerSent, input.wall) / 2));
@@ -198,7 +198,7 @@ export function resolveBattle(input: CombatInput): CombatResult {
   }
   // a defending sorcerer raises an arcane barrier, and warding items add to it
   if (defHeroes.includes('sorcerer')) { D *= 1 + HERO_POWERS.barrier; effects.push('barrier'); }
-  if (defItems.some((i) => i.special === 'ward')) { D *= 1.1; effects.push('ward'); }
+  if (defItems.some((i) => i.special === 'ward')) { D *= 1 + ITEM_POWERS.ward; effects.push('ward'); }
   // a defending druid grows a thorn hedge along the wall
   const defWall = battleWall + (defHeroes.includes('druid') ? HERO_POWERS.thornwall : 0);
   if (defWall > battleWall) effects.push('thornwall');
@@ -254,7 +254,7 @@ export function resolveBattle(input: CombatInput): CombatResult {
   let catLevelsDestroyed = 0;
   const catsLeft = winner === 'attacker' ? attSurvivors.catapult ?? 0 : main.catapult ?? 0;
   if (catsLeft > 0 && input.catTargetLevel !== undefined) {
-    const catMult = (attItem?.special === 'catx2' ? 2 : 1) * siegeMult;
+    const catMult = (attItem?.special === 'catx2' ? 1 + ITEM_POWERS.siege : 1) * siegeMult;
     const power = catsLeft * catMult * techMultiplier(attTech.catapult) * ramFactor;
     if (input.catTargetIsWall) {
       catLevelsDestroyed = catDemolish(power, wallAfter, 0);

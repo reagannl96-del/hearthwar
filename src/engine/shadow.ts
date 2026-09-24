@@ -7,7 +7,7 @@ import { UNITS } from './data/units';
 import { distance, watchtowerRange } from './formulas';
 import { commandsOf, commandsTo } from './cmdindex';
 import type { Command, Player, SupportStack, Tribe, TribeAlert, UnitId, Units, Village, World } from './types';
-import { invitesFor, tribeAlerts } from './tribes';
+import { applicationsBy, invitesFor, tribeAlerts } from './tribes';
 import { emptyBuildings } from './village';
 
 export interface PublicSnapshot {
@@ -29,6 +29,8 @@ export interface PrivatePacket {
   tribe?: Tribe;
   /** tribes inviting this player (just enough to show the invitation) */
   invitedBy: { tribeId: number; by: number; t: number }[];
+  /** tribes this player has asked to join */
+  appliedTo?: { tribeId: number; t: number }[];
   /** attacks on fellow tribe members, for those with internal access */
   tribeAlerts: TribeAlert[];
 }
@@ -65,7 +67,7 @@ export function publicSnapshot(w: World): PublicSnapshot {
   const tribes: World['tribes'] = {};
   for (const id in w.tribes) {
     const t = w.tribes[id];
-    tribes[id] = { ...t, internal: '', invites: [], forum: [] };
+    tribes[id] = { ...t, internal: '', invites: [], forum: [], applications: [] };
   }
   return {
     rev: w.mapRev,
@@ -131,6 +133,7 @@ export function privatePacket(w: World, pid: number): PrivatePacket {
     news: w.news.slice(0, 60),
     tribe: p.tribeId != null ? w.tribes[p.tribeId] : undefined,
     invitedBy: invitesFor(w, pid).map((i) => ({ tribeId: i.tribe.id, by: i.by, t: i.t })),
+    appliedTo: applicationsBy(w, pid).map((a) => ({ tribeId: a.tribe.id, t: a.t })),
     tribeAlerts: tribeAlerts(w, pid),
   };
 }
@@ -160,6 +163,10 @@ export function mergeShadow(pub: World, priv: PrivatePacket): World {
   for (const inv of priv.invitedBy ?? []) {
     const t = w.tribes[inv.tribeId];
     if (t) w.tribes[inv.tribeId] = { ...t, invites: [...(t.invites ?? []).filter((i) => i.pid !== priv.pid), { pid: priv.pid, by: inv.by, t: inv.t }] };
+  }
+  for (const ap of priv.appliedTo ?? []) {
+    const t = w.tribes[ap.tribeId];
+    if (t) w.tribes[ap.tribeId] = { ...t, applications: [...(t.applications ?? []).filter((a) => a.pid !== priv.pid), { pid: priv.pid, t: ap.t }] };
   }
   w.tribeAlerts = priv.tribeAlerts ?? [];
   for (const c of priv.commands) w.commands[c.id] = c;

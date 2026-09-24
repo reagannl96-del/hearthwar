@@ -38,8 +38,8 @@ export function QuestsScreen() {
       <Section title="Achievements">
         <div class="achievements">
           {ach.map((a) => (
-            <div class={`medal tier-${a.tier}`}>
-              <div class="medal-badge" aria-hidden="true">{a.tier > 0 ? MEDALS[a.tier - 1][0] : '·'}</div>
+            <div class={`ach-card tier-${a.tier}`}>
+              <div class="ach-badge" aria-hidden="true">{a.tier > 0 ? MEDALS[a.tier - 1][0] : '·'}</div>
               <div class="grow">
                 <b>{a.title}</b> {a.tier > 0 && <span class="pill">{MEDALS[a.tier - 1]}</span>}
                 <div class="muted small">{a.text}: <span class="num">{fmt(a.value)}</span>{a.next !== null && <> · next at <span class="num">{fmt(a.next)}</span></>}</div>

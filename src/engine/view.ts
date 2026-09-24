@@ -10,7 +10,7 @@ import {
   armyMsPerField, distance, hideCap, merchantCount, storageCap, unitsCount, watchtowerRange,
 } from './formulas';
 import { achievementLevels, questStatus } from './quests';
-import { TRIBE_RIGHTS, invitesFor, relation, tribeAlerts, tribePoints, unreadThreads } from './tribes';
+import { TRIBE_RIGHTS, applicationsBy, tribeFull, invitesFor, joinedThisWeek, relation, tribeAlerts, tribePoints, unreadThreads } from './tribes';
 import { awardsSummary, dayOf } from './awards';
 import { DOMINATION, roundDays, standings, type Standings } from './round';
 import type {
@@ -111,6 +111,8 @@ export interface PlayerView {
   villages: VillageView[];
   /** tribe invitations waiting for me */
   tribeInvites: number;
+  /** rulers asking to join my tribe (for recruiters) */
+  tribeApplications: number;
   /** tribe forum threads with posts I haven't read */
   forumUnread: number[];
   /** the round is over and the realm frozen */
@@ -257,6 +259,7 @@ export function buildView(w: World, pid: number): PlayerView {
     },
     villages,
     tribeInvites: invitesFor(w, pid).length,
+    tribeApplications: tribeApplicationCount(w, pid),
     forumUnread: unreadThreads(w, pid),
     roundOver: !!w.finished,
     commands,
@@ -426,6 +429,25 @@ export interface TribeProfileView {
   relations: { id: number; name: string; tag: string; status: Diplomacy }[];
   /** how my tribe sees this one */
   myRelation: Diplomacy | 'own' | null;
+  /** open to new members */
+  recruiting: boolean;
+  /** members who joined in the last week */
+  joinedThisWeek: number;
+  /** the viewer has asked to join and is waiting */
+  applied: boolean;
+  /** the viewer could ask to join (tribeless, and the tribe is recruiting with room) */
+  canApply: boolean;
+  /** the viewer is tribeless and has an invitation from this tribe */
+  invited: boolean;
+  /** every seat taken (members and open invitations) */
+  full: boolean;
+}
+
+/** Requests to join my tribe waiting on an answer, if I am one who answers them. */
+function tribeApplicationCount(w: World, pid: number): number {
+  const t = w.players[pid]?.tribeId != null ? w.tribes[w.players[pid].tribeId!] : null;
+  if (!t || !(t.founderId === pid || (t.rights?.[pid] ?? []).some((r) => r === 'lead' || r === 'invite'))) return 0;
+  return (t.applications ?? []).filter((a) => w.players[a.pid] && !w.players[a.pid].eliminated).length;
 }
 
 export function tribeProfile(w: World, tid: number, viewer: number): TribeProfileView | null {
@@ -455,6 +477,12 @@ export function tribeProfile(w: World, tid: number, viewer: number): TribeProfil
       .filter(([id]) => w.tribes[Number(id)])
       .map(([id, status]) => ({ id: Number(id), name: w.tribes[Number(id)].name, tag: w.tribes[Number(id)].tag, status })),
     myRelation: relation(w, me?.tribeId ?? null, t.id),
+    recruiting: !!t.recruiting,
+    joinedThisWeek: joinedThisWeek(w, t),
+    applied: !!t.applications?.some((a) => a.pid === viewer),
+    canApply: !!t.recruiting && me?.tribeId == null && !me?.eliminated && !tribeFull(t),
+    invited: me?.tribeId == null && !!t.invites?.some((i) => i.pid === viewer),
+    full: tribeFull(t),
   };
 }
 
@@ -463,32 +491,54 @@ export interface MyTribeView extends TribeProfileView {
   myRights: TribeRight[];
   isFounder: boolean;
   invites: { pid: number; name: string; by: string; t: number }[];
+  /** rulers asking to join (shown to recruiters) */
+  applications: { pid: number; name: string; kind: 'human' | 'ai'; points: number; villages: number; t: number }[];
   forum: ForumThread[];
   names: Record<number, string>;
   alerts: TribeAlert[];
 }
 
 /** Everything the tribe screen needs: my tribe (if any) and invitations waiting for me. */
-export function tribeHome(w: World, pid: number): { tribe: MyTribeView | null; invitations: { id: number; name: string; tag: string; by: string; t: number; points: number; members: number }[] } {
+export function tribeHome(w: World, pid: number): {
+  tribe: MyTribeView | null;
+  invitations: { id: number; name: string; tag: string; by: string; t: number; points: number; members: number }[];
+  /** tribes I have asked to join */
+  requests: { id: number; name: string; tag: string; t: number }[];
+  /** tribes open to new members, biggest first (for rulers without a tribe) */
+  recruiting: { id: number; name: string; tag: string; points: number; members: number; joinedThisWeek: number }[];
+} {
   const me = w.players[pid];
   const invitations = invitesFor(w, pid).map((i) => ({
     id: i.tribe.id, name: i.tribe.name, tag: i.tribe.tag, by: w.players[i.by]?.name ?? '?', t: i.t,
     points: tribePoints(w, i.tribe), members: i.tribe.members.length,
   }));
+  const requests = applicationsBy(w, pid).map((a) => ({ id: a.tribe.id, name: a.tribe.name, tag: a.tribe.tag, t: a.t }));
+  const recruiting = Object.values(w.tribes)
+    .filter((x) => x.recruiting && !tribeFull(x))
+    .map((x) => ({ id: x.id, name: x.name, tag: x.tag, points: tribePoints(w, x), members: x.members.length, joinedThisWeek: joinedThisWeek(w, x) }))
+    .sort((a, b) => b.points - a.points);
   const t = me?.tribeId != null ? w.tribes[me.tribeId] : null;
-  if (!t) return { tribe: null, invitations };
+  if (!t) return { tribe: null, invitations, requests, recruiting };
   const prof = tribeProfile(w, t.id, pid)!;
   const names: Record<number, string> = {};
   for (const id in w.players) names[Number(id)] = w.players[id].name;
   const myRights = t.founderId === pid ? [...TRIBE_RIGHTS] : (t.rights?.[pid]?.includes('lead') ? [...TRIBE_RIGHTS] : [...(t.rights?.[pid] ?? [])]);
   return {
     invitations,
+    requests,
+    recruiting,
     tribe: {
       ...prof,
       internal: t.internal ?? '',
       myRights,
       isFounder: t.founderId === pid,
       invites: (t.invites ?? []).map((i) => ({ pid: i.pid, name: w.players[i.pid]?.name ?? '?', by: w.players[i.by]?.name ?? '?', t: i.t })),
+      applications: myRights.includes('invite')
+        ? (t.applications ?? []).filter((a) => w.players[a.pid] && !w.players[a.pid].eliminated).map((a) => {
+          const x = w.players[a.pid];
+          return { pid: x.id, name: x.name, kind: x.kind, points: x.points, villages: x.villages.length, t: a.t };
+        })
+        : [],
       forum: [...(t.forum ?? [])].sort((a, b) => Number(!!b.sticky) - Number(!!a.sticky)),
       names,
       alerts: myRights.includes('internal') ? (w.tribeAlerts ?? tribeAlerts(w, pid)) : [],

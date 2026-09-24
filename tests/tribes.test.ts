@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { applyAction } from '../src/engine/actions';
-import { privatePacket, publicSnapshot } from '../src/engine/shadow';
-import { hasRight } from '../src/engine/tribes';
-import { tribeHome } from '../src/engine/view';
+import { mergeShadow, privatePacket, publicSnapshot } from '../src/engine/shadow';
+import { hasRight, joinedThisWeek } from '../src/engine/tribes';
+import { advance } from '../src/engine/game';
+import { tribeHome, tribeProfile } from '../src/engine/view';
 import { createWorld, defaultConfig, spawnPlayer } from '../src/engine/world';
 
 function world() {
@@ -79,6 +80,111 @@ describe('tribes', () => {
     const pb = privatePacket(w, b.id);
     expect(pb.tribe).toBeUndefined();
     expect(pb.invitedBy.map((i) => i.tribeId)).toEqual([tid]);
+  });
+});
+
+describe('recruiting', () => {
+  it('a recruiting tribe takes requests to join; recruiters accept or decline; the rankings count new members', () => {
+    const { w, a, b, c } = world();
+    const ok = (pid: number, act: Parameters<typeof applyAction>[2]) => {
+      const r = applyAction(w, pid, act);
+      if (!r.ok) throw new Error(`${act.type}: ${r.error}`);
+      return r;
+    };
+    const tid = ok(a.id, { type: 'tribeCreate', name: 'Iron Oath', tag: 'IRN' }).data as number;
+    // a tribe founded by a person starts closed
+    expect(w.tribes[tid].recruiting).toBe(false);
+    expect(applyAction(w, b.id, { type: 'tribeApply', tribe: tid }).ok).toBe(false);
+    ok(a.id, { type: 'tribeRecruiting', on: true });
+    expect(tribeProfile(w, tid, b.id)!.canApply).toBe(true);
+    ok(b.id, { type: 'tribeApply', tribe: tid });
+    ok(c.id, { type: 'tribeApply', tribe: tid });
+    expect(applyAction(w, b.id, { type: 'tribeApply', tribe: tid }).ok).toBe(false); // once is enough
+    expect(tribeHome(w, b.id).requests.map((r) => r.tag)).toEqual(['IRN']);
+    expect(tribeHome(w, a.id).tribe!.applications.map((x) => x.name).sort()).toEqual(['Bram', 'Cora']);
+    // only recruiters answer
+    ok(a.id, { type: 'tribeAnswer', pid: b.id, accept: true });
+    expect(b.tribeId).toBe(tid);
+    expect(applyAction(w, b.id, { type: 'tribeAnswer', pid: c.id, accept: true }).ok).toBe(false);
+    expect(joinedThisWeek(w, w.tribes[tid])).toBe(1);
+    // closing the doors turns the rest away, and they hear about it
+    const before = c.reports.length;
+    ok(a.id, { type: 'tribeRecruiting', on: false });
+    expect(w.tribes[tid].applications).toEqual([]);
+    expect(c.tribeId).toBeNull();
+    expect(c.reports.length).toBe(before + 1);
+    // a week later the new member no longer counts as new
+    w.now += 8 * 24 * 3_600_000;
+    expect(joinedThisWeek(w, w.tribes[tid])).toBe(0);
+  });
+
+  it('a request to join stays between the ruler and the tribe', () => {
+    const { w, a, b, c } = world();
+    const tid = applyAction(w, a.id, { type: 'tribeCreate', name: 'Iron Oath', tag: 'IRN' }).data as number;
+    applyAction(w, a.id, { type: 'tribeRecruiting', on: true });
+    applyAction(w, b.id, { type: 'tribeApply', tribe: tid });
+    const pub = publicSnapshot(w).world;
+    expect(pub.tribes[tid].applications).toEqual([]);
+    expect(pub.tribes[tid].recruiting).toBe(true);
+    // the applicant still sees their own request after the shadow merge; nobody else does
+    const mine = mergeShadow(pub, privatePacket(w, b.id));
+    expect(tribeProfile(mine, tid, b.id)!.applied).toBe(true);
+    const theirs = mergeShadow(pub, privatePacket(w, c.id));
+    expect(theirs.tribes[tid].applications).toEqual([]);
+    // the recruiter sees it
+    expect(privatePacket(w, a.id).tribe?.applications?.map((x) => x.pid)).toEqual([b.id]);
+  });
+
+  it('tribes led by AI rulers recruit and answer requests to join on their own', () => {
+    const w = createWorld({ worldName: 'T', playerName: '', villageName: '', multiplayer: true, seed: 8, config: { ...defaultConfig(), aiCount: 14, size: 80, aiAlwaysAwake: true } });
+    const me = spawnPlayer(w, 'Dara', 'D')!;
+    const aiTribes = Object.values(w.tribes).filter((t) => w.players[t.founderId!]?.kind === 'ai');
+    expect(aiTribes.length).toBeGreaterThan(0);
+    // an AI tribe is open to newcomers
+    const t = aiTribes.sort((x, y) => x.members.length - y.members.length)[0];
+    t.recruiting = true;
+    // a ruler of some standing, on the realm's very first day
+    me.points = Math.max(...t.members.map((m) => w.players[m].points));
+    expect(applyAction(w, me.id, { type: 'tribeApply', tribe: t.id }).ok).toBe(true);
+    // its recruiters read the request and take them in within a few hours
+    advance(w, w.now + 6 * 3_600_000);
+    expect(t.applications?.some((x) => x.pid === me.id) ?? false).toBe(false);
+    expect(me.tribeId).toBe(t.id);
+    // and AI tribes keep taking members in over the days
+    advance(w, w.now + 2 * 24 * 3_600_000);
+    const joined = Object.values(w.tribes).reduce((n, x) => n + joinedThisWeek(w, x), 0);
+    expect(joined).toBeGreaterThan(0);
+  });
+});
+
+describe('tribe housekeeping', () => {
+  it('a founder who loses their last village leaves the tribe and the crown passes on', async () => {
+    const { conquer } = await import('../src/engine/commands');
+    const { w, a, b, c } = world();
+    const tid = applyAction(w, a.id, { type: 'tribeCreate', name: 'Iron Oath', tag: 'IRN' }).data as number;
+    applyAction(w, a.id, { type: 'tribeInvite', name: 'Bram' });
+    applyAction(w, b.id, { type: 'tribeAccept', tribe: tid });
+    // Cora conquers Alda's only village (the game's conquest hook then drops Alda from the tribe)
+    conquer(w, w.villages[a.villages[0]], c.id);
+    expect(a.eliminated).toBe(true);
+    const { dropFromTribe } = await import('../src/engine/tribes');
+    dropFromTribe(w, a.id);
+    expect(a.tribeId).toBeNull();
+    expect(w.tribes[tid].members).toEqual([b.id]);
+    expect(w.tribes[tid].founderId).toBe(b.id);
+  });
+
+  it('accepting a request into a full tribe keeps the request for later', async () => {
+    const { TRIBE_MAX_MEMBERS } = await import('../src/engine/tribes');
+    const { w, a, b } = world();
+    const tid = applyAction(w, a.id, { type: 'tribeCreate', name: 'Iron Oath', tag: 'IRN' }).data as number;
+    applyAction(w, a.id, { type: 'tribeRecruiting', on: true });
+    applyAction(w, b.id, { type: 'tribeApply', tribe: tid });
+    const t = w.tribes[tid];
+    t.members = [...t.members, ...Array.from({ length: TRIBE_MAX_MEMBERS - 1 }, (_, i) => 90_000 + i)];
+    expect(applyAction(w, a.id, { type: 'tribeAnswer', pid: b.id, accept: true }).ok).toBe(false);
+    expect(t.applications?.map((x) => x.pid)).toEqual([b.id]);
+    expect(b.tribeId).toBeNull();
   });
 });
 

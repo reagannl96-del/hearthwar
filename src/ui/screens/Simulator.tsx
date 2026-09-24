@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks';
-import { HEROES, ITEM_BY_ID, UNITS, UNIT_ORDER, itemsFor } from '../../engine/data/units';
+import { HEROES, ITEM_BY_ID, UNITS, UNIT_ORDER, itemsFor, itemHero } from '../../engine/data/units';
 import type { UnitId, Units } from '../../engine/types';
 import { Icon } from '../art/icons';
 import { Btn, NumInput, Section, UnitTable, UnitIcon, unitName } from '../components/common';
@@ -22,7 +22,8 @@ export function Simulator() {
   const r = host.value!.simulate({
     att,
     attTech: v.tech,
-    attItem: item && (att.paladin ?? 0) > 0 ? ITEM_BY_ID[item] : null,
+    // an item only works in the hands of its own hero
+    attItem: item && (att[itemHero(ITEM_BY_ID[item])] ?? 0) > 0 ? ITEM_BY_ID[item] : null,
     defStacks: [{ units: def, tech: {} }],
     defItems: [],
     wall: Number(wall || 0),

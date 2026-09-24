@@ -842,12 +842,13 @@ input.tiny { width: 56px; padding: 2px 4px; }
 .quest-progress .progress { flex: 1; margin: 0; }
 .quest-reward { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
 .achievements { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
-.medal { display: flex; gap: 10px; align-items: flex-start; padding: 10px; border: 1px solid var(--line-strong); border-radius: 4px; background: var(--parch-hi); }
-.medal-badge { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: #d8c08c; font: 800 1.15rem var(--font-display); color: var(--muted); flex: none; border: 2px solid #a88a57; }
-.medal.tier-1 .medal-badge { background: radial-gradient(circle at 35% 30%, #e0a06a, #9a5a2a); color: #fff; border-color: #6b3a14; }
-.medal.tier-2 .medal-badge { background: radial-gradient(circle at 35% 30%, #e6ecef, #8d989f); color: #2c3338; border-color: #5d676e; }
-.medal.tier-3 .medal-badge { background: radial-gradient(circle at 35% 30%, #fbe39a, #c9912a); color: #3a2406; border-color: #8a5a10; }
-.medal.tier-4 .medal-badge { background: radial-gradient(circle at 35% 30%, #e8716a, #8e1f16); color: #fff; border-color: #4a0c07; }
+.ach-card { display: flex; gap: 10px; align-items: flex-start; padding: 10px; border: 1px solid var(--line-strong); border-radius: 4px; background: var(--parch-hi); min-width: 0; }
+.ach-card .grow { min-width: 0; }
+.ach-badge { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: #d8c08c; font: 800 1.15rem var(--font-display); color: var(--muted); flex: none; border: 2px solid #a88a57; }
+.ach-card.tier-1 .ach-badge { background: radial-gradient(circle at 35% 30%, #e0a06a, #9a5a2a); color: #fff; border-color: #6b3a14; }
+.ach-card.tier-2 .ach-badge { background: radial-gradient(circle at 35% 30%, #e6ecef, #8d989f); color: #2c3338; border-color: #5d676e; }
+.ach-card.tier-3 .ach-badge { background: radial-gradient(circle at 35% 30%, #fbe39a, #c9912a); color: #3a2406; border-color: #8a5a10; }
+.ach-card.tier-4 .ach-badge { background: radial-gradient(circle at 35% 30%, #e8716a, #8e1f16); color: #fff; border-color: #4a0c07; }
 .stat-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
 .stat {
   background: var(--grain), linear-gradient(var(--parch-hi), var(--parch-2));
@@ -1184,6 +1185,9 @@ input.tiny { width: 56px; padding: 2px 4px; }
 .tribe-tag { font-weight: 800; }
 .tribe-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; vertical-align: 0; border: 1px solid rgba(0, 0, 0, 0.4); }
 .pill-gold { background: linear-gradient(#f3d27a, #d9a441); color: #3a2410; border-color: #a8741a; }
+.pill-recruiting { background: rgba(70, 150, 60, 0.16); border-color: #4f8a2e; color: #2f5d18; }
+.growth { font-size: 0.72rem; font-weight: 800; color: #3f7a22; white-space: nowrap; }
+.gap-sm { gap: 6px; }
 .rel-ally { background: rgba(25, 180, 190, 0.18); border-color: #149aa3; color: #0c6d74; }
 .rel-nap { background: rgba(140, 80, 200, 0.16); border-color: #8a4fc8; color: #5d2c94; }
 .rel-enemy { background: rgba(200, 50, 40, 0.14); border-color: #b3261a; color: #8e1e14; }

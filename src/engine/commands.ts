@@ -4,7 +4,7 @@ import { bumpDaily } from './awards';
 import { themeOfHero, unitNameAt } from './data/themes';
 import { computeLoot, resolveBattle, type DefStackInput } from './combat';
 import { BUILDINGS, BUILDING_ORDER } from './data/buildings';
-import { HEROES, HERO_POWERS, ITEM_BY_ID, MERCHANT_CARRY, MERCHANT_SPEED, UNITS, isHero, type ItemDef } from './data/units';
+import { HEROES, HERO_POWERS, ITEM_BY_ID, ITEM_POWERS, MERCHANT_CARRY, MERCHANT_SPEED, UNITS, isHero, type ItemDef } from './data/units';
 import { pushEvent } from './events';
 import { addCommand, commandsFrom, commandsOf, removeCommand } from './cmdindex';
 import {
@@ -67,7 +67,7 @@ function equippedItem(w: World, ownerId: number | null, units: Units): ItemDef |
  */
 export function travelTime(w: World, from: Village, to: Village, units: Units, ownerId: number | null, support = false): number {
   const item = equippedItem(w, ownerId, units);
-  const per = armyMsPerField(units, w.config.unitSpeed, item?.special === 'speed' ? 0.15 : 0);
+  const per = armyMsPerField(units, w.config.unitSpeed, item?.special === 'speed' ? ITEM_POWERS.speed : 0);
   const druid = support && (units.druid ?? 0) > 0 ? 0.75 : 1;
   return Math.max(1000, Math.round(distance(from.x, from.y, to.x, to.y) * per * druid));
 }
@@ -572,7 +572,7 @@ function resolveAttack(w: World, c: Command, hooks: ArrivalHooks): void {
   let risen: BattleData['risen'];
   if (!result.pureScout) {
     const fallen = (u: Units) => RAISABLE.reduce((n, k) => n + (u[k] ?? 0), 0);
-    const share = (lantern: boolean) => HERO_POWERS.raise * (lantern ? 2 : 1);
+    const share = (lantern: boolean) => HERO_POWERS.raise * (lantern ? 1 + ITEM_POWERS.raise : 1);
     if (result.winner === 'attacker' && (survivors.necromancer ?? 0) > 0 && home && home.ownerId === c.ownerId) {
       const n = Math.min(Math.floor(fallen(defLostTotal) * share(attItem?.special === 'raise')), Math.max(0, popFree(home)));
       if (n > 0) {
@@ -599,7 +599,7 @@ function resolveAttack(w: World, c: Command, hooks: ArrivalHooks): void {
   let loot: Res | undefined;
   let capacity = 0;
   if (result.winner === 'attacker' && !result.pureScout) {
-    const lootBonus = (attItem?.special === 'loot' ? 1.2 : 1) * ((survivors.goblin ?? 0) > 0 ? 1 + HERO_POWERS.plunder : 1);
+    const lootBonus = (attItem?.special === 'loot' ? 1 + ITEM_POWERS.loot : 1) * ((survivors.goblin ?? 0) > 0 ? 1 + HERO_POWERS.plunder : 1);
     capacity = Math.floor(unitsCarry(survivors) * lootBonus);
     const hidden = target.ownerId !== null ? hideCap(target.buildings.hiding) : 0;
     const avail = res(
@@ -617,7 +617,7 @@ function resolveAttack(w: World, c: Command, hooks: ArrivalHooks): void {
   if (result.winner === 'attacker' && (survivors.noble ?? 0) > 0) {
     const before = Math.floor(target.loyalty);
     let drop = 0;
-    for (let i = 0; i < survivors.noble!; i++) drop += randInt(w, 20, 35) + (attItem?.special === 'loyalty' ? 10 : 0);
+    for (let i = 0; i < survivors.noble!; i++) drop += randInt(w, 20, 35) + (attItem?.special === 'loyalty' ? ITEM_POWERS.loyalty : 0);
     const after = before - drop;
     if (after <= 0) {
       conquered = true;
@@ -632,15 +632,14 @@ function resolveAttack(w: World, c: Command, hooks: ArrivalHooks): void {
   // scouting
   let scout: BattleData['scout'];
   const scoutRatio = result.scoutsSent > 0 ? result.scoutsSurvived / result.scoutsSent : 0;
-  const owl = attItem?.special === 'scout';
   if (result.scoutsSurvived > 0) {
     scout = { res: res(Math.floor(target.res.wood), Math.floor(target.res.clay), Math.floor(target.res.iron)) };
     if (target.ownerId !== null) {
       const hc = hideCap(target.buildings.hiding);
       scout.hidden = res(Math.min(hc, scout.res!.wood), Math.min(hc, scout.res!.clay), Math.min(hc, scout.res!.iron));
     }
-    if (scoutRatio >= 0.5 || owl) scout.buildings = { ...target.buildings };
-    if (scoutRatio >= 0.75 || owl) scout.unitsOutside = unitsOutsideOf(w, target);
+    if (scoutRatio >= 0.5) scout.buildings = { ...target.buildings };
+    if (scoutRatio >= 0.75) scout.unitsOutside = unitsOutsideOf(w, target);
     attacker.stats.scouted++;
   }
 

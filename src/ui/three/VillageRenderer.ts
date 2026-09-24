@@ -60,6 +60,11 @@ function hammerSwing(t: number): number {
   return 1.8 - Math.sin(((p - 0.72) / 0.28) * Math.PI) * 0.06;
 }
 
+/** Invisible, but it still catches clicks (the raycaster ignores visibility). */
+const HIT_MAT = new THREE.MeshBasicMaterial({ visible: false });
+/** Buildings too thin to hit comfortably, and how wide their click area is (kept clear of their neighbours). */
+const HIT_RADIUS: Partial<Record<BuildingId, number>> = { rally: 3.6 };
+
 export class VillageRenderer {
   private renderer: THREE.WebGLRenderer;
   private scene = new THREE.Scene();
@@ -364,6 +369,14 @@ export class VillageRenderer {
       } else group = bake(raw, { building: id });
       h = built.h;
       radius = Math.max(built.w, built.d) * 0.6;
+    }
+    // slender buildings get a generous invisible hit area, so they are easy to click or tap
+    const hitR = HIT_RADIUS[id];
+    if (hitR) {
+      const hh = Math.max(5, h);
+      const hit = new THREE.Mesh(new THREE.CylinderGeometry(hitR, hitR, hh, 16).translate(0, hh / 2, 0), HIT_MAT);
+      hit.userData.building = id;
+      group.add(hit);
     }
     // smoke emitters
     group.traverse((o) => {

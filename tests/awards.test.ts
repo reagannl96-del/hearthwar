@@ -36,7 +36,8 @@ describe('AI rulers keep human hours', () => {
     const w = createWorld({ worldName: 'T', playerName: 'P', villageName: 'H', seed: 4, config: { ...defaultConfig(), aiCount: 5, size: 50 } });
     for (const p of Object.values(w.players).filter((x) => x.kind === 'ai')) {
       let awake = 0, sessions = 0, was = false, longestAway = 0, away = 0;
-      const start = w.now;
+      // (after the opening rush, when nobody sleeps)
+      const start = w.now + 6 * 3_600_000;
       // two days, so the night is never cut in half by the edge of the sample
       for (let m = 0; m < 2880; m++) {
         w.now = start + m * 60_000;
@@ -48,12 +49,39 @@ describe('AI rulers keep human hours', () => {
         }
         was = on;
       }
-      w.now = start;
+      w.now = 0;
       // at the keyboard 5-8 hours a day, spread over several sessions, with one long night
       expect(awake).toBeGreaterThan(5 * 60);
       expect(awake).toBeLessThan(8 * 60);
       expect(sessions).toBeGreaterThanOrEqual(6);
       expect(longestAway).toBeGreaterThanOrEqual(8 * 60);
     }
+  });
+
+  it('nobody sleeps through the opening of a new realm', async () => {
+    const { aiAsleep } = await import('../src/engine/ai/ai');
+    const w = createWorld({ worldName: 'T', playerName: 'P', villageName: 'H', seed: 4, config: { ...defaultConfig(), aiCount: 8, size: 60 } });
+    const ais = Object.values(w.players).filter((x) => x.kind === 'ai');
+    for (let m = 0; m < 4 * 60; m += 10) {
+      w.now = m * 60_000;
+      expect(ais.some((p) => aiAsleep(w, p))).toBe(false);
+    }
+  });
+
+  it('between sessions a ruler still glances in and keeps the builders busy', async () => {
+    const { aiAwake, aiThink } = await import('../src/engine/ai/ai');
+    const w = createWorld({ worldName: 'T', playerName: 'P', villageName: 'H', seed: 4, config: { ...defaultConfig(), aiCount: 5, size: 50 } });
+    const p = Object.values(w.players).find((x) => x.kind === 'ai')!;
+    const v = w.villages[p.villages[0]];
+    // find a moment the ruler is away from the keyboard, well after the opening
+    w.now = 6 * 3_600_000;
+    while (aiAwake(w, p)) w.now += 60_000;
+    v.res = { wood: 50_000, clay: 50_000, iron: 50_000 };
+    v.buildQueue = [];
+    p.ai!.lastGlance = undefined;
+    aiThink(w, p);
+    expect(v.buildQueue.length).toBeGreaterThan(0);
+    // but no war and no raids from a glance
+    expect(Object.values(w.commands).filter((c) => c.ownerId === p.id).length).toBe(0);
   });
 });

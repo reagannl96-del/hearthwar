@@ -335,6 +335,7 @@ export function createWorld(o: NewWorldOptions): World {
     if (spots.some(([sx, sy]) => Math.hypot(sx - x, sy - y) < 1.5)) continue;
     addBarb(x, y);
   }
+  w.barbTarget = barbs.length;
 
   for (const id in w.players) {
     const p = w.players[id];
@@ -452,16 +453,20 @@ function settle(w: World, p: Player, villageNameText: string, strict = false): V
  * few barbarian villages around it and beginner protection, like any newcomer),
  * and the odd barbarian village springs up in open country. Arrivals thin out as
  * the map fills and stop once there is no proper room left. Called on every
- * barbarian tick; the timing is random, about every hour and a half of real time
- * for rulers and every half hour for barbarians on a normal-speed world.
+ * barbarian tick; the timing is random. On a standard realm (speed 150) rulers
+ * come about twice a day times the room left (1 - rulers / cap, so well under one
+ * a day on a freshly filled realm), and barbarian villages at most about four a
+ * day, only while there are fewer than the realm's target.
  */
 export function realmGrowth(w: World): void {
   if (w.finished) return;
   const tick = barbInterval(w);
   const size = w.config.size;
   const rulers = Object.values(w.players).filter((p) => p.kind === 'ai' && !p.eliminated).length;
-  const cap = Math.max(4, Math.round(w.config.aiCount * 2));
-  const rulerGap = Math.min(6 * HOUR, Math.max(20 * 60_000, (180 * HOUR) / w.config.speed));
+  // newcomers trickle in: a couple a day on a standard realm, and never more than
+  // about a third on top of the rulers the realm started with
+  const cap = Math.max(4, Math.round(w.config.aiCount * 1.3));
+  const rulerGap = Math.min(24 * HOUR, Math.max(3 * HOUR, (1800 * HOUR) / w.config.speed));
   const crowding = Math.max(0, 1 - rulers / cap);
   if (w.config.aiCount > 0 && nextRandom(w) < (tick / rulerGap) * crowding) {
     const p = foundAiRuler(w);
@@ -470,10 +475,12 @@ export function realmGrowth(w: World): void {
       news(w, `${p.name} has arrived in the realm and founded ${v.name}.`, 'player', v.id);
     }
   }
-  // a new barbarian village, only while the realm has fewer than it started with
-  // and only on open ground with no neighbour within two fields
-  const barbGap = Math.min(3 * HOUR, Math.max(10 * 60_000, (75 * HOUR) / w.config.speed));
-  const target = Math.round(size * size * w.config.barbDensity);
+  // a new barbarian village now and then (a few a day on a standard realm), only while
+  // the round realm has fewer than it started with, and only on open ground with no
+  // neighbour within two fields
+  const barbGap = Math.min(12 * HOUR, Math.max(2 * HOUR, (900 * HOUR) / w.config.speed));
+  // (saves from before barbTarget use the island's own area: enough land, no flood)
+  const target = w.barbTarget ?? Math.round((w.round ? Math.PI * (size / 2 - 4) ** 2 : size * size) * w.config.barbDensity);
   let barbs = 0;
   for (const id in w.villages) if (w.villages[id].ownerId === null) barbs++;
   if (barbs < target && nextRandom(w) < tick / barbGap) {
@@ -564,6 +571,7 @@ function growRealm(w: World): void {
   const head = Math.min(10, 4 + Math.floor(w.now / (24 * HOUR)));
   for (let i = oldAi; i < wantAi; i++) if (!foundAiRuler(w, head)) break;
   const wantBarbs = Math.round(Math.PI * (size / 2 - 4) ** 2 * w.config.barbDensity);
+  w.barbTarget = wantBarbs;
   let barbs = Object.values(w.villages).filter((v) => v.ownerId === null).length;
   for (let tries = 0; barbs < wantBarbs && tries < wantBarbs * 40; tries++) if (sproutBarbarian(w, 1)) barbs++;
 }

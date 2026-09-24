@@ -12,7 +12,7 @@ import { nextRandom } from '../rng';
 import { villagesNear } from '../spatial';
 import { exchangeQuote } from '../market';
 import { commandsTo } from '../cmdindex';
-import { acceptInvite, createTribe, declineInvite, hasRight, invitePlayer, invitesFor, leaveTribe, relation, setDiplomacy, tribeOf, tribePoints } from '../tribes';
+import { TRIBE_MAX_MEMBERS, tribeFull, acceptInvite, answerApplication, applicationsBy, applyToTribe, cancelInvite, createTribe, declineInvite, hasRight, invitePlayer, invitesFor, leaveTribe, relation, setDiplomacy, tribeOf, tribePoints, withdrawApplication } from '../tribes';
 import { tribeName } from '../data/names';
 import type { BattleData, BuildingId, Command, Player, Res, Tribe, UnitId, Units, Village, VillageRole, World } from '../types';
 import { RES_KEYS } from '../types';
@@ -140,12 +140,23 @@ const RAIDERS: UnitId[] = ['light', 'marcher', 'axe', 'spear', 'heavy'];
  * (more on hard realms, less on easy ones). While away nothing new is queued, sent
  * or traded; queued work carries on, as it does for a person.
  */
-export function aiAwake(w: World, p: Player): boolean {
-  if (w.config.aiAlwaysAwake) return true;
+const LAUNCH_RUSH = 4 * 3_600_000;
+
+/** Whether this ruler is in bed right now (about eight hours a day, at their own time). */
+export function aiAsleep(w: World, p: Player): boolean {
+  if (w.config.aiAlwaysAwake) return false;
+  // nobody sleeps through the opening of a new realm
+  if (w.now < LAUNCH_RUSH) return false;
   const minute = Math.floor((w.createdReal + w.now) / 60_000);
   const ofDay = ((minute % 1440) + 1440) % 1440;
   const sleepStart = (p.id * 397) % 1440;
-  if ((ofDay - sleepStart + 1440) % 1440 < 8 * 60) return false;
+  return (ofDay - sleepStart + 1440) % 1440 < 8 * 60;
+}
+
+export function aiAwake(w: World, p: Player): boolean {
+  if (w.config.aiAlwaysAwake) return true;
+  if (aiAsleep(w, p)) return false;
+  const minute = Math.floor((w.createdReal + w.now) / 60_000);
   const diff = w.config.difficulty;
   const cycle = diff === 'hard' ? 85 : diff === 'easy' ? 130 : 105;
   const t = minute + p.id * 37;
@@ -154,9 +165,37 @@ export function aiAwake(w: World, p: Player): boolean {
   return t % cycle < len;
 }
 
+/**
+ * Between sessions a person still glances at the game now and then, the way you
+ * check your phone: a quick look to keep the builders and the barracks busy, and
+ * nothing more (no raids, no war). Now and then even in the night.
+ */
+const GLANCE_AWAKE = 20 * 60_000;
+const GLANCE_ASLEEP = 90 * 60_000;
+
+function glance(w: World, p: Player): void {
+  const ai = p.ai!;
+  const gap = aiAsleep(w, p) ? GLANCE_ASLEEP : GLANCE_AWAKE;
+  // spread the glances out: every ruler has their own rhythm
+  if (w.now - (ai.lastGlance ?? -Infinity) < gap + ((p.id * 7919) % 7) * 60_000) return;
+  ai.lastGlance = w.now;
+  const n = p.villages.length;
+  const from = (ai.glanceCursor ?? 0) % Math.max(1, n);
+  ai.glanceCursor = from + 12;
+  for (let i = 0; i < Math.min(12, n); i++) {
+    const v = w.villages[p.villages[(from + i) % n]];
+    if (!v || v.ownerId !== p.id) continue;
+    updateVillage(w, v, w.now);
+    // before looking away again, fill the whole building queue
+    build(w, p, v);
+    research(w, p, v);
+    recruit(w, p, v);
+  }
+}
+
 export function aiThink(w: World, p: Player): void {
   const ai = p.ai!;
-  if (!aiAwake(w, p)) return;
+  if (!aiAwake(w, p)) { glance(w, p); return; }
   const incoming = incomingIndex(w, p);
   // incoming attacks show up as alerts, so every village under threat gets a look
   for (const [vid, list] of incoming) {
@@ -183,13 +222,13 @@ export function aiThink(w: World, p: Player): void {
     farm(w, p, v);
     scavenge(w, p, v);
   }
-  const period = aiThinkInterval(w) * 4;
-  if (w.now - ai.lastWarCheck >= period) {
+  if (w.now - ai.lastWarCheck >= Math.max(aiThinkInterval(w), WAR_WAIT.check)) {
     ai.lastWarCheck = w.now;
     war(w, p);
   }
   conquestDrive(w, p);
   tribeLife(w, p);
+  tribeRecruiting(w, p);
   // forget stale farm memory
   if (nextRandom(w) < 0.05) {
     for (const k in ai.memory) if (ai.memory[k] < w.now - 30 * aiThinkInterval(w)) delete ai.memory[k];
@@ -208,8 +247,8 @@ function incomingIndex(w: World, p: Player): Map<number, Command[]> {
 // ---------- building ----------
 
 function build(w: World, p: Player, v: Village): void {
-  const slots = Math.min(buildQueueSlots(v), 3);
-  for (let guard = 0; guard < 3 && v.buildQueue.length < slots; guard++) {
+  const slots = buildQueueSlots(v);
+  for (let guard = 0; guard < slots && v.buildQueue.length < slots; guard++) {
     const b = chooseBuild(w, p, v);
     if (!b) return;
     if (!applyAction(w, p.id, { type: 'build', vid: v.id, building: b }).ok) return;
@@ -496,8 +535,40 @@ function farm(w: World, p: Player, v: Village): void {
     ai.memory[t.id] = w.now;
     sends--;
   }
+  // a player's village that the scouts found almost undefended is worth a raid too
+  if (sends > 0) {
+    const group0 = raidGroup(v, 0);
+    for (const t of villagesNear(w, v.x, v.y, radius)) {
+      if (sends <= 0 || !group0) break;
+      if (t.ownerId === null || t.ownerId === p.id) continue;
+      const o = w.players[t.ownerId];
+      if (!o || o.eliminated || isProtected(w, o.id)) continue;
+      if (o.kind === 'human' && !ai.hostile) continue;
+      if (o.tribeId != null && o.tribeId === p.tribeId) continue;
+      const rel = relation(w, p.tribeId, o.tribeId);
+      if (rel === 'ally' || rel === 'nap') continue;
+      if ((ai.memory[t.id] ?? 0) + PLAYER_RAID_COOLDOWN > w.now) continue;
+      if (!mayHit(w, p, o.id)) continue;
+      if ((ai.avoid?.[t.id] ?? 0) > w.now) continue;
+      const intel = p.intel[t.id];
+      const seenAt = Math.max(intel?.scoutT ?? 0, intel?.lastAttackT ?? 0);
+      if (!intel?.units || w.now - seenAt > 2 * 60 * MIN) continue;
+      const defenders = unitsCount(intel.units) - (intel.units.scout ?? 0);
+      const wall = intel.buildings?.wall ?? intel.wall ?? 0;
+      if (defenders > 25 || wall > 3) continue;
+      const group = raidGroup(v, wall);
+      if (!group) break;
+      if (!sendTroops(w, { ownerId: p.id, fromVid: v.id, toVid: t.id, kind: 'attack', units: group, tag: 'farm' }).ok) break;
+      ai.memory[t.id] = w.now;
+      noteHit(w, p, t);
+      sends--;
+    }
+  }
   ai.raidBudget = sends;
 }
+
+/** A player's village is raided at most this often by one ruler. */
+const PLAYER_RAID_COOLDOWN = 40 * 60_000;
 
 function raidGroup(v: Village, wall: number): Units | null {
   const strength = wall > 0 ? 250 + wall * 180 : 60;
@@ -586,6 +657,25 @@ const unitWorth = (units: Units) => {
   for (const k in units) { const u = k as UnitId; const c = UNITS[u].cost; n += (units[u] ?? 0) * (c.wood + c.clay + c.iron); }
   return n;
 };
+/** How long a ruler waits on things of war, in real time (a person's patience, not a count of looks). */
+const MIN = 60_000;
+const WAR_WAIT = {
+  /** a scouting plan is dropped if no report comes back in time */
+  plan: 20 * MIN,
+  /** scouts that never came back: something strong is there */
+  scoutsLost: 60 * MIN,
+  /** the report says it would be a bloodbath */
+  tooStrong: 45 * MIN,
+  /** the report says it is not worth the trip */
+  notWorth: 30 * MIN,
+  /** how often, while online, a ruler looks over its war plans */
+  check: 4 * MIN,
+  /** a scouting report this recent is trusted without scouting again */
+  freshReport: 60 * MIN,
+  /** a village this ruler just emptied is left alone for a while: nothing to kill, little to take */
+  justCleared: 40 * MIN,
+};
+
 /** A grudge fades after this long without fresh fighting. */
 const GRUDGE_MS = 60 * 60_000;
 
@@ -612,14 +702,14 @@ function war(w: World, p: Player): void {
     const plan = ai.plans[vid];
     if (plan) {
       const target = w.villages[plan.target];
-      if (!target || target.ownerId === p.id || w.now - plan.since > think * 40) { delete ai.plans[vid]; continue; }
+      if (!target || target.ownerId === p.id || w.now - plan.since > WAR_WAIT.plan) { delete ai.plans[vid]; continue; }
       const intel = p.intel[plan.target];
       const reported = intel?.scoutT !== undefined && intel.scoutT >= plan.since;
       if (!reported) {
         if (w.commands[plan.scoutCmd]?.kind === 'attack') continue; // still on the road
         // the scouts never came back: whatever is there is strong enough to kill them
         delete ai.plans[vid];
-        ai.avoid[plan.target] = w.now + think * 60;
+        ai.avoid[plan.target] = w.now + WAR_WAIT.scoutsLost;
         continue;
       }
       delete ai.plans[vid];
@@ -644,11 +734,41 @@ function war(w: World, p: Player): void {
       if (attackValue(send) >= minArmy * 0.5 && sendTroops(w, { ownerId: p.id, fromVid: v.id, toVid: target.id, kind: 'attack', units: send, tag: 'war' }).ok) noteHit(w, p, target);
       continue;
     }
+    const fresh = p.intel[target.id];
+    if (fresh?.scoutT !== undefined && w.now - fresh.scoutT < WAR_WAIT.freshReport) { strike(w, p, v, target, army); continue; }
     const scouts = v.units.scout ?? 0;
     if (scouts < 3) continue;
     const r = sendTroops(w, { ownerId: p.id, fromVid: v.id, toVid: target.id, kind: 'attack', units: { scout: Math.min(scouts, 8) }, tag: 'scout' });
     if (r.ok) ai.plans[vid] = { target: target.id, since: w.now, scoutCmd: (r.data as { id: number }).id };
   }
+}
+
+/**
+ * However many rulers eye the same player, a person gets a breather between
+ * attacks: after one lands, the rest of the realm leaves them be for a while.
+ * A ruler the player attacked may still strike back sooner.
+ */
+const HUMAN_BREATHER = 3 * 60 * MIN;
+const PAYBACK_WAIT = 30 * MIN;
+
+function lastHitOn(w: World, humanId: number): number {
+  let t = 0;
+  for (const id in w.players) {
+    const h = w.players[id].ai?.lastHit?.[humanId];
+    if (h !== undefined && h > t) t = h;
+  }
+  return t;
+}
+
+/** May this ruler attack (or scout for an attack on) this village's owner right now? */
+function mayHit(w: World, p: Player, ownerId: number | null): boolean {
+  if (ownerId === null || w.players[ownerId]?.kind !== 'human') return true;
+  const last = lastHitOn(w, ownerId);
+  if (!last || w.now - last >= HUMAN_BREATHER) return true;
+  const ai = p.ai!;
+  const mine = ai.lastHit?.[ownerId] ?? 0;
+  const wronged = ai.provoked?.[ownerId] ?? 0;
+  return wronged > mine && w.now - mine >= PAYBACK_WAIT;
 }
 
 /** Remember who we hit (grudges and the human's attack history). */
@@ -665,14 +785,15 @@ function strike(w: World, p: Player, v: Village, target: Village, army: Units): 
   const ai = p.ai!;
   const diff = w.config.difficulty;
   const think = aiThinkInterval(w);
-  const margin = diff === 'hard' ? 1.15 : diff === 'easy' ? 2.2 : 1.45;
+  const margin = diff === 'hard' ? 1.1 : diff === 'easy' ? 1.8 : 1.3;
   const intel = p.intel[target.id]!;
   const wall = intel.buildings?.wall ?? intel.wall ?? 0;
   const sim = resolveBattle({
     att: army, attTech: v.tech, attItem: null, defStacks: [{ units: intel.units ?? {}, tech: {} }], defItems: [],
     wall, luck: 0, morale: 1,
   });
-  if (sim.winner !== 'attacker' || sim.attStrength < sim.defStrength * margin) { ai.avoid![target.id] = w.now + think * 45; return; }
+  if (!mayHit(w, p, target.ownerId)) return;
+  if (sim.winner !== 'attacker' || sim.attStrength < sim.defStrength * margin) { ai.avoid![target.id] = w.now + WAR_WAIT.tooStrong; return; }
   if (commandsTo(w, v.id).some((c) => c.kind === 'attack' && c.ownerId !== p.id && c.arrive - w.now < think * 6)) return;
   const send = { ...army };
   if (wall === 0) delete send.ram;
@@ -692,9 +813,9 @@ function strike(w: World, p: Player, v: Village, target: Village, army: Units): 
   const r0 = intel.res;
   const lootable = r0 ? Math.max(0, r0.wood - hidden) + Math.max(0, r0.clay - hidden) + Math.max(0, r0.iron - hidden) : 0;
   const gain = Math.min(lootable, unitsCarry(sim.attSurvivors)) + unitWorth(intel.units ?? {}) * 0.5
-    + (target.ownerId !== null && ai.targetPlayer === target.ownerId ? 2000 + unitWorth(army) * 0.05 : 0);
+    + (target.ownerId !== null && ai.targetPlayer === target.ownerId ? 600 : 0);
   const cost = unitWorth(sim.attLost);
-  if (gain < 1500 || gain < cost * 0.8) { ai.avoid![target.id] = w.now + think * 25; return; }
+  if (gain < 1500 || gain < cost * 0.8) { ai.avoid![target.id] = w.now + WAR_WAIT.notWorth; return; }
   if (sendTroops(w, { ownerId: p.id, fromVid: v.id, toVid: target.id, kind: 'attack', units: send, catTarget: cat, tag: 'war' }).ok) noteHit(w, p, target);
 }
 
@@ -722,9 +843,12 @@ function pickWarTarget(w: World, p: Player, v: Village): Village | null {
     if (Object.values(ai.plans ?? {}).some((pl) => pl.target === t.id)) continue;
     if (o.kind === 'human') {
       if (!ai.hostile) continue;
+      if (!mayHit(w, p, o.id)) continue;
       if (ai.targetPlayer !== o.id && humansTargetedBy(w, o.id) >= humanCap) continue;
       if (diff === 'easy' && o.points > p.points * 0.8) continue;
     }
+    const seen = p.intel[t.id];
+    if (seen?.lastColor === 'green' && w.now - (seen.lastAttackT ?? 0) < WAR_WAIT.justCleared) continue;
     const d = distance(v.x, v.y, t.x, t.y);
     let score = -d * 3 + t.points / 50;
     if (ai.targetPlayer === o.id) score += 40;
@@ -753,6 +877,7 @@ export function aiOnBattle(w: World, c: Command, target: Village, data: BattleDa
   const attacker = w.players[c.ownerId];
   if (!attacker) return;
   if (attacker.kind === 'human' && !victim.ai.hostile) return;
+  if (attacker.kind === 'human' && data.winner === 'attacker') (victim.ai.provoked ??= {})[attacker.id] = w.now;
   if (data.winner === 'attacker' || nextRandom(w) < 0.3) {
     victim.ai.targetPlayer = attacker.id;
     victim.ai.grudgeAt = w.now;
@@ -827,6 +952,25 @@ function tribeLife(w: World, p: Player): void {
       return;
     }
   }
+  // on our own: ask a good tribe nearby that is recruiting to take us in (one request at a time)
+  if (!t0) {
+    const waiting = applicationsBy(w, p.id)[0];
+    if (waiting && w.now - waiting.t > 12 * HOUR_MS) withdrawApplication(w, p.id, waiting.tribe.id);
+    else if (!waiting && w.now - (ai.tribelessSince ?? w.now) > 3 * HOUR_MS && nextRandom(w) < 0.35) {
+      let best: Tribe | null = null, bestAppeal = 0.5;
+      for (const id in w.tribes) {
+        const t = w.tribes[id];
+        if (!t.recruiting || tribeFull(t)) continue;
+        if (w.now - (ai.turnedAway?.[t.id] ?? -Infinity) < 2 * DAY_MS) continue;
+        const a = tribeAppeal(w, p, t);
+        // a tribe with nobody close by is no help (and would soon be left again)
+        const near = a - Math.min(5, tribePoints(w, t) / Math.max(1, p.points));
+        if (near < 0.6) continue;
+        if (a > bestAppeal) { bestAppeal = a; best = t; }
+      }
+      if (best && applyToTribe(w, p.id, best.id).ok) return;
+    }
+  }
   // on our own for a good while and doing well: found a tribe and gather the neighbours
   if (!t0 && w.now - (ai.tribelessSince ?? w.now) > DAY_MS && myPts >= 1500) {
     const chance = ai.personality === 'warlord' || ai.personality === 'expander' ? 0.08 : 0.03;
@@ -841,20 +985,6 @@ function tribeLife(w: World, p: Player): void {
   const t = tribeOf(w, p.id);
   if (!t || !hasRight(t, p.id, 'invite')) return;
   const tp = tribePoints(w, t);
-  // recruit a nearby tribeless ruler now and then
-  if (t.members.length < 10 && nextRandom(w) < 0.2) {
-    const home = w.villages[p.villages[0]];
-    if (home) {
-      for (const v of villagesNear(w, home.x, home.y, 25)) {
-        const o = v.ownerId !== null ? w.players[v.ownerId] : null;
-        if (!o || o.id === p.id || o.tribeId != null || o.eliminated) continue;
-        if (t.invites?.some((i) => i.pid === o.id)) continue;
-        if (o.points < myPts * 0.3 || o.points > myPts * 3) continue;
-        invitePlayer(w, p.id, o.name);
-        break;
-      }
-    }
-  }
   // answer other tribes' diplomacy
   if (!hasRight(t, p.id, 'diplomacy')) return;
   for (const id in w.tribes) {
@@ -868,6 +998,73 @@ function tribeLife(w: World, p: Player): void {
     else if (theirView === 'nap' && !ours && op >= tp * 0.6) setDiplomacy(w, p.id, other.id, 'nap');
     else if (theirView === 'ally' && !ours && op >= tp * 0.8) setDiplomacy(w, p.id, other.id, nextRandom(w) < 0.5 ? 'ally' : 'nap');
   }
+}
+
+const HOUR_MS = 3_600_000;
+
+/**
+ * How big a tribe led by AI rulers aims to be: small at first, growing with the
+ * realm, so tribes fill up steadily over the round instead of all at once.
+ */
+export function aiTribeTarget(w: World): number {
+  return Math.min(TRIBE_MAX_MEMBERS, 6 + Math.floor((w.now / DAY_MS) * 1.5));
+}
+/** A recruiting tribe sends out an invitation about this often (while its recruiter is online). */
+const RECRUIT_GAP = 75 * 60_000;
+
+/**
+ * Recruiting, the way an active tribe does it: requests to join get an answer, and
+ * a tribe led by AI rulers keeps its doors open (the "recruiting" badge on the
+ * rankings) and keeps inviting neighbours without a tribe until it is as big as it
+ * wants to be.
+ */
+function tribeRecruiting(w: World, p: Player): void {
+  const t = tribeOf(w, p.id);
+  if (!t || !hasRight(t, p.id, 'invite')) return;
+  const ai = p.ai!;
+  // a tribe run by AI rulers manages its own doors; once a person is among its recruiters, they decide
+  const aiLed = w.players[t.founderId ?? -1]?.kind === 'ai'
+    && !t.members.some((m) => w.players[m]?.kind === 'human' && hasRight(t, m, 'invite'));
+  const target = aiLed ? aiTribeTarget(w) : TRIBE_MAX_MEMBERS;
+  if (aiLed) t.recruiting = t.members.length < target;
+  const avg = tribePoints(w, t) / Math.max(1, t.members.length);
+  // requests to join: read, then answered (a ruler that just raided the tribe need not ask)
+  for (const a of [...(t.applications ?? [])]) {
+    if (w.now - a.t < 10 * 60_000) continue;
+    const who = w.players[a.pid];
+    if (!who || who.eliminated || who.tribeId != null) { t.applications = (t.applications ?? []).filter((x) => x.pid !== a.pid); continue; }
+    const hostile = t.members.some((m) => {
+      const at = w.players[m]?.ai?.provoked?.[who.id];
+      return at !== undefined && at > w.now - DAY_MS;
+    });
+    answerApplication(w, p.id, who.id, !hostile && t.members.length < target && who.points >= avg * 0.08);
+  }
+  if (!aiLed) return;
+  // invitations nobody answered for two days lapse, so they do not block the tribe
+  for (const inv of [...(t.invites ?? [])]) if (inv.by === p.id && w.now - inv.t > 2 * DAY_MS) cancelInvite(w, p.id, inv.pid);
+  if (!t.recruiting || w.now - (ai.lastRecruit ?? -Infinity) < RECRUIT_GAP) return;
+  if (t.members.length + (t.invites?.length ?? 0) >= target) return;
+  const home = w.villages[p.villages[0]];
+  if (!home) return;
+  ai.lastRecruit = w.now;
+  ai.invited ??= {};
+  for (const k in ai.invited) if (w.now - ai.invited[k] > 2 * DAY_MS) delete ai.invited[k];
+  let best: Player | null = null, bestScore = -Infinity;
+  const seen = new Set<number>();
+  for (const v of villagesNear(w, home.x, home.y, 30)) {
+    const o = v.ownerId !== null ? w.players[v.ownerId] : null;
+    if (!o || seen.has(o.id)) continue;
+    seen.add(o.id);
+    if (o.id === p.id || o.tribeId != null || o.eliminated || ai.invited[o.id] !== undefined) continue;
+    if (t.invites?.some((i) => i.pid === o.id)) continue;
+    if (o.points < avg * 0.08) continue;
+    const d = distance(home.x, home.y, v.x, v.y);
+    // people get an invitation only from fairly close neighbours
+    if (o.kind === 'human' && d > 24) continue;
+    const score = Math.min(2, o.points / Math.max(1, avg)) - d / 30;
+    if (score > bestScore) { bestScore = score; best = o; }
+  }
+  if (best && invitePlayer(w, p.id, best.name).ok) ai.invited[best.id] = w.now;
 }
 
 export { BUILDINGS };

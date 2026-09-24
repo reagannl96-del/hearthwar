@@ -12,6 +12,7 @@ import { HEROES, ITEM_BY_ID, UNITS, itemsFor } from './data/units';
 import { peekEvent, popEvent, pushEvent } from './events';
 import { addUnits, unitsPop } from './formulas';
 import { replenishExchange } from './market';
+import { dropFromTribe } from './tribes';
 import { nextRandom, pick } from './rng';
 import type { Command, GameEvent, Player, UnitId, Village, World } from './types';
 import { RES_KEYS } from './types';
@@ -21,6 +22,8 @@ import { BARB_BUILDINGS, ITEM_FIND_CHANCE, aiThinkInterval, barbInterval, itemIn
 const hooks: ArrivalHooks = {
   onConquest(w, v, oldOwner, newOwner) {
     aiOnConquest(w, v, oldOwner, newOwner);
+    // a ruler who lost their last village leaves their tribe, and the crown passes on
+    if (oldOwner !== null && w.players[oldOwner]?.eliminated) dropFromTribe(w, oldOwner);
   },
   onBattle(w, c, target, data) {
     aiOnBattle(w, c, target, data);

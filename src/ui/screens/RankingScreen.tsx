@@ -3,6 +3,7 @@ import { Icon } from '../art/icons';
 import { Btn, Empty, Modal, Section, Tabs } from '../components/common';
 import { Sparkline } from '../components/Sparkline';
 import { coords, fmt } from '../format';
+import { Growth, JoinButton, RecruitingPill } from './TribeScreen';
 import { go, host, view } from '../store';
 
 type Tab = 'players' | 'tribes' | 'oda' | 'odd';
@@ -27,15 +28,16 @@ export function RankingScreen({ player }: { player?: number }) {
           {tribes.length === 0 ? <Empty>No tribes in this realm.</Empty> : (
             <div class="table-scroll">
               <table class="rank-table">
-                <thead><tr><th>#</th><th>Tribe</th><th>Members</th><th class="right">Villages</th><th class="right">Points</th></tr></thead>
+                <thead><tr><th>#</th><th>Tribe</th><th class="right">Members</th><th class="right">Villages</th><th class="right">Points</th><th /></tr></thead>
                 <tbody>
                   {tribes.map((t, i) => (
                     <tr class="clickable" onClick={() => go({ name: 'tribe', id: t.id })} title="Show the tribe and its members">
                       <td class="num">{i + 1}</td>
-                      <td><i class="sw" style={{ background: t.color }} /> <b>[{t.tag}]</b> {t.name}</td>
-                      <td class="small">{t.memberNames.join(', ')}</td>
+                      <td><i class="sw" style={{ background: t.color }} /> <b>[{t.tag}]</b> {t.name}{t.recruiting && !t.full && <RecruitingPill />}</td>
+                      <td class="right nowrap" title={t.memberNames.join(', ')}><span class="num">{t.members.length}</span> <Growth n={t.joinedThisWeek} /></td>
                       <td class="right num">{t.villages}</td>
                       <td class="right num">{fmt(t.points)}</td>
+                      <td class="right" onClick={(e) => e.stopPropagation()}><JoinButton t={t} /></td>
                     </tr>
                   ))}
                 </tbody>

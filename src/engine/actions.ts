@@ -22,6 +22,7 @@ import { restartPlayer } from './world';
 import {
   acceptInvite, cancelInvite, createTribe, declineInvite, disbandTribe, editTribe, forumDelete, forumNewThread, forumPin, forumReply,
   invitePlayer, kickMember, leaveTribe, setDiplomacy, setRights, forumRead,
+  answerApplication, applyToTribe, setRecruiting, withdrawApplication,
 } from './tribes';
 
 export type Action =
@@ -61,6 +62,10 @@ export type Action =
   | { type: 'tribeDiplomacy'; tribe: number; status: Diplomacy | null }
   | { type: 'tribeEdit'; description?: string; internal?: string; name?: string; tag?: string }
   | { type: 'tribeDisband' }
+  | { type: 'tribeRecruiting'; on: boolean }
+  | { type: 'tribeApply'; tribe: number }
+  | { type: 'tribeWithdraw'; tribe: number }
+  | { type: 'tribeAnswer'; pid: number; accept: boolean }
   | { type: 'forumThread'; title: string; text: string; report?: number }
   | { type: 'forumReply'; thread: number; text: string; report?: number }
   | { type: 'forumDelete'; thread: number; post?: number }
@@ -507,6 +512,10 @@ export function applyAction(w: World, pid: number, a: Action): ActionResult {
     case 'tribeDiplomacy': return setDiplomacy(w, pid, a.tribe, a.status);
     case 'tribeEdit': return editTribe(w, pid, a);
     case 'tribeDisband': return disbandTribe(w, pid);
+    case 'tribeRecruiting': return setRecruiting(w, pid, a.on === true);
+    case 'tribeApply': return applyToTribe(w, pid, Number(a.tribe));
+    case 'tribeWithdraw': return withdrawApplication(w, pid, Number(a.tribe));
+    case 'tribeAnswer': return answerApplication(w, pid, Number(a.pid), a.accept === true);
     case 'forumThread': return forumNewThread(w, pid, a.title, a.text, a.report);
     case 'forumReply': return forumReply(w, pid, a.thread, a.text, a.report);
     case 'forumDelete': return forumDelete(w, pid, a.thread, a.post);

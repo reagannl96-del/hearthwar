@@ -11,6 +11,7 @@ import { exchangeQuote } from '../engine/market';
 import { villageAt } from '../engine/spatial';
 import type { ActionResult, BuildingId, Report, UnitId, Units, World } from '../engine/types';
 import { unitAvailable, updateVillage } from '../engine/village';
+import { joinedThisWeek, tribeFull } from '../engine/tribes';
 import {
   achievementsFor, buildMap, buildView, playerProfile, rankingFor, realmProgress, tribeHome, tribeProfile, villageInfo, type MapData, type PlayerView,
 } from '../engine/view';
@@ -96,11 +97,22 @@ export abstract class HostBase {
   }
 
   tribes() {
-    return Object.values(this.world.tribes).map((t) => ({
+    const w = this.world;
+    const me = w.players[this.pid];
+    return Object.values(w.tribes).map((t) => ({
       ...t,
-      points: t.members.reduce((s, m) => s + (this.world.players[m]?.points ?? 0), 0),
-      villages: t.members.reduce((s, m) => s + (this.world.players[m]?.villages.length ?? 0), 0),
-      memberNames: t.members.map((m) => this.world.players[m]?.name ?? '?'),
+      points: t.members.reduce((s, m) => s + (w.players[m]?.points ?? 0), 0),
+      villages: t.members.reduce((s, m) => s + (w.players[m]?.villages.length ?? 0), 0),
+      memberNames: t.members.map((m) => w.players[m]?.name ?? '?'),
+      recruiting: !!t.recruiting,
+      joinedThisWeek: joinedThisWeek(w, t),
+      /** I have asked to join and am waiting */
+      applied: !!t.applications?.some((a) => a.pid === this.pid),
+      /** I could ask to join */
+      canApply: !!t.recruiting && me?.tribeId == null && !me?.eliminated && !tribeFull(t),
+      /** I have no tribe and this one has invited me */
+      invited: me?.tribeId == null && !!t.invites?.some((i) => i.pid === this.pid),
+      full: tribeFull(t),
     }));
   }
 

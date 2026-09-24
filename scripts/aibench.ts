@@ -11,7 +11,8 @@
 
 import { advance } from '../src/engine/game';
 import { aiAwake } from '../src/engine/ai/ai';
-import { createWorld, defaultConfig } from '../src/engine/world';
+import { createWorld, defaultConfig, spawnPlayer } from '../src/engine/world';
+import { villagePoints } from '../src/engine/formulas';
 import { unitsPop } from '../src/engine/formulas';
 import type { Player, World } from '../src/engine/types';
 
@@ -24,6 +25,41 @@ const w: World = createWorld({
   config: { ...defaultConfig(), size: 120, aiCount: 20, difficulty: 'normal' },
 });
 const ais = (): Player[] => Object.values(w.players).filter((p) => p.kind === 'ai');
+
+// a few human rulers like the ones on the live server: a grown village with a wall and some defenders
+const humanCount = Number(process.argv[4] || 4);
+for (let i = 0; i < humanCount; i++) spawnPlayer(w, 'Human ' + (i + 1), 'Hold ' + (i + 1));
+const humansAll = Object.values(w.players).filter((x) => x.kind === 'human');
+humansAll.forEach((p, i) => {
+  p.protectedUntil = 0;
+  const strong = i % 2 === 1;
+  for (const vid of p.villages) {
+    const v = w.villages[vid];
+    // small players (~600 points, light defence) and well-defended ones
+    Object.assign(v.buildings, strong
+      ? { main: 12, barracks: 8, stable: 4, smithy: 5, rally: 1, farm: 14, warehouse: 12, wall: 6, timber: 14, claypit: 14, ironmine: 12, market: 3 }
+      : { main: 6, barracks: 3, smithy: 1, rally: 1, farm: 6, warehouse: 6, wall: 2, timber: 8, claypit: 8, ironmine: 6 });
+    v.units = strong ? { spear: 400, sword: 300, axe: 150, light: 60, scout: 20 } : { spear: 60, sword: 30, axe: 20, scout: 3 };
+    v.points = villagePoints(v.buildings);
+  }
+  p.points = p.villages.reduce((n, vid) => n + w.villages[vid].points, 0);
+});
+const strongIds = new Set(humansAll.filter((_, i) => i % 2 === 1).map((p) => p.id));
+const humanIds = new Set(Object.values(w.players).filter((x) => x.kind === 'human').map((x) => x.id));
+const seenCmd = new Set<number>();
+const hits = { scout: 0, war: 0, noble: 0, other: 0, onSmall: 0, onStrong: 0 };
+const trackCommands = () => {
+  for (const id in w.commands) {
+    const c = w.commands[id];
+    if (seenCmd.has(c.id)) continue;
+    seenCmd.add(c.id);
+    const t = w.villages[c.toVid];
+    if (c.kind !== 'attack' || !t || t.ownerId === null || !humanIds.has(t.ownerId) || humanIds.has(c.ownerId)) continue;
+    const k = c.tag === 'scout' ? 'scout' : c.tag === 'war' ? 'war' : c.tag === 'noble' ? 'noble' : 'other';
+    hits[k]++;
+    if (k !== 'scout') { if (strongIds.has(t.ownerId)) hits.onStrong++; else hits.onSmall++; }
+  }
+};
 
 interface Snap { attacks: number; loot: number; points: number; villages: number; army: number }
 const snap = (p: Player): Snap => ({
@@ -45,6 +81,7 @@ for (let d = 1; d <= days; d++) {
   for (let m = 0; m < 1440; m += 1) {
     advance(w, start + m * 60_000);
     for (const p of ais()) if (aiAwake(w, p)) online.set(p.id, (online.get(p.id) ?? 0) + 1);
+    trackCommands();
   }
   advance(w, start + DAY);
   const rows = ais().map((p) => {
@@ -62,6 +99,10 @@ for (let d = 1; d <= days; d++) {
   const today = w.news.filter((n) => n.t > start);
   const count = (re: RegExp) => today.filter((n) => re.test(n.text)).length;
   const inTribe = ais().filter((p) => p.tribeId != null).length;
+  console.log(`      AI moves on the ${humanIds.size} human rulers today: ${hits.scout} scouting, ${hits.war} attacks, ${hits.noble} noble trains, ${hits.other} other (${((hits.war + hits.noble + hits.other) / Math.max(1, humanIds.size)).toFixed(1)} attacks per human)`);
+  const small = humanIds.size - strongIds.size;
+  console.log(`        per small player: ${(hits.onSmall / Math.max(1, small)).toFixed(1)} attacks, per well-defended player: ${(hits.onStrong / Math.max(1, strongIds.size)).toFixed(1)} attacks, scouting per player: ${(hits.scout / Math.max(1, humanIds.size)).toFixed(1)}`);
+  hits.scout = hits.war = hits.noble = hits.other = hits.onSmall = hits.onStrong = 0;
   console.log(`      tribes: ${Object.keys(w.tribes).length}, AI rulers in a tribe: ${inTribe}/${ais().length}, today: ${count(/founded the tribe/)} founded, ${count(/joined the tribe/)} joined, ${count(/left the tribe/)} left`);
 }
 console.log(`\n(simulated in ${((Date.now() - started) / 1000).toFixed(1)} s)`);

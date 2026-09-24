@@ -116,6 +116,39 @@ const Leaf = ({ x, y, r = 0, c = '#8fbc50' }: { x: number; y: number; r?: number
   <path transform={`rotate(${r} ${x} ${y})`} d={`M${x} ${y}c1.2-1.6 3-2 4.4-1.4-.8 1.6-2.6 2.2-4.4 1.4Z`} fill={c} stroke-width=".6" />
 );
 
+/** a light cavalry lance, held upright behind the mount, with a pennant (or a leaf) near the tip */
+const Lance = ({ shaft, flag, tip = STEEL, edge, leaf }: { shaft: string; flag: string; tip?: string; edge?: string; leaf?: boolean }) => (
+  <>
+    <path d="M2.4 23 5.6 3.2" stroke={O} stroke-width="2.8" />
+    <path d="M2.4 23 5.6 3.2" stroke={shaft} stroke-width="1.3" />
+    <path d="M5.1 3.6 6 .4 6.9 3.9Z" fill={tip} stroke-width=".6" />
+    {leaf ? (
+      <path d="M4.8 6.4C3 5.2 1.2 5.6.4 7.2c1.4 1.2 3.2 1.2 4.4-.8Z" fill={flag} stroke-width=".6" />
+    ) : (
+      <path d="M5.2 4.6.6 5.4l2.2 1.3L.6 8.2l4.2.4Z" fill={flag} stroke-width=".7" />
+    )}
+    {edge && <path d="M1.4 5.6 4.6 5" stroke={edge} stroke-width=".5" />}
+  </>
+);
+/** a drawn bow with an arrow, over a mounted archer's (smaller) mount */
+const RiderBow = ({ wood, string, tip }: { wood: string; string: string; tip: string }) => (
+  <>
+    <path d="M10.4 1.6c6.2-.8 12.2 5 11.8 11.6" fill="none" stroke={O} stroke-width="3" />
+    <path d="M10.4 1.6c6.2-.8 12.2 5 11.8 11.6" fill="none" stroke={wood} stroke-width="1.5" />
+    <path d="M10.4 1.6 13.4 10.6 22.2 13.2" fill="none" stroke={string} stroke-width=".7" />
+    <path d="M13.4 10.6 21.4 2.6" stroke={O} stroke-width="2" />
+    <path d="M13.4 10.6 21.4 2.6" stroke={GRAIN} stroke-width=".8" />
+    <path d="m23.2.8-1 3.6-2.6-2.6Z" fill={tip} stroke-width=".6" />
+  </>
+);
+/** a heavy rider's kite shield, carried in front of the mount */
+const KiteShield = ({ fill, trim }: { fill: string; trim: string }) => (
+  <>
+    <path d="M1.2 12.8c2.8-.8 5.6-.8 8.4 0v3.4c0 3.2-1.8 5.6-4.2 6.8-2.4-1.2-4.2-3.6-4.2-6.8Z" fill={fill} stroke-width="1.1" />
+    <path d="M2.4 13.8c2-.5 4-.5 6 0v2.4c0 2.5-1.3 4.3-3 5.3-1.7-1-3-2.8-3-5.3Z" fill="none" stroke={trim} stroke-width=".6" />
+  </>
+);
+
 function horseMount(t: VillageTheme, coat: string, P: Pal): JSX.Element {
   return (
     <>
@@ -250,14 +283,19 @@ const UNIT_ART: Partial<Record<UnitId, Art>> = {
         <path d="m7.4 14.2 4.8-4.8" stroke={P.trimLt} stroke-width="1" />
       </Ink>
     ),
+  // Three kinds of riders, three silhouettes: light cavalry carry a lance and pennant,
+  // mounted archers are a smaller mount under a drawn bow, heavy cavalry ride armoured
+  // behind a kite shield.
   light: (P, t) =>
     t === 'necromancer' ? (
       <Ink>
+        <Lance shaft="#3a3230" flag="#2e2a33" edge={GHOST} />
         <BoneHorse />
         <path d="M8.2 12.4c3 .6 6.2.2 9.4-1.6" fill="none" stroke={P.accent} stroke-width="1.3" />
       </Ink>
     ) : t === 'goblin' ? (
       <Ink>
+        <Lance shaft={P.wood} flag={P.accent} tip={P.blade} />
         <path d={wolfHead} fill="#7d7a70" />
         <path d="M7.4 8c.4-1.6 1.4-2.6 2.8-3" fill="none" stroke="#a8a496" stroke-width="1" />
         <path d="M8 13.2c3 .6 6 .2 9-1.4" fill="none" stroke={P.accent} stroke-width="1.5" />
@@ -267,6 +305,7 @@ const UNIT_ART: Partial<Record<UnitId, Art>> = {
       </Ink>
     ) : t === 'druid' ? (
       <Ink>
+        <Lance shaft={P.wood} flag={P.accentLt} tip={P.blade} leaf />
         <Antlers c={P.woodLt} />
         <path d={horseHead} fill="#a8703e" />
         <path d="M17.6 10.8c1.4-.2 2.4.2 3 1.4" fill="none" stroke="#efe0c0" stroke-width="1.4" />
@@ -275,46 +314,44 @@ const UNIT_ART: Partial<Record<UnitId, Art>> = {
       </Ink>
     ) : (
       <Ink>
+        <Lance shaft={t === 'sorcerer' ? P.woodLt : WOOD} flag={t === 'sorcerer' ? P.accentLt : RED} tip={t === 'sorcerer' ? P.gem : STEEL} />
         {horseMount(t, t === 'sorcerer' ? '#4a3a8a' : '#9a5f2e', P)}
-        {t === 'sorcerer' ? <Bolt /> : <path d="M9 2.4c-1.6 2.6-2 5.2-1.2 8" fill="none" stroke={WOOD_DK} stroke-width="1.4" />}
-        {t === 'classic' && <path d="M9 5.4c-1.8 1-2.8 2.6-3 4.6" fill="none" stroke="#c98a4e" stroke-width="1.1" />}
+        {t === 'sorcerer' && <Bolt />}
       </Ink>
     ),
-  marcher: (P, t) =>
-    t === 'necromancer' ? (
-      <Ink>
-        <BoneHorse />
-        <Bow c={P.accentLt} />
-        <path d="M17.4 2.4c2.6 1.8 2.6 5.8 0 7.4" fill="none" stroke={GHOST} stroke-width=".6" />
-      </Ink>
-    ) : t === 'goblin' ? (
-      <Ink>
-        <path d={wolfHead} fill="#5a5448" />
-        <path d="M8 13.2c3 .6 6 .2 9-1.4" fill="none" stroke={P.accentLt} stroke-width="1.5" />
-        <Eye x={13} y={8.4} />
-        <circle cx="22.4" cy="11.8" r=".8" fill={O} />
-        <path d="M15.6.4c4 1.6 4.4 5.8 1.4 8.4" fill="none" stroke={P.woodLt} stroke-width="1.6" />
-      </Ink>
-    ) : t === 'druid' ? (
-      <Ink>
-        <Antlers c={P.woodLt} />
-        <path d={horseHead} fill="#7e5230" />
-        <path d="M8.2 12.4c3 .6 6.2.2 9.4-1.6" fill="none" stroke={P.accentLt} stroke-width="1.5" />
-        <Eye x={12.6} y={8.4} />
-        <Bow c={P.woodLt} />
-      </Ink>
-    ) : (
-      <Ink>
-        {horseMount(t, t === 'sorcerer' ? '#35286a' : '#6e4424', { ...P, accent: t === 'sorcerer' ? P.accentLt : GREEN_LT })}
-        <Bow c={t === 'sorcerer' ? P.blade : WOOD_LT} />
-      </Ink>
-    ),
+  marcher: (P, t) => (
+    <Ink>
+      <RiderBow wood={t === 'necromancer' ? '#5e5450' : t === 'sorcerer' ? P.woodLt : P.wood} string={t === 'necromancer' ? GHOST : t === 'sorcerer' ? P.gem : '#efe3c8'} tip={t === 'sorcerer' ? P.gem : t === 'necromancer' ? GHOST : P.blade} />
+      <g transform="translate(-1.2 5.6) scale(.76)">
+        {t === 'necromancer' ? (
+          <BoneHorse />
+        ) : t === 'goblin' ? (
+          <>
+            <path d={wolfHead} fill="#5a5448" />
+            <path d="M8 13.2c3 .6 6 .2 9-1.4" fill="none" stroke={P.accentLt} stroke-width="1.5" />
+            <Eye x={13} y={8.4} />
+            <circle cx="22.4" cy="11.8" r=".8" fill={O} />
+          </>
+        ) : t === 'druid' ? (
+          <>
+            <Antlers c={P.woodLt} />
+            <path d={horseHead} fill="#7e5230" />
+            <path d="M8.2 12.4c3 .6 6.2.2 9.4-1.6" fill="none" stroke={P.accentLt} stroke-width="1.5" />
+            <Eye x={12.6} y={8.4} />
+          </>
+        ) : (
+          horseMount(t, t === 'sorcerer' ? '#35286a' : '#6e4424', { ...P, accent: t === 'sorcerer' ? P.accentLt : GREEN_LT })
+        )}
+      </g>
+    </Ink>
+  ),
   heavy: (P, t) =>
     t === 'necromancer' ? (
       <Ink>
         <BoneHorse armor />
         <path d="M9.6 5.2 8.2.8 10.8 4.6Z" fill="#2e2a33" />
-        <path d="M5.4 21.6c1.6-2.4 4.6-3.4 8-3" fill="none" stroke={P.accent} stroke-width="1.2" />
+        <KiteShield fill="#2e2a33" trim={GHOST} />
+        <Skull x={5.4} y={16.4} r={1.5} />
       </Ink>
     ) : t === 'goblin' ? (
       <Ink>
@@ -346,6 +383,8 @@ const UNIT_ART: Partial<Record<UnitId, Art>> = {
         ) : (
           <path d="M9.4 2.2c-2 .2-3.2 1.4-3.6 3.2 1.4-.8 2.6-1 3.8-.6Z" fill={RED} />
         )}
+        <KiteShield fill={t === 'sorcerer' ? '#5b3596' : BLUE} trim={t === 'sorcerer' ? P.gem : GOLD} />
+        {t === 'sorcerer' ? <Sparkle x={5.4} y={17} c={P.gem} /> : <path d="M5.4 14.4v6.4M3 16.8h4.8" stroke={GOLD_LT} stroke-width="1.1" />}
       </Ink>
     ),
   ram: (P, t) => (
@@ -419,6 +458,9 @@ const UNIT_ART: Partial<Record<UnitId, Art>> = {
   ),
   militia: (P, t) => (
     <Ink>
+      <path d="m20.6 21.8 1.2-1.2L9.6 8.4 8.4 9.6Z" fill={P.woodDk} />
+      <path d="M7.2 9.8c-1.4-.4-2-1.6-1.6-3 .6.4 1 .2 1.2-.4.2-1 .8-1.8 1.8-2.2-.2 1 .2 1.6.8 2 .8.6 1 1.6.4 2.6Z" fill={t === 'necromancer' ? GHOST : t === 'sorcerer' ? '#b58cff' : '#f0a030'} stroke-width=".7" />
+      <path d="M7.8 8.6c-.4-.6-.2-1.2.2-1.6.2.6.6.8 1 .6" fill="none" stroke={t === 'necromancer' ? '#d8ffe6' : '#fde38a'} stroke-width=".7" />
       <path d="m3.4 21.8-1.2-1.2 10-10 1.2 1.2Z" fill={P.wood} />
       <path d="M11.2 11.6 9 9.4l3.2-3.2 2.2 2.2Z" fill={P.bladeDk} />
       <path d="M12.8 5.6 17.6.8M15.4 8.2l4.8-4.8M14.2 6.8l6.6-6.6" fill="none" stroke={P.blade} stroke-width="1.4" />

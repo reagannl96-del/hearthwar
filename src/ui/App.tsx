@@ -221,7 +221,7 @@ function Nav() {
     { r: { name: 'reports' }, icon: 'report', label: 'Reports', key: 'reports', badge: v.unreadReports },
     { r: { name: 'quests' }, icon: 'quest', label: 'Quests', key: 'quests', badge: claimable },
     { r: { name: 'overviews' }, icon: 'overview', label: 'Overview', key: 'overviews' },
-    { r: { name: 'tribe' }, icon: 'tribe', label: 'Tribe', key: 'tribe', badge: v.tribeInvites || undefined, glow: v.forumUnread.length > 0 },
+    { r: { name: 'tribe' }, icon: 'tribe', label: 'Tribe', key: 'tribe', badge: v.tribeInvites + (v.tribeApplications ?? 0) || undefined, glow: v.forumUnread.length > 0 },
     { r: { name: 'ranking' }, icon: 'rank', label: 'Rankings', key: 'ranking' },
     { r: { name: 'realm' }, icon: 'star', label: 'Realm', key: 'realm' },
     { r: { name: 'news' }, icon: 'news', label: 'Chronicle', key: 'news' },

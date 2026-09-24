@@ -9,6 +9,7 @@ import { coords, fmt, fmtAgo } from '../format';
 import { act, go, host, now, view } from '../store';
 
 type Tab = 'overview' | 'members' | 'invites' | 'diplomacy' | 'forum' | 'settings';
+type Home = ReturnType<NonNullable<typeof host.value>['tribeHome']>;
 
 const REL_LABEL: Record<Diplomacy | 'own', string> = { ally: 'Ally', nap: 'Non-aggression pact', enemy: 'Enemy', own: 'Your tribe' };
 
@@ -17,7 +18,7 @@ export function TribeScreen({ id, tab }: { id?: number; tab?: string }) {
   view.value; // re-render on updates
   const home = h.tribeHome();
   if (id !== undefined && id !== home.tribe?.id) return <TribeProfile id={id} />;
-  if (!home.tribe) return <NoTribe invitations={home.invitations} />;
+  if (!home.tribe) return <NoTribe home={home} />;
   return <MyTribe t={home.tribe} tab={(tab as Tab) ?? 'overview'} />;
 }
 
@@ -30,12 +31,55 @@ export function TribeTag({ id, tag }: { id: number; tag: string }) {
   );
 }
 
-function NoTribe({ invitations }: { invitations: ReturnType<NonNullable<typeof host.value>['tribeHome']>['invitations'] }) {
+/** "+3 this week": new members over the last week, when there are any. */
+export function Growth({ n }: { n: number }) {
+  if (n <= 0) return null;
+  return <span class="growth" title="New members in the last week">+{n} this week</span>;
+}
+
+export function RecruitingPill() {
+  return <span class="pill pill-recruiting" title="This tribe is taking new members: rulers without a tribe can ask to join">Recruiting</span>;
+}
+
+/** Ask to join / waiting on an answer, for a tribe that is recruiting. */
+export function JoinButton({ t, small = true }: { t: { id: number; tag: string; applied: boolean; canApply: boolean; invited?: boolean }; small?: boolean }) {
+  if (t.invited) return <Btn small={small} onClick={() => act({ type: 'tribeAccept', tribe: t.id }, `You joined [${t.tag}].`)}>Accept invitation</Btn>;
+  if (t.applied) {
+    return (
+      <span class="row gap-sm nowrap">
+        <span class="muted small">Request sent</span>
+        <Btn small variant="quiet" onClick={() => act({ type: 'tribeWithdraw', tribe: t.id }, 'Request withdrawn.')}>Withdraw</Btn>
+      </span>
+    );
+  }
+  if (!t.canApply) return null;
+  return <Btn small={small} onClick={() => act({ type: 'tribeApply', tribe: t.id }, `You asked to join [${t.tag}]. Their recruiters will answer soon.`)}>Ask to join</Btn>;
+}
+
+function NoTribe({ home }: { home: Home }) {
+  const { invitations, recruiting } = home;
   const [name, setName] = useState('');
   const [tag, setTag] = useState('');
+  const asked = new Set(home.requests.map((r) => r.id));
   return (
     <div class="stack">
       <div class="page-head"><h1>Tribe</h1></div>
+      <Section title="Tribes recruiting">
+        {recruiting.length === 0 ? <Empty>No tribe is taking new members right now. Found your own, or wait for an invitation.</Empty> : (
+          <ul class="tribe-invites">
+            {recruiting.map((r) => (
+              <li>
+                <div class="grow">
+                  <TribeTag id={r.id} tag={r.tag} /> <b>{r.name}</b> <Growth n={r.joinedThisWeek} />
+                  <div class="muted small">{r.members}/{TRIBE_MAX_MEMBERS} members · <span class="num">{fmt(r.points)}</span> points</div>
+                </div>
+                <JoinButton t={{ id: r.id, tag: r.tag, applied: asked.has(r.id), canApply: true, invited: invitations.some((i) => i.id === r.id) }} />
+              </li>
+            ))}
+          </ul>
+        )}
+        <p class="muted small">You can wait on one request at a time; asking another tribe withdraws the first. Their recruiters decide.</p>
+      </Section>
       <div class="grid-2">
         <Section title="Invitations">
           {invitations.length === 0 ? <Empty>No tribe has invited you yet. Tribes invite rulers they want at their side.</Empty> : (
@@ -79,8 +123,8 @@ function TribeList() {
         {tribes.map((t, i) => (
           <tr class="clickable" onClick={() => go({ name: 'tribe', id: t.id })}>
             <td class="num">{i + 1}</td>
-            <td><span class="tribe-dot" style={{ background: t.color }} /> <b>[{t.tag}]</b> {t.name}</td>
-            <td class="right num">{t.members.length}</td>
+            <td><span class="tribe-dot" style={{ background: t.color }} /> <b>[{t.tag}]</b> {t.name}{t.recruiting && !t.full && <RecruitingPill />}</td>
+            <td class="right num">{t.members.length} <Growth n={t.joinedThisWeek} /></td>
             <td class="right num">{fmt(t.points)}</td>
           </tr>
         ))}
@@ -155,9 +199,10 @@ function ProfileHead({ t }: { t: TribeProfileView }) {
       <div class="grow">
         <h1>[{t.tag}] {t.name}</h1>
         <div class="muted small">
-          Rank <b class="num">{t.rank}</b> · <b class="num">{fmt(t.points)}</b> points · {t.members.length}/{TRIBE_MAX_MEMBERS} members · <b class="num">{t.villages}</b> villages · founded by {t.founder}
+          Rank <b class="num">{t.rank}</b> · <b class="num">{fmt(t.points)}</b> points · {t.members.length}/{TRIBE_MAX_MEMBERS} members <Growth n={t.joinedThisWeek} /> · <b class="num">{t.villages}</b> villages · founded by {t.founder}
         </div>
       </div>
+      {t.recruiting && !t.full && <RecruitingPill />}
       {t.myRelation && t.myRelation !== 'own' && <span class={`pill rel-${t.myRelation}`}>{REL_LABEL[t.myRelation]}</span>}
     </div>
   );
@@ -186,6 +231,21 @@ function TribeProfile({ id }: { id: number }) {
         <span>[{t.tag}] {t.name}</span>
       </div>
       <Section><ProfileHead t={t} /></Section>
+      {(t.recruiting || t.invited || t.applied) && t.myRelation !== 'own' && (
+        <Section title="Join this tribe">
+          <div class="row gap wrap">
+            <p class="grow muted">
+              {t.invited ? 'They have invited you.'
+                : t.applied ? 'You asked to join. Their recruiters will answer soon.'
+                : t.canApply ? 'The tribe is taking new members. Ask to join and their recruiters will answer.'
+                : view.value!.me.tribeId != null ? 'The tribe is taking new members, but you are already in a tribe.'
+                : t.full ? 'The tribe is full right now.'
+                : 'You cannot ask to join right now.'}
+            </p>
+            <JoinButton t={t} small={false} />
+          </div>
+        </Section>
+      )}
       {t.description && <Section title="About"><p class="prewrap">{t.description}</p></Section>}
       <Section title={`Members (${t.members.length})`}><MembersTable t={t} /></Section>
       <Section title="Diplomacy"><Relations t={t} /></Section>
@@ -198,7 +258,7 @@ function MyTribe({ t, tab }: { t: MyTribeView; tab: Tab }) {
   const tabs: { id: Tab; label: string; badge?: number }[] = [
     { id: 'overview', label: 'Overview', badge: t.alerts.length || undefined },
     { id: 'members', label: 'Members' },
-    ...(can('invite') ? [{ id: 'invites' as Tab, label: 'Invitations', badge: t.invites.length || undefined }] : []),
+    ...(can('invite') ? [{ id: 'invites' as Tab, label: 'Recruiting', badge: t.applications.length || undefined }] : []),
     { id: 'diplomacy', label: 'Diplomacy' },
     { id: 'forum', label: 'Forum' },
     { id: 'settings', label: can('lead') ? 'Properties' : 'Leave' },
@@ -266,6 +326,27 @@ function Invites({ t }: { t: MyTribeView }) {
   const [name, setName] = useState('');
   const everyone = Object.values(host.value!.map().players).filter((p) => p.tribeId !== t.id).sort((a, b) => a.name.localeCompare(b.name));
   return (
+    <div class="stack">
+    <Section title="Recruiting">
+      <label class="check">
+        <input type="checkbox" checked={t.recruiting} onChange={(e) => act({ type: 'tribeRecruiting', on: e.currentTarget.checked }, e.currentTarget.checked ? 'The tribe is recruiting: it shows so on the rankings.' : 'The tribe is no longer recruiting.')} />
+        Recruiting: show the tribe as recruiting on the rankings, and let rulers without a tribe ask to join
+      </label>
+      {t.applications.length === 0 ? <Empty>{t.recruiting ? 'No requests to join right now.' : 'Turn recruiting on to receive requests to join.'}</Empty> : (
+        <ul class="tribe-invites">
+          {t.applications.map((a) => (
+            <li>
+              <div class="grow">
+                <button type="button" class="link" onClick={() => go({ name: 'ranking', player: a.pid })}><b>{a.name}</b></button>{a.kind === 'ai' && <span class="muted small"> (ruler)</span>}
+                <div class="muted small"><span class="num">{fmt(a.points)}</span> points · {a.villages} village{a.villages === 1 ? '' : 's'} · asked {fmtAgo(a.t, now.value)}</div>
+              </div>
+              <Btn small onClick={() => act({ type: 'tribeAnswer', pid: a.pid, accept: true }, `${a.name} joined the tribe.`)}>Accept</Btn>
+              <Btn small variant="ghost" onClick={() => act({ type: 'tribeAnswer', pid: a.pid, accept: false })}>Decline</Btn>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Section>
     <div class="grid-2">
       <Section title="Invite a ruler">
         <form class="row gap" onSubmit={(e) => { e.preventDefault(); if (act({ type: 'tribeInvite', name }, `${name} has been invited.`)) setName(''); }}>
@@ -287,6 +368,7 @@ function Invites({ t }: { t: MyTribeView }) {
           </ul>
         )}
       </Section>
+    </div>
     </div>
   );
 }
