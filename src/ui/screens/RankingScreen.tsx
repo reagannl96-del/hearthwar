@@ -2,11 +2,11 @@ import { useState } from 'preact/hooks';
 import { Icon } from '../art/icons';
 import { Btn, Empty, Modal, Section, Tabs } from '../components/common';
 import { Sparkline } from '../components/Sparkline';
-import { coords, fmt } from '../format';
+import { continent, coords, fmt } from '../format';
 import { Growth, JoinButton, RecruitingPill } from './TribeScreen';
 import { host, view, usePane } from '../store';
 
-type Tab = 'players' | 'tribes' | 'oda' | 'odd';
+type Tab = 'players' | 'tribes' | 'continent' | 'oda' | 'odd';
 
 const PERSONA: Record<string, string> = { farmer: 'Raider', warlord: 'Warlord', turtle: 'Defender', expander: 'Conqueror' };
 
@@ -23,8 +23,8 @@ export function RankingScreen({ player }: { player?: number }) {
   return (
     <div class="stack">
       <div class="page-head"><h1>Rankings</h1></div>
-      <Tabs<Tab> active={tab} onChange={setTab} tabs={[{ id: 'players', label: 'Rulers' }, { id: 'tribes', label: 'Tribes' }, { id: 'oda', label: 'Attackers' }, { id: 'odd', label: 'Defenders' }]} />
-      {tab === 'tribes' ? (
+      <Tabs<Tab> active={tab} onChange={setTab} tabs={[{ id: 'players', label: 'Rulers' }, { id: 'tribes', label: 'Tribes' }, { id: 'continent', label: 'Continents' }, { id: 'oda', label: 'Attackers' }, { id: 'odd', label: 'Defenders' }]} />
+      {tab === 'continent' ? <ContinentRanking /> : tab === 'tribes' ? (
         <Section>
           {tribes.length === 0 ? <Empty>No tribes in this realm.</Empty> : (
             <div class="table-scroll">
@@ -74,6 +74,101 @@ export function RankingScreen({ player }: { player?: number }) {
         </Section>
       )}
     </div>
+  );
+}
+
+/**
+ * The realm is split into continents of 10 by 10 fields (K55 is x 50-59, y 50-59).
+ * Each has its own leaderboard: the rulers and tribes with the most points there,
+ * counting only their villages inside it.
+ */
+function ContinentRanking() {
+  const pane = usePane();
+  const h = host.value!;
+  const map = h.map();
+  const me = view.value!.me.id;
+  const home = pane.village.value!;
+  const [k, setK] = useState(continent(home.x, home.y));
+  // every continent anyone rules land in, with how many villages each ruler and tribe holds there
+  const byK = new Map<string, Map<number, { points: number; villages: number }>>();
+  const span = new Map<string, [number, number]>([[continent(home.x, home.y), [Math.floor(home.x / 10) * 10, Math.floor(home.y / 10) * 10]]]);
+  for (const v of map.villages) {
+    if (v.ownerId === null) continue;
+    const key = continent(v.x, v.y);
+    span.set(key, [Math.floor(v.x / 10) * 10, Math.floor(v.y / 10) * 10]);
+    const m = byK.get(key) ?? byK.set(key, new Map()).get(key)!;
+    const e = m.get(v.ownerId) ?? { points: 0, villages: 0 };
+    e.points += v.points;
+    e.villages++;
+    m.set(v.ownerId, e);
+  }
+  const keys = [...new Set([...byK.keys(), k])].sort((a, b) => (span.get(a)?.[1] ?? 0) - (span.get(b)?.[1] ?? 0) || (span.get(a)?.[0] ?? 0) - (span.get(b)?.[0] ?? 0));
+  const here = byK.get(k) ?? new Map<number, { points: number; villages: number }>();
+  const rulers = [...here].map(([id, e]) => ({ id, ...e, p: map.players[id] })).filter((r) => r.p).sort((a, b) => b.points - a.points);
+  const tribeMap = new Map<number, { points: number; villages: number; members: number }>();
+  for (const r of rulers) {
+    if (r.p.tribeId == null || !map.tribes[r.p.tribeId]) continue;
+    const t = tribeMap.get(r.p.tribeId) ?? { points: 0, villages: 0, members: 0 };
+    t.points += r.points; t.villages += r.villages; t.members++;
+    tribeMap.set(r.p.tribeId, t);
+  }
+  const tribes = [...tribeMap].map(([id, t]) => ({ id, ...t, t: map.tribes[id] })).sort((a, b) => b.points - a.points);
+  const myRank = rulers.findIndex((r) => r.id === me);
+  return (
+    <>
+      <Section>
+        <div class="row gap wrap">
+          <label for="continent-pick"><b>Continent</b></label>
+          <select id="continent-pick" value={k} onChange={(e) => setK((e.currentTarget as HTMLSelectElement).value)}>
+            {keys.map((c) => <option value={c}>{c}{c === continent(home.x, home.y) ? ' (yours)' : ''}</option>)}
+          </select>
+          <span class="muted small">
+            {span.has(k) && <>{k}: fields {span.get(k)![0]}–{span.get(k)![0] + 9} across, {span.get(k)![1]}–{span.get(k)![1] + 9} down</>}
+            {myRank >= 0 && <> · you are <b>#{myRank + 1}</b> here</>}
+          </span>
+        </div>
+      </Section>
+      <Section title={`Rulers of ${k}`}>
+        {rulers.length === 0 ? <Empty>Nobody rules a village in {k} yet.</Empty> : (
+          <div class="table-scroll">
+            <table class="rank-table">
+              <thead><tr><th>#</th><th>Ruler</th><th>Tribe</th><th class="right">Villages here</th><th class="right">Points here</th></tr></thead>
+              <tbody>
+                {rulers.map((r, i) => (
+                  <tr class={r.id === me ? 'is-me' : ''}>
+                    <td class="num">{i + 1}</td>
+                    <td><button type="button" class="link" onClick={() => pane.go({ name: 'ranking', player: r.id })}><i class="sw" style={{ background: r.id === me ? 'var(--me)' : r.p.color }} /> {r.p.name}</button></td>
+                    <td>{r.p.tribeId != null && map.tribes[r.p.tribeId] && <button type="button" class="pill link" onClick={() => pane.go({ name: 'tribe', id: r.p.tribeId! })}>{map.tribes[r.p.tribeId].tag}</button>}</td>
+                    <td class="right num">{r.villages}</td>
+                    <td class="right num">{fmt(r.points)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Section>
+      <Section title={`Tribes of ${k}`}>
+        {tribes.length === 0 ? <Empty>No tribe holds land in {k}.</Empty> : (
+          <div class="table-scroll">
+            <table class="rank-table">
+              <thead><tr><th>#</th><th>Tribe</th><th class="right">Members here</th><th class="right">Villages here</th><th class="right">Points here</th></tr></thead>
+              <tbody>
+                {tribes.map((t, i) => (
+                  <tr class="clickable" onClick={() => pane.go({ name: 'tribe', id: t.id })}>
+                    <td class="num">{i + 1}</td>
+                    <td><i class="sw" style={{ background: t.t.color }} /> <b>[{t.t.tag}]</b> {t.t.name}</td>
+                    <td class="right num">{t.members}</td>
+                    <td class="right num">{t.villages}</td>
+                    <td class="right num">{fmt(t.points)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Section>
+    </>
   );
 }
 
