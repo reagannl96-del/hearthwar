@@ -6,10 +6,18 @@ import {
   blob, box, branch, cone, cyl, darker, detailMat, druidCanopy, fireflies, getSeason, getTheme, gnarledTrunk, horn, hornPair, leafCluster, limb, mesh, orcSkull, type Theme,
 } from './kit';
 import { runeStone, toadstools } from './grove';
+import { wildTree, type WildSpot } from './wilds';
+import { camelRider, caravanCamel, desertFolk, djinnHero, djinnSoldier, vizier } from './oasis';
+import { dwarfFolk, dwarfRider, dwarfSoldier, forgelord, mineCartTrader, thane } from './deepforge';
+import { frostFolk, frostQueen, frostRider, frostSoldier, frostTrader } from './frosthold';
+import { lizardCaravan, saurianKing, saurianRider, saurianSoldier, skinkFolk, sunPriest } from './templecity';
 
 const AUTUMN = [C.leafOrange, C.leafRed, C.leafYellow, C.leafGold, C.leafOrange, C.leafGreen];
 
-export function tree(kind: 'oak' | 'pine' | 'birch', r: () => number, scale = 1, detail = 1): THREE.Group {
+export function tree(kind: 'oak' | 'pine' | 'birch', r: () => number, scale = 1, detail = 1, at?: WildSpot): THREE.Group {
+  // the eastern desert and the southern jungle grow their own (palms, cacti, jungle giants...)
+  const wild = wildTree(kind, r, scale, detail, at);
+  if (wild) return wild;
   const g = new THREE.Group();
   if (getSeason() === 'volcanic') {
     // a charred snag: black trunk, a few bare branches, embers still glowing in the bark
@@ -445,6 +453,15 @@ export function person(tunic: number): THREE.Group {
     g.add(box(0.6, 0.05, 0.06, pattern === 1 ? 0xdfe6ef : 0xf3d36a, 0, 0.05, -0.28)); // hem
   } else if (theme === 'orc') {
     orcFolk(g, tunic);
+  } else if (theme === 'djinn') {
+    desertFolk(g, tunic);
+  } else if (theme === 'dwarf') {
+    dwarfFolk(g, tunic);
+  } else if (theme === 'frost') {
+    frostFolk(g, tunic);
+  } else if (theme === 'saurian') {
+    // skinks of the temple-city: small, bright-scaled and quick
+    skinkFolk(g, tunic, figureCount++);
   } else if (theme === 'necromancer') {
     // the risen: bare bones under a tattered cape, a green light where the eyes were
     const k = figureCount++;
@@ -598,7 +615,7 @@ const STEEL = 0xb9c4cc;
 const STEEL_DK = 0x6a7782;
 const SHAFT = 0x7a5230;
 
-export type TroopModel = 'spear' | 'sword' | 'axe' | 'archer' | 'scout' | 'noble' | 'light' | 'marcher' | 'heavy' | 'paladin' | 'sorcerer' | 'druid' | 'goblin' | 'necromancer' | 'orc' | 'trader';
+export type TroopModel = 'spear' | 'sword' | 'axe' | 'archer' | 'scout' | 'noble' | 'light' | 'marcher' | 'heavy' | 'paladin' | 'sorcerer' | 'druid' | 'goblin' | 'necromancer' | 'orc' | 'djinn' | 'dwarf' | 'frost' | 'saurian' | 'trader';
 
 function helmet(g: THREE.Group, color = STEEL) {
   g.add(cyl(0.16, 0.23, 0.2, color, 7, 0, 1.3));
@@ -619,6 +636,10 @@ const GEAR = {
   druid: { blade: 0xd6cdb0, shield: 0x4f7a2e, glow: 0 },
   necromancer: { blade: 0x7d8480, shield: 0x2e2a33, glow: 0 },
   orc: { blade: 0x5e5a56, shield: 0x6e4a2a, glow: 0 },
+  frost: { blade: 0xdcecfa, shield: 0x5b9bd8, glow: 0x1c4f78 },
+  dwarf: { blade: 0x9ea4aa, shield: 0xb57a3c, glow: 0 },
+  djinn: { blade: 0xdfe4e6, shield: 0xcf9e46, glow: 0 },
+  saurian: { blade: 0x2a2a30, shield: 0x3f7a4a, glow: 0 },
 };
 const bladeMesh = (geo: THREE.BufferGeometry) => {
   const k = GEAR[getTheme()];
@@ -830,9 +851,24 @@ function nobleman(theme: Theme): THREE.Group {
 function footSoldier(kind: TroopModel): THREE.Group {
   if (kind === 'goblin') return goblin();
   if (kind === 'orc') return orcKing();
+  if (kind === 'djinn') return djinnHero();
+  if (kind === 'dwarf') return forgelord();
+  if (kind === 'frost') return frostQueen();
+  if (getTheme() === 'frost') {
+    // the Frost Queen's court: wardens, frostguards, reavers and archers, snow owls for scouts, ice heralds
+    const f = frostSoldier(kind);
+    if (f) return f;
+  }
+  if (kind === 'noble' && getTheme() === 'dwarf') return thane();
+  if (kind === 'noble' && getTheme() === 'djinn') return vizier();
+  if (kind === 'noble' && getTheme() === 'saurian') return sunPriest();
+  // the Saurian King's host: skink spears, saurus guards and warriors, blowpipers, chameleons for scouts
+  if (getTheme() === 'saurian' && (kind === 'spear' || kind === 'sword' || kind === 'axe' || kind === 'archer' || kind === 'scout')) return saurianSoldier(kind, figureCount++);
   if (kind === 'noble') return nobleman(getTheme());
   const theme = getTheme();
   if (theme === 'orc') return orcSoldier(kind);
+  if (theme === 'djinn') return djinnSoldier(kind);
+  if (theme === 'dwarf') return dwarfSoldier(kind);
   if (kind === 'scout' && (theme === 'sorcerer' || theme === 'druid')) return bird(theme === 'sorcerer');
   if (kind === 'scout' && theme === 'necromancer') return bats();
   const gear = GEAR[theme];
@@ -1252,12 +1288,14 @@ function stag(color: number): THREE.Group {
 /** A great brown bear: the druids' heavy cavalry. */
 function bear(): THREE.Group {
   const g = new THREE.Group();
-  const fur = 0x5e3f28;
-  for (const [x, z] of [[-0.55, 0.24], [0.55, 0.24], [-0.55, -0.24], [0.55, -0.24]]) g.add(box(0.26, 0.6, 0.26, darker(fur, 0.8), x, 0, z));
+  // up in the frozen north the druids ride polar bears
+  const polar = getSeason() === 'winter';
+  const fur = polar ? 0xeeeae0 : 0x5e3f28;
+  for (const [x, z] of [[-0.55, 0.24], [0.55, 0.24], [-0.55, -0.24], [0.55, -0.24]]) g.add(box(0.26, 0.6, 0.26, darker(fur, polar ? 0.9 : 0.8), x, 0, z));
   g.add(blob(0.62, fur, 0, 0.95, 0, 1.45, 0.75, 0.8));
   g.add(blob(0.42, fur, 0.5, 1.2, 0, 1, 0.9, 1)); // shoulder hump
   g.add(blob(0.3, fur, 1.0, 1.15, 0));
-  g.add(box(0.24, 0.18, 0.22, 0xa7825a, 1.24, 1.04, 0));
+  g.add(box(0.24, 0.18, 0.22, polar ? 0xdcd6c8 : 0xa7825a, 1.24, 1.04, 0));
   g.add(box(0.07, 0.07, 0.07, 0x1a1a1a, 1.37, 1.17, 0));
   for (const z of [-0.2, 0.2]) g.add(blob(0.09, fur, 0.92, 1.42, z));
   g.add(box(0.7, 0.1, 0.78, 0x4f7a2e, -0.05, 1.42, 0)); // a mossy saddle-cloth
@@ -1272,6 +1310,14 @@ function bear(): THREE.Group {
 function rider(kind: TroopModel): THREE.Group {
   if (kind === 'paladin') return paladinRider();
   const theme = getTheme();
+  // the Oasis rides camels
+  if (theme === 'djinn') return camelRider(kind);
+  // the hold rides mountain goats and war-rams
+  if (theme === 'dwarf') return dwarfRider(kind);
+  // the temple-city rides raptors and horned beasts
+  if (theme === 'saurian') return saurianRider(kind);
+  // the court rides snow wolves and mammoths, and its archers ride reindeer sledges
+  if (theme === 'frost') return frostRider(kind);
   const g = new THREE.Group();
   let mount: THREE.Group;
   let seat = 1.3;
@@ -1411,6 +1457,10 @@ function paladinRider(): THREE.Group {
  */
 function packTrader(): THREE.Group {
   const theme = getTheme();
+  if (theme === 'djinn') return caravanCamel();
+  if (theme === 'dwarf') return mineCartTrader();
+  if (theme === 'saurian') return lizardCaravan();
+  if (theme === 'frost') return frostTrader();
   const g = new THREE.Group();
   let mount: THREE.Group;
   let seat = 1.3;
@@ -1448,10 +1498,12 @@ function packTrader(): THREE.Group {
 
 export function troop(kind: TroopModel): THREE.Group {
   if (kind === 'trader') return packTrader();
+  // the Saurian King rides his great raptor
+  if (kind === 'saurian') return saurianKing();
   return kind === 'light' || kind === 'marcher' || kind === 'heavy' || kind === 'paladin' ? rider(kind) : footSoldier(kind);
 }
 
-export const isRider = (k: TroopModel) => k === 'light' || k === 'marcher' || k === 'heavy' || k === 'paladin' || k === 'trader';
+export const isRider = (k: TroopModel) => k === 'light' || k === 'marcher' || k === 'heavy' || k === 'paladin' || k === 'saurian' || k === 'trader';
 
 // ---------- hero themes: landmarks ----------
 

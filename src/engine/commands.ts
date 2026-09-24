@@ -21,6 +21,8 @@ import { RES_KEYS } from './types';
 import { moraleFight, popFree, refreshPoints, storageOf, updateVillage, villageMorale } from './village';
 
 export const REPORT_CAP = 600;
+/** The archive keeps up to this many reports (the oldest archived go first past it). */
+export const ARCHIVE_CAP = 400;
 
 // ---------- helpers ----------
 
@@ -33,13 +35,19 @@ export function sideInfo(w: World, v: Village, ownerId: number | null = v.ownerI
   return { theme: themeOfHero(v.heroKind), playerId: ownerId, playerName: playerName(w, ownerId), vid: v.id, vname: v.name, x: v.x, y: v.y };
 }
 
+/** The inbox keeps the newest REPORT_CAP reports; archived ones are kept apart, up to ARCHIVE_CAP. */
+export function trimReports(p: { reports: Report[] }): void {
+  let inbox = 0, archive = 0;
+  p.reports = p.reports.filter((r) => (r.archived ? ++archive <= ARCHIVE_CAP : ++inbox <= REPORT_CAP));
+}
+
 export function addReport(w: World, playerId: number | null, r: Omit<Report, 'id' | 't' | 'read'> & { read?: boolean }): Report | null {
   if (playerId === null) return null;
   const p = w.players[playerId];
   if (!p || p.kind !== 'human') return null;
   const rep: Report = { id: w.nextId++, t: w.now, read: false, ...r };
   p.reports.unshift(rep);
-  if (p.reports.length > REPORT_CAP) p.reports.length = REPORT_CAP;
+  trimReports(p);
   return rep;
 }
 
@@ -69,7 +77,9 @@ export function travelTime(w: World, from: Village, to: Village, units: Units, o
   const item = equippedItem(w, ownerId, units);
   const per = armyMsPerField(units, w.config.unitSpeed, item?.special === 'speed' ? ITEM_POWERS.speed : 0);
   const druid = support && (units.druid ?? 0) > 0 ? 0.75 : 1;
-  return Math.max(1000, Math.round(distance(from.x, from.y, to.x, to.y) * per * druid));
+  // the desert wind at a djinn's back
+  const wind = (units.djinn ?? 0) > 0 ? 1 - HERO_POWERS.sandwind : 1;
+  return Math.max(1000, Math.round(distance(from.x, from.y, to.x, to.y) * per * druid * wind));
 }
 
 /**
@@ -654,6 +664,35 @@ function resolveAttack(w: World, c: Command, hooks: ArrivalHooks): void {
     bumpDaily(w, attacker, 'looter', resSum(loot));
   }
 
+  // a djinn on the winning side claims tribute: resources worth a share of the enemy that fell,
+  // carried home with the army (or, defending, straight into his village's stores)
+  let tribute: BattleData['tribute'];
+  if (!result.pureScout) {
+    const worth = (u: Units) => Object.entries(u).reduce((sum, [k, n]) => {
+      const d = UNITS[k as UnitId];
+      return sum + (n ?? 0) * (d.cost.wood + d.cost.clay + d.cost.iron);
+    }, 0);
+    const third = (total: number) => { const t = Math.floor((total * HERO_POWERS.tribute) / 3); return res(t, t, t); };
+    if (result.winner === 'attacker' && (survivors.djinn ?? 0) > 0) {
+      const t = third(worth(defLostTotal));
+      if (resSum(t) > 0) {
+        tribute = { side: 'attacker', res: t };
+      }
+    } else if (result.winner === 'defender') {
+      const st = stacks.find((x) => (x.units.djinn ?? 0) > 0 && x.ownerId !== null);
+      const master = st ? (st.home ? target : w.villages[st.fromVid]) : undefined;
+      if (st && master && master.ownerId === st.ownerId) {
+        const t = third(worth(result.attLost));
+        if (resSum(t) > 0) {
+          updateVillage(w, master, w.now);
+          const cap = storageOf(master);
+          for (const k of RES_KEYS) master.res[k] = Math.min(cap, master.res[k] + t[k]);
+          tribute = { side: 'defender', res: t };
+        }
+      }
+    }
+  }
+
   // loyalty
   let loyaltyChange: BattleData['loyalty'];
   let conquered = false;
@@ -725,6 +764,7 @@ function resolveAttack(w: World, c: Command, hooks: ArrivalHooks): void {
     militia: (defUnitsHome.militia ?? 0) > 0,
     risen,
     healed,
+    tribute,
     effects: result.effects,
   };
   if (home) data.attacker = { ...sideInfo(w, home, c.ownerId) };
@@ -803,7 +843,9 @@ function resolveAttack(w: World, c: Command, hooks: ArrivalHooks): void {
   if (hasUnits(survivors)) {
     const back: Command = {
       id: w.nextId++, kind: 'return', ownerId: c.ownerId, fromVid: c.fromVid, toVid: c.fromVid, origin: target.id,
-      units: survivors, depart: w.now, arrive: w.now + (c.arrive - c.depart), res: loot,
+      units: survivors, depart: w.now, arrive: w.now + (c.arrive - c.depart),
+      // what the army carries home: its loot, and any tribute the djinn claimed on top
+      res: tribute?.side === 'attacker' ? res((loot?.wood ?? 0) + tribute.res.wood, (loot?.clay ?? 0) + tribute.res.clay, (loot?.iron ?? 0) + tribute.res.iron) : loot,
     };
     if (hasUnits(result.attLost)) back.losses = true;
     if (c.repeat) back.repeat = true;

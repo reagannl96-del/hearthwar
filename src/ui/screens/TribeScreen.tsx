@@ -11,6 +11,9 @@ import { Btn, CopyButton, Countdown, Empty, PlayerLink, Section, Tabs, VillageLi
 import { threadLink } from '../deepLink';
 import { coords, fmt, fmtAgo } from '../format';
 import { act, host, now, view, usePane } from '../store';
+import { FlagBadge } from './BannerScreen';
+import { RightIcon } from '../art/rightIcons';
+import { MarkMenu, StanceSelect } from './PlayerProfile';
 
 type Tab = 'overview' | 'members' | 'invites' | 'diplomacy' | 'forum' | 'settings';
 type Home = ReturnType<NonNullable<typeof host.value>['tribeHome']>;
@@ -151,10 +154,31 @@ function TribeList() {
   );
 }
 
-function RightsBadges({ rights, founder }: { rights: TribeRight[]; founder: boolean }) {
-  if (founder) return <span class="pill pill-gold">Founder</span>;
-  if (rights.includes('lead')) return <span class="pill pill-gold">Leader</span>;
-  return <>{rights.map((r) => <span class="pill">{RIGHT_LABEL[r]}</span>)}</>;
+/** The short column headings for the rights (the full name is in the tooltip). */
+const RIGHT_SHORT: Record<TribeRight, string> = { lead: 'Leader', invite: 'Recruiter', diplomacy: 'Diplomat', forum: 'Moderator', internal: 'Internal' };
+const RIGHT_HINT: Record<TribeRight, string> = {
+  lead: 'Leader: every right, and may change the rights of others',
+  invite: 'Recruiter: invites rulers and answers requests to join',
+  diplomacy: 'Diplomat: sets allies, pacts and enemies',
+  forum: 'Forum moderator: pins and deletes forum posts',
+  internal: 'Internal access: reads the members-only announcement and sees attacks on members',
+};
+
+/** A member's rights, one icon per column: lit when held (leaders and the founder hold them all). */
+function RightsCells({ rights, founder }: { rights: TribeRight[]; founder: boolean }) {
+  const all = founder || rights.includes('lead');
+  return (
+    <>
+      {TRIBE_RIGHTS.map((r) => {
+        const on = all || rights.includes(r);
+        return (
+          <td class="center right-cell">
+            <RightIcon right={r} on={on} founder={founder && r === 'lead'} title={on ? RIGHT_LABEL[r] : `No ${RIGHT_LABEL[r].toLowerCase()} right`} />
+          </td>
+        );
+      })}
+    </>
+  );
 }
 
 function MembersTable({ t, manage }: { t: TribeProfileView; manage?: MyTribeView }) {
@@ -165,17 +189,24 @@ function MembersTable({ t, manage }: { t: TribeProfileView; manage?: MyTribeView
   const [editing, setEditing] = useState<number | null>(null);
   return (
     <table class="table tribe-members">
-      <thead><tr><th>#</th><th>Ruler</th><th class="right">Rank</th><th class="right">Points</th><th class="right">Villages</th><th>Rights</th>{manage && <th />}</tr></thead>
+      <thead><tr><th>#</th><th>Ruler</th><th class="right">Rank</th><th class="right">Points</th><th class="right">Villages</th>
+        {TRIBE_RIGHTS.map((r) => (
+          <th class="center right-head" title={RIGHT_HINT[r]}>
+            <RightIcon right={r} size={22} />
+            <span class="right-label">{RIGHT_SHORT[r]}</span>
+          </th>
+        ))}
+        {manage && <th />}</tr></thead>
       <tbody>
         {t.members.map((m, i) => (
           <>
             <tr>
               <td class="num">{i + 1}</td>
-              <td><button type="button" class="link" onClick={() => pane.go({ name: 'ranking', player: m.id })}>{m.name}</button>{m.kind === 'ai' && <span class="muted small"> (ruler)</span>}</td>
+              <td><span class="member-name"><FlagBadge flag={m.flag} w={24} h={16} title={m.flag ? `${m.name}'s banner` : undefined} /><button type="button" class="link" onClick={() => pane.go({ name: 'ranking', player: m.id })}>{m.name}</button>{m.founder && <span class="pill pill-gold founder-tag">Founder</span>}{m.kind === 'ai' && <span class="muted small"> (ruler)</span>}</span></td>
               <td class="right num">{m.rank}</td>
               <td class="right num">{fmt(m.points)}</td>
               <td class="right num">{m.villages}</td>
-              <td><RightsBadges rights={m.rights} founder={m.founder} /></td>
+              <RightsCells rights={m.rights} founder={m.founder} />
               {manage && (
                 <td class="right nowrap">
                   {canRights && !m.founder && m.id !== me && <Btn small variant="ghost" onClick={() => setEditing(editing === m.id ? null : m.id)}>Rights</Btn>}
@@ -185,7 +216,7 @@ function MembersTable({ t, manage }: { t: TribeProfileView; manage?: MyTribeView
             </tr>
             {editing === m.id && manage && (
               <tr class="rights-row">
-                <td colSpan={7}>
+                <td colSpan={6 + TRIBE_RIGHTS.length}>
                   <div class="rights-edit">
                     {TRIBE_RIGHTS.filter((r) => r !== 'lead' || manage.isFounder).map((r) => (
                       <label class="check">
@@ -197,7 +228,7 @@ function MembersTable({ t, manage }: { t: TribeProfileView; manage?: MyTribeView
                             act({ type: 'tribeRights', pid: m.id, rights: next });
                           }}
                         />
-                        {RIGHT_LABEL[r]}
+                        <RightIcon right={r} size={18} /> {RIGHT_LABEL[r]}
                       </label>
                     ))}
                   </div>
@@ -227,6 +258,34 @@ function ProfileHead({ t }: { t: TribeProfileView }) {
   );
 }
 
+/** What you can do about a tribe from its page: join it, set your stance to it, mark it, find it, quote it. */
+function TribeActions({ t }: { t: TribeProfileView }) {
+  const pane = usePane();
+  const own = t.myRelation === 'own';
+  // the biggest village any member holds, to find the tribe on the map
+  const members = new Set(t.members.map((m) => m.id));
+  let seat: { id: number; points: number } | null = null;
+  for (const v of host.value!.map().villages) if (v.ownerId !== null && members.has(v.ownerId) && (!seat || v.points > seat.points)) seat = v;
+  const joinNote = own ? null
+    : t.invited ? 'They have invited you.'
+    : t.applied ? 'You asked to join. Their recruiters will answer soon.'
+    : t.canApply ? 'Taking new members: ask to join and their recruiters will answer.'
+    : t.recruiting && view.value!.me.tribeId != null ? 'Recruiting, but you are already in a tribe.'
+    : t.recruiting && t.full ? 'Recruiting, but full right now.'
+    : null;
+  return (
+    <div class="ph-actions tribe-actions" role="toolbar" aria-label={`Actions for [${t.tag}]`}>
+      {!own && (t.invited || t.applied || t.canApply) && <JoinButton t={t} />}
+      {joinNote && <span class="muted small">{joinNote}</span>}
+      {t.canDiplomacy && <StanceSelect tribeId={t.id} tag={t.tag} current={t.myRelation === 'own' ? null : t.myRelation} />}
+      {!own && <MarkMenu kind="tribes" id={t.id} what={`every [${t.tag}] village`} />}
+      {seat && <Btn small variant="ghost" onClick={() => pane.go({ name: 'map', focus: seat!.id })} title="Centre the map on the tribe's biggest village"><Icon name="map" size={14} /> Show on map</Btn>}
+      <span class="grow" />
+      <CopyButton text={`[tribe]${t.tag}[/tribe]`} label="Copy as BBCode, for the tribe forum" class="is-bb">BBCode</CopyButton>
+    </div>
+  );
+}
+
 function Relations({ t }: { t: TribeProfileView }) {
   if (t.relations.length === 0) return <Empty>No allies, pacts or enemies declared.</Empty>;
   return (
@@ -250,25 +309,12 @@ function TribeProfile({ id }: { id: number }) {
         <span aria-hidden="true">›</span>
         <span>[{t.tag}] {t.name}</span>
       </div>
-      <Section><ProfileHead t={t} /></Section>
-      {(t.recruiting || t.invited || t.applied) && t.myRelation !== 'own' && (
-        <Section title="Join this tribe">
-          <div class="row gap wrap">
-            <p class="grow muted">
-              {t.invited ? 'They have invited you.'
-                : t.applied ? 'You asked to join. Their recruiters will answer soon.'
-                : t.canApply ? 'The tribe is taking new members. Ask to join and their recruiters will answer.'
-                : view.value!.me.tribeId != null ? 'The tribe is taking new members, but you are already in a tribe.'
-                : t.full ? 'The tribe is full right now.'
-                : 'You cannot ask to join right now.'}
-            </p>
-            <JoinButton t={t} small={false} />
-          </div>
-        </Section>
-      )}
-      {t.description && <Section title="About"><BBCode text={t.description} /></Section>}
-      <Section title={`Members (${t.members.length})`}><MembersTable t={t} /></Section>
-      <Section title="Diplomacy"><Relations t={t} /></Section>
+      <Section class="tribe-profile-head"><ProfileHead t={t} /><TribeActions t={t} /></Section>
+      <div class="grid-2">
+        <Section title="About">{t.description ? <BBCode text={t.description} /> : <Empty>No public description yet.</Empty>}</Section>
+        <Section title="Diplomacy"><Relations t={t} /></Section>
+      </div>
+      <Section title={<>Members <span class="ph-count">{t.members.length}/{TRIBE_MAX_MEMBERS}</span></>}><div class="table-scroll"><MembersTable t={t} /></div></Section>
     </div>
   );
 }
@@ -276,20 +322,21 @@ function TribeProfile({ id }: { id: number }) {
 function MyTribe({ t, tab, thread, post }: { t: MyTribeView; tab: Tab; thread?: number; post?: number }) {
   const pane = usePane();
   const can = (r: TribeRight) => t.myRights.includes(r) || t.myRights.includes('lead');
-  const tabs: { id: Tab; label: string; badge?: number }[] = [
+  const unreadThreads = view.value!.forumUnread.length;
+  const tabs: { id: Tab; label: string; badge?: number; unread?: number }[] = [
     { id: 'overview', label: 'Overview', badge: t.alerts.length || undefined },
     { id: 'members', label: 'Members' },
     ...(can('invite') ? [{ id: 'invites' as Tab, label: 'Recruiting', badge: t.applications.length || undefined }] : []),
     { id: 'diplomacy', label: 'Diplomacy' },
-    { id: 'forum', label: 'Forum' },
+    { id: 'forum', label: 'Forum', unread: unreadThreads || undefined },
     { id: 'settings', label: can('lead') ? 'Properties' : 'Leave' },
   ];
   return (
     <div class="stack">
-      <Section><ProfileHead t={t} /></Section>
+      <Section class="tribe-profile-head"><ProfileHead t={t} /><TribeActions t={t} /></Section>
       <Tabs<Tab> tabs={tabs} active={tab} onChange={(x) => pane.go({ name: 'tribe', tab: x })} />
       {tab === 'overview' && <Overview t={t} />}
-      {tab === 'members' && <Section title={`Members (${t.members.length}/${TRIBE_MAX_MEMBERS})`}><MembersTable t={t} manage={t} /></Section>}
+      {tab === 'members' && <Section title={`Members (${t.members.length}/${TRIBE_MAX_MEMBERS})`}><div class="table-scroll"><MembersTable t={t} manage={t} /></div></Section>}
       {tab === 'invites' && <Invites t={t} />}
       {tab === 'diplomacy' && <DiplomacyTab t={t} canEdit={can('diplomacy')} />}
       {tab === 'forum' && <Forum t={t} thread={thread} post={post} />}
@@ -341,7 +388,7 @@ function Overview({ t }: { t: MyTribeView }) {
                 const said = last?.text ? excerpt(last.text, 80) : last?.report ? 'shared a report' : '';
                 return (
                   <li>
-                    <button type="button" class="link" onClick={() => pane.go({ name: 'tribe', tab: 'forum', thread: th.id })}><b>{th.title}</b></button> <span class="muted small">· {t.names[last?.by ?? th.by]} {fmtAgo(last?.t ?? th.t, now.value)}</span>
+                    {view.value!.forumUnread.includes(th.id) && <span class="unread-dot" title="Unread" />}<button type="button" class="link" onClick={() => pane.go({ name: 'tribe', tab: 'forum', thread: th.id })}><b>{th.title}</b></button> <span class="muted small">· {t.names[last?.by ?? th.by]} {fmtAgo(last?.t ?? th.t, now.value)}</span>
                     {said && <div class="forum-excerpt muted small">{said}</div>}
                   </li>
                 );
@@ -517,6 +564,7 @@ function Forum({ t, thread, post }: { t: MyTribeView; thread?: number; post?: nu
             return (
               <li id={`post-${p.id}`} class={flash === p.id ? 'is-target' : ''}>
                 <div class="post-head">
+                  <FlagBadge flag={host.value?.world.players[p.by]?.flag} w={27} h={18} title={`${author}'s banner`} />
                   <button type="button" class="link" onClick={() => pane.go({ name: 'ranking', player: p.by })}>{author}</button>
                   <span class="muted small">{fmtAgo(p.t, now.value)}</span>
                   <span class="post-tools">

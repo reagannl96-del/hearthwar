@@ -302,6 +302,11 @@ export class Fx {
   magic(at: THREE.Vector3, n: number, color: number): void {
     this.glowPool.emit(at, { n, color, speed: 2.2, up: 2, gravity: -0.8, drag: 2, life: 1.1, size: 0.45, grow: 0.1, spread: 0.6 });
   }
+  /** Gold showering down (the Djinn's tribute): motes that tumble from overhead and wink out. */
+  gold(at: THREE.Vector3, n: number): void {
+    this.glowPool.emit(at, { n, color: 0xffd35a, speed: 1.6, up: 0.8, gravity: 3.0, drag: 1.1, life: 2.3, size: 0.46, grow: 0.05, spread: 2.0 });
+    this.glowPool.emit(at, { n: Math.ceil(n / 2), color: 0xfff4c0, speed: 1.2, up: 0.4, gravity: 2.6, drag: 1.2, life: 1.6, size: 0.3, grow: 0.05, spread: 1.6 });
+  }
   smoke(at: THREE.Vector3, color = 0x7a726a, n = 1, size = 0.7): void {
     this.haze.emit(at, { n, color, speed: 0.35, up: 1.4, gravity: -1, drag: 0.5, life: 3, size, grow: 2.6, spread: 0.5 });
   }
@@ -342,9 +347,9 @@ export class Fx {
   }
 
   /** A glowing bolt (a sorcerer's lightning, a necromancer's green fire), nearly straight. */
-  bolt(from: THREE.Vector3, to: THREE.Vector3, dur: number, color: number, onLand?: () => void): void {
+  bolt(from: THREE.Vector3, to: THREE.Vector3, dur: number, color: number, onLand?: () => void, glowSize?: number): void {
     const obj = new THREE.Group();
-    this.launch(obj, from, to, dur, 0.8, color, 0, onLand);
+    this.launch(obj, from, to, dur, 0.8, color, 0, onLand, glowSize);
   }
 
   /** A catapult's load, lobbed high, trailing fire or magic. */
@@ -353,9 +358,9 @@ export class Fx {
     this.launch(obj, from, to, dur, Math.max(8, from.distanceTo(to) * 0.45), color, 6, onLand);
   }
 
-  private launch(obj: THREE.Object3D, from: THREE.Vector3, to: THREE.Vector3, dur: number, arc: number, color: number, spin: number, onLand?: () => void): void {
+  private launch(obj: THREE.Object3D, from: THREE.Vector3, to: THREE.Vector3, dur: number, arc: number, color: number, spin: number, onLand?: () => void, glowSize?: number): void {
     const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
-    glow.scale.setScalar(spin ? 3.2 : 2.2);
+    glow.scale.setScalar(glowSize ?? (spin ? 3.2 : 2.2));
     obj.add(glow);
     obj.position.copy(from);
     this.group.add(obj);

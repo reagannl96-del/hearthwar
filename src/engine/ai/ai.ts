@@ -6,7 +6,8 @@ import { applyAction, buildQueueSlots, checkBuild, nobleInfo, recruitCheck, rese
 import { resolveBattle } from '../combat';
 import { isProtected, news, sendTrain, sendTroops, travelTime, withdrawSupport } from '../commands';
 import { BUILDINGS, BUILDING_ORDER } from '../data/buildings';
-import { HEROES, UNITS } from '../data/units';
+import { HEROES, HERO_INFO, UNITS } from '../data/units';
+import { regionAt, type Region } from '../regions';
 import { COIN_COST, distance, farmCap, hasUnits, hideCap, moraleFor, recruitTime, resGte, unitsCarry, unitsCount } from '../formulas';
 import { nextRandom } from '../rng';
 import { villagesNear } from '../spatial';
@@ -593,9 +594,21 @@ const HERO_TASTE: Record<P, Partial<Record<UnitId, number>>> = {
   guardian: { paladin: 3, druid: 3, sorcerer: 2, orc: 1, necromancer: 0.5, goblin: 0.3 },
 };
 
+/** How much each temperament likes the wilds' own heroes, for its villages out there. */
+const WILD_TASTE: Record<P, Partial<Record<UnitId, number>>> = {
+  warlord: { saurian: 0.8, djinn: 0.7, dwarf: 0.5, frost: 0.4 },
+  expander: { djinn: 0.8, saurian: 0.6, frost: 0.5, dwarf: 0.5 },
+  farmer: { djinn: 0.8, dwarf: 0.7, frost: 0.5, saurian: 0.4 },
+  turtle: { dwarf: 0.85, frost: 0.85, djinn: 0.4, saurian: 0.3 },
+  opportunist: { saurian: 0.8, djinn: 0.7, frost: 0.4, dwarf: 0.4 },
+  guardian: { frost: 0.8, dwarf: 0.8, djinn: 0.5, saurian: 0.4 },
+};
+const WILD_HERO: Partial<Record<Region, UnitId>> = { winter: 'frost', volcanic: 'dwarf', desert: 'djinn', jungle: 'saurian' };
+
 function pickHero(w: World, p: Player): UnitId {
   const taste = HERO_TASTE[p.ai!.personality];
-  const opts = HEROES.filter((h) => h !== 'paladin' || w.config.paladin);
+  // a ruler's favourite is one it can raise anywhere (the wilds' heroes answer only their own land)
+  const opts = HEROES.filter((h) => (h !== 'paladin' || w.config.paladin) && !HERO_INFO[h]?.region);
   const total = opts.reduce((a, h) => a + (taste[h] ?? 0.2), 0);
   let x = nextRandom(w) * total;
   for (const h of opts) {
@@ -615,13 +628,23 @@ function hero(w: World, p: Player, v: Village): void {
   const ai = p.ai!;
   ai.hero ??= pickHero(w, p);
   let kind = v.heroKind;
-  if (!kind) kind = v.id === p.villages[0] || (v.id * 2654435761 >>> 0) % 10 < 7 ? ai.hero : HEROES[(v.id * 7) % HEROES.length];
+  if (!kind) {
+    // out in the wilds, the land's own hero is a strong pull (how strong depends on the ruler)
+    const wild = WILD_HERO[regionAt(v.x, v.y, w.config.size)];
+    const pull = wild ? WILD_TASTE[ai.personality][wild] ?? 0.5 : 0;
+    const roll = ((v.id * 2246822519) >>> 0) % 1000 / 1000;
+    if (wild && roll < pull) kind = wild;
+    else {
+      const anywhere = HEROES.filter((h) => !HERO_INFO[h]?.region);
+      kind = v.id === p.villages[0] || (v.id * 2654435761 >>> 0) % 10 < 7 ? ai.hero : anywhere[(v.id * 7) % anywhere.length];
+    }
+  }
   if (kind === 'paladin' && !w.config.paladin) return;
   if (recruitCheck(w, v, kind, 1).ok) applyAction(w, p.id, { type: 'recruit', vid: v.id, unit: kind, count: 1 });
 }
 
 /** Heroes who do their best work on the attack go along with a real one. */
-const ATTACK_HEROES: UnitId[] = ['goblin', 'necromancer', 'orc'];
+const ATTACK_HEROES: UnitId[] = ['goblin', 'necromancer', 'orc', 'saurian', 'djinn'];
 function attackHero(v: Village): UnitId | null {
   for (const h of ATTACK_HEROES) if ((v.units[h] ?? 0) > 0) return h;
   return null;

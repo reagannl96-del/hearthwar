@@ -1,3 +1,4 @@
+import type { Region } from '../regions';
 import type { BuildingId, RecruitBuilding, Res, UnitId } from '../types';
 
 export type UnitClass = 'inf' | 'cav' | 'arc';
@@ -126,6 +127,30 @@ export const UNITS: Record<UnitId, UnitDef> = {
     cost: r(50, 40, 40), pop: 10, attack: 180, def: [220, 180, 150], speed: 11, carry: 60, time: 21600,
     cls: 'inf', building: 'statue', req: { statue: 1 }, research: false, smithy: 0,
   },
+  frost: {
+    id: 'frost', name: 'Frost Queen', plural: 'Frost Queens',
+    description: 'A hero of the statue who answers only villages in the frozen north. Her frost bites through horse and rider, and rime seals the walls she guards against ram and stone.',
+    cost: r(40, 50, 50), pop: 10, attack: 140, def: [240, 320, 240], speed: 12, carry: 40, time: 21600,
+    cls: 'arc', building: 'statue', req: { statue: 1 }, research: false, smithy: 0,
+  },
+  dwarf: {
+    id: 'dwarf', name: 'Forgelord', plural: 'Forgelords',
+    description: 'A hero of the statue who answers only villages in the volcanic west. The dwarf-king under the mountain: his bolt-throwers cut attackers down before they reach the wall, and his deep mines run rich with iron.',
+    cost: r(50, 50, 30), pop: 10, attack: 160, def: [320, 260, 200], speed: 14, carry: 150, time: 21600,
+    cls: 'inf', building: 'statue', req: { statue: 1 }, research: false, smithy: 0,
+  },
+  djinn: {
+    id: 'djinn', name: 'Djinn', plural: 'Djinn',
+    description: 'A hero of the statue who answers only villages in the eastern desert. A spirit of the dunes bound to a lamp: the desert wind carries his armies swiftly, and every victory pays him in gold.',
+    cost: r(40, 40, 60), pop: 10, attack: 190, def: [150, 150, 220], speed: 8, carry: 200, time: 21600,
+    cls: 'cav', building: 'statue', req: { statue: 1 }, research: false, smithy: 0,
+  },
+  saurian: {
+    id: 'saurian', name: 'Saurian King', plural: 'Saurian Kings',
+    description: 'A hero of the statue who answers only villages in the southern jungle. A cold-blooded hunter on a great raptor: his riders strike as a pack, and nobody makes out what is coming until it is upon them.',
+    cost: r(50, 50, 40), pop: 10, attack: 200, def: [180, 160, 140], speed: 9, carry: 100, time: 21600,
+    cls: 'cav', building: 'statue', req: { statue: 1 }, research: false, smithy: 0,
+  },
   noble: {
     id: 'noble', name: 'Nobleman', plural: 'Noblemen',
     description: 'Lowers the loyalty of a village. At zero loyalty the village is yours.',
@@ -147,11 +172,11 @@ export const UNITS: Record<UnitId, UnitDef> = {
 };
 
 export const UNIT_ORDER: UnitId[] = [
-  'spear', 'sword', 'axe', 'archer', 'scout', 'light', 'marcher', 'heavy', 'ram', 'catapult', 'paladin', 'sorcerer', 'druid', 'goblin', 'necromancer', 'orc', 'noble',
+  'spear', 'sword', 'axe', 'archer', 'scout', 'light', 'marcher', 'heavy', 'ram', 'catapult', 'paladin', 'sorcerer', 'druid', 'goblin', 'necromancer', 'orc', 'frost', 'dwarf', 'djinn', 'saurian', 'noble',
 ];
 
 /** Heroes of the statue: each village may keep one. */
-export const HEROES: UnitId[] = ['paladin', 'sorcerer', 'druid', 'goblin', 'necromancer', 'orc'];
+export const HEROES: UnitId[] = ['paladin', 'sorcerer', 'druid', 'goblin', 'necromancer', 'orc', 'frost', 'dwarf', 'djinn', 'saurian'];
 export const isHero = (u: UnitId) => HEROES.includes(u);
 
 export interface HeroInfo {
@@ -165,6 +190,8 @@ export interface HeroInfo {
   /** the hero's signature ability, in a few words */
   ability: string;
   perks: string[];
+  /** the region whose villages alone can raise this hero (the wilds' own heroes) */
+  region?: Region;
 }
 
 /** What each hero's abilities do in battle (tuned with scripts/herobench.ts). */
@@ -187,6 +214,22 @@ export const HERO_POWERS = {
   warcry: 0.5,
   /** the Orc King's bloodlust: every attacker in the army he leads fights this much harder */
   bloodlust: 0.15,
+  /** the Frost Queen's frostbite: enemy cavalry fights this much weaker against her, in attack and defense */
+  frostbite: 0.14,
+  /** rime on the walls the Frost Queen guards: enemy rams and catapults do this much less */
+  rime: 0.5,
+  /** the Forgelord's bolt-throwers: before a battle at the village he guards, this share of the attackers falls per wall level */
+  volley: 0.009,
+  /** (never more than this share, whatever the wall) */
+  volleyMax: 0.15,
+  /** the Forgelord's deep mines: a village sworn to him digs this much more iron */
+  deepMines: 0.2,
+  /** the Djinn's desert wind: armies he leads march this much faster */
+  sandwind: 0.15,
+  /** the Djinn's tribute: when his side wins, resources worth this share of the enemy's fallen are his */
+  tribute: 0.11,
+  /** the Saurian King's pack: cavalry fighting beside him is this much stronger */
+  pack: 0.15,
 };
 
 export const HERO_VS_BONUS = 0.25;
@@ -211,6 +254,22 @@ export const HERO_INFO: Record<string, HeroInfo> = {
   orc: {
     vsLabel: 'Walls and everything behind them', ability: 'Warcry',
     perks: ['Warcry: rams and rock-hurlers in the army he leads strike 50% harder at walls and buildings', 'Bloodlust: every attacker in the warband he leads fights 15% harder'],
+  },
+  frost: {
+    vsLabel: 'Cavalry and siege', ability: 'Frostbite', region: 'winter',
+    perks: ['Frostbite: enemy cavalry fights 14% weaker against her, in attack and defense', 'Rime walls: rams and catapults attacking the village she guards do half the damage'],
+  },
+  dwarf: {
+    vsLabel: 'Holding the gate', ability: 'Bolt-throwers', region: 'volcanic',
+    perks: ['Bolt-throwers: defending, the wall shoots first: 0.9% of the attackers fall per wall level before the armies meet (up to 15%)', 'Deep mines: a village sworn to him digs 20% more iron'],
+  },
+  djinn: {
+    vsLabel: 'Swift strikes and riches', ability: 'Desert Wind', region: 'desert',
+    perks: ['Desert wind: armies he leads, attacking or supporting, march 15% faster', 'Tribute: when his side wins, resources worth 11% of the enemy troops that fell are his'],
+  },
+  saurian: {
+    vsLabel: 'Cavalry strikes', ability: 'Pack Hunt', region: 'jungle',
+    perks: ['Pack hunt: cavalry fighting beside him is 15% stronger, in attack and defense', 'Stalkers: attacks he leads can\'t be made out: watchtowers and sentries never see what troops are coming'],
   },
   necromancer: {
     vsLabel: 'Infantry and the fallen', ability: 'Dread',
@@ -314,6 +373,34 @@ export const ITEMS: ItemDef[] = [
   { id: 'boarplate', hero: 'orc', name: 'Boar-Hide Plate', description: 'Boar riders fight 8% harder in attack and defense.', unit: 'heavy', att: T, def: T },
   { id: 'skullcrown', hero: 'orc', name: 'Crown of Tusks', description: 'Warchiefs lower loyalty by 1.5 extra points.', unit: 'noble', special: 'loyalty' },
   { id: 'wardrum', hero: 'orc', name: 'Drum of the Warpath', description: 'Rock-hurlers deal 5% more building damage.', unit: 'catapult', special: 'catx2' },
+  // the frost queen's
+  { id: 'rimebow', hero: 'frost', name: 'Rimebow', description: 'Frost archers fight 8% harder in attack and defense.', unit: 'archer', att: T, def: T },
+  { id: 'glacierplate', hero: 'frost', name: 'Glacier Plate', description: 'Mammoth riders fight 8% harder in attack and defense.', unit: 'heavy', att: T, def: T },
+  { id: 'wolfpelt', hero: 'frost', name: 'Snow-Wolf Pelt', description: 'Snow-wolf riders attack with 9% more strength (and defend 3% better).', unit: 'light', att: AA, def: AD },
+  { id: 'owlquill', hero: 'frost', name: 'Snow Owl Quill', description: 'Snow owls fight 6% harder.', unit: 'scout', special: 'scout' },
+  { id: 'winterheart', hero: 'frost', name: 'Heart of Winter', description: 'Defending, every defender in the village fights 5% harder.', special: 'ward' },
+  { id: 'sleighbells', hero: 'frost', name: 'Sleigh Bells', description: 'The army the Frost Queen leads marches 6% faster.', special: 'speed' },
+  // the forgelord's
+  { id: 'runeaxe', hero: 'dwarf', name: 'Rune Axe', description: 'Longbeards attack with 9% more strength (and defend 3% better).', unit: 'axe', att: AA, def: AD },
+  { id: 'oathshield', hero: 'dwarf', name: 'Oath Shield', description: 'Shieldbearers fight 8% harder in attack and defense.', unit: 'spear', att: T, def: T },
+  { id: 'steamdrill', hero: 'dwarf', name: 'Steam Drill Bit', description: 'Steam drills break walls 5% harder.', unit: 'ram', special: 'ramx2' },
+  { id: 'dragonbolts', hero: 'dwarf', name: 'Dragonfire Bolts', description: 'Flame ballistae deal 5% more building damage.', unit: 'catapult', special: 'catx2' },
+  { id: 'thanering', hero: 'dwarf', name: 'Ring of the Thanes', description: 'Thanes lower loyalty by 1.5 extra points.', unit: 'noble', special: 'loyalty' },
+  { id: 'minerlamp', hero: 'dwarf', name: "Miner's Lantern", description: 'Tunnel scouts fight 6% harder.', unit: 'scout', special: 'scout' },
+  // the djinn's
+  { id: 'windlamp', hero: 'djinn', name: 'Lamp of the Four Winds', description: 'The army the djinn leads marches 6% faster.', special: 'speed' },
+  { id: 'goldpurse', hero: 'djinn', name: 'Bottomless Purse', description: 'The army the djinn leads carries 8% more loot.', special: 'loot' },
+  { id: 'dunesaddle', hero: 'djinn', name: 'Saddle of the Dunes', description: 'Camel riders attack with 9% more strength (and defend 3% better).', unit: 'light', att: AA, def: AD },
+  { id: 'sunscimitar', hero: 'djinn', name: 'Sun Scimitar', description: 'Blade dancers fight 8% harder in attack and defense.', unit: 'sword', att: T, def: T },
+  { id: 'falconhood', hero: 'djinn', name: "Falconer's Hood", description: 'Desert falcons fight 6% harder.', unit: 'scout', special: 'scout' },
+  { id: 'vizierseal', hero: 'djinn', name: "Vizier's Seal", description: 'Viziers lower loyalty by 1.5 extra points.', unit: 'noble', special: 'loyalty' },
+  // the saurian king's
+  { id: 'raptorclaw', hero: 'saurian', name: 'Raptor Claw', description: 'Raptor riders attack with 9% more strength (and defend 3% better).', unit: 'light', att: AA, def: AD },
+  { id: 'obsidianblade', hero: 'saurian', name: 'Obsidian Blade', description: 'Saurus warriors attack with 9% more strength (and defend 3% better).', unit: 'axe', att: AA, def: AD },
+  { id: 'hornedcrest', hero: 'saurian', name: 'Horned Crest', description: 'Horned riders fight 8% harder in attack and defense.', unit: 'heavy', att: T, def: T },
+  { id: 'jadeidol', hero: 'saurian', name: 'Jade Idol', description: 'Defending, every defender in the village fights 5% harder.', special: 'ward' },
+  { id: 'chameleoncloak', hero: 'saurian', name: 'Chameleon Cloak', description: 'Chameleon scouts fight 6% harder.', unit: 'scout', special: 'scout' },
+  { id: 'sunstone', hero: 'saurian', name: 'Sunstone Shot', description: 'Temple slingers deal 5% more building damage.', unit: 'catapult', special: 'catx2' },
   // the necromancer's
   { id: 'soullantern', hero: 'necromancer', name: 'Soul Lantern', description: 'More of the fallen rise again after a won battle: 10.8 in 100 instead of 10.', special: 'raise' },
   { id: 'bonescythe', hero: 'necromancer', name: 'Bone Scythe', description: 'Grave reavers attack with 9% more strength (and defend 3% better).', unit: 'axe', att: AA, def: AD },

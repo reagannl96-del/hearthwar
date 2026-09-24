@@ -2,7 +2,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { navOrder, saveNavOrder } from './navOrder';
 import { captureThreadLink, openThreadLink, takeThreadLink } from './deepLink';
 import { Icon } from './art/icons';
-import { Clock, CopyButton, unitName } from './components/common';
+import { Clock, CopyButton, NewPosts, unitName } from './components/common';
 import { QUADRANT_NAME, coords, fmt, fmtDur, quadrant } from './format';
 import { BuildingScreen } from './screens/BuildingScreen';
 import { MapScreen } from './screens/MapScreen';
@@ -10,6 +10,7 @@ import { NewsScreen } from './screens/NewsScreen';
 import { TribeScreen } from './screens/TribeScreen';
 import { OverviewsScreen } from './screens/OverviewsScreen';
 import { QuestsScreen } from './screens/QuestsScreen';
+import { stalkedAttack } from './screens/RallyScreen';
 import { RankingScreen } from './screens/RankingScreen';
 import { RealmScreen } from './screens/RealmScreen';
 import { BannerScreen } from './screens/BannerScreen';
@@ -187,6 +188,7 @@ function IncomingBanner() {
         <b>{attacks.length}</b> incoming {attacks.length === 1 ? 'attack' : 'attacks'} · next hits <b>{next.toName}</b> in{' '}
         <b class="num">{fmtDur((next.arrive - now.value) / warp.value)}</b>
         {next.detected && <> · lookouts spot <b>{unitName(next.detected, true, next.theme)}</b></>}
+        {stalkedAttack(next) && <> · its troops can't be made out</>}
       </span>
     </button>
   );
@@ -374,6 +376,7 @@ function Nav() {
           <Icon name={it.icon} size={18} />
           <span class="nav-label">{it.label}</span>
           {it.badge ? <span class="badge">{it.badge}</span> : null}
+          {it.glow ? <NewPosts title="New posts in your tribe forum" size={22} /> : null}
         </button>
       ))}
       {!narrow && (

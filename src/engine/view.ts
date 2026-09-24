@@ -10,12 +10,13 @@ import {
   armyMsPerField, distance, hideCap, merchantCount, storageCap, unitsCount, watchtowerRange, sighted,
 } from './formulas';
 import { achievementLevels, questStatus } from './quests';
-import { TRIBE_RIGHTS, applicationsBy, tribeFull, invitesFor, joinedThisWeek, relation, tribeAlerts, tribePoints, unreadThreads } from './tribes';
+import { TRIBE_MAX_MEMBERS, TRIBE_RIGHTS, applicationsBy, hasRight, tribeFull, invitesFor, joinedThisWeek, relation, tribeAlerts, tribePoints, unreadThreads } from './tribes';
 import { awardsSummary, dayOf } from './awards';
 import { DOMINATION, roundDays, standings, type Standings } from './round';
 import type {
   BonusType, BuildJob, Buildings, Intel, PaladinState, PlayerStats, RecruitBuilding, RecruitJob, Report, Res,
-  ResearchJob, ScavengeRun, UnitId, Units, World, WorldConfig, Diplomacy, ForumThread, TribeAlert, TribeRight, RoundResult, HeroGear } from './types';
+  ResearchJob, ScavengeRun, UnitId, Units, World, WorldConfig, Diplomacy, ForumThread, TribeAlert, TribeRight, RoundResult, HeroGear, Player, Tribe } from './types';
+import type { FlagDesign } from './data/flags';
 import { farmMax, popUsed, productionRates, updateVillage, villageMorale } from './village';
 
 export interface SupportView { fromVid: number; fromName: string; ownerId: number; ownerName: string; units: Units; theme: VillageTheme }
@@ -231,12 +232,14 @@ export function buildView(w: World, pid: number): PlayerView {
     } else if (mine.has(c.toVid) && (c.kind === 'attack' || c.kind === 'support' || c.kind === 'trade')) {
       let detected: UnitId | null = null;
       const tower = w.villages[c.toVid].buildings.watchtower;
-      if (c.kind === 'attack' && tower > 0) {
+      // a Saurian King's stalkers can't be made out, by tower or by sentry
+      const stalked = (c.units.saurian ?? 0) > 0;
+      if (c.kind === 'attack' && tower > 0 && !stalked) {
         const frac = Math.min(1, Math.max(0, (w.now - c.depart) / Math.max(1, c.arrive - c.depart)));
         const cx = from.x + (to.x - from.x) * frac, cy = from.y + (to.y - from.y) * frac;
         if (distance(cx, cy, to.x, to.y) <= watchtowerRange(tower)) detected = slowestUnit(c.units);
       }
-      const kinds = c.kind === 'attack' && sighted(w.now, c.depart, c.arrive)
+      const kinds = c.kind === 'attack' && !stalked && sighted(w.now, c.depart, c.arrive)
         ? (Object.keys(c.units) as UnitId[]).filter((k) => (c.units[k] ?? 0) > 0)
         : undefined;
       incoming.push({
@@ -393,13 +396,126 @@ export function rankingFor(w: World) {
     .sort((a, b) => b.points - a.points);
 }
 
-export function playerProfile(w: World, pid: number) {
+/** Yes, or no and why (for a button shown greyed out with the reason). */
+export interface Can { ok: boolean; reason?: string }
+
+/** A ruler's place in their tribe, as anyone can see it. */
+export interface ProfileTribe {
+  id: number;
+  name: string;
+  tag: string;
+  color: string;
+  /** the tribe's place on the tribe rankings */
+  rank: number;
+  members: number;
+  /** founder, a leader, or a plain member */
+  role: 'founder' | 'leader' | null;
+  rights: TribeRight[];
+}
+
+/**
+ * What the viewer may do about this ruler, worked out with the same rules the tribe
+ * actions check. A field is null when it doesn't apply at all (nothing to show).
+ */
+export interface ProfileActions {
+  self: boolean;
+  /** how the viewer's tribe sees theirs */
+  relation: Diplomacy | 'own' | null;
+  myTribe: { id: number; tag: string; name: string } | null;
+  /**
+   * Invite them to the viewer's tribe: 'can' do it now, they are already 'invited',
+   * they have 'applied' to join (a recruiter answers instead), or 'blocked' (with the reason).
+   */
+  invite: null | { state: 'can' | 'invited' | 'applied' | 'blocked'; reason?: string; note?: string; mayWithdraw: boolean };
+  /** remove them from the viewer's tribe (shown to recruiters and leaders) */
+  kick: Can | null;
+  /** change their rights in the viewer's tribe (shown to leaders) */
+  rights: (Can & { current: TribeRight[]; grantable: TribeRight[] }) | null;
+  /** set the viewer's tribe's relation to theirs (shown to diplomats) */
+  diplomacy: (Can & { current: Diplomacy | null }) | null;
+  /** their villages can be attacked from here */
+  attack: Can;
+}
+
+export interface ProfileVillage { id: number; name: string; x: number; y: number; points: number; theme: VillageTheme }
+
+function profileTribe(w: World, t: Tribe, pid: number): ProfileTribe {
+  const founder = t.founderId === pid;
+  const rights = founder ? [...TRIBE_RIGHTS] : [...(t.rights?.[pid] ?? [])];
+  const tribeRanks = Object.values(w.tribes).map((x) => ({ id: x.id, pts: tribePoints(w, x) })).sort((a, b) => b.pts - a.pts);
+  return {
+    id: t.id, name: t.name, tag: t.tag, color: t.color, rank: tribeRanks.findIndex((x) => x.id === t.id) + 1,
+    members: t.members.length, role: founder ? 'founder' : rights.includes('lead') ? 'leader' : null, rights,
+  };
+}
+
+/** What `viewer` may do about ruler `target`, by the rules in tribes.ts and commands.ts. */
+export function profileActions(w: World, target: Player, viewer: number): ProfileActions {
+  const me = w.players[viewer];
+  const self = target.id === viewer;
+  const mine = me?.tribeId != null ? w.tribes[me.tribeId] ?? null : null;
+  const theirs = target.tribeId != null ? w.tribes[target.tribeId] ?? null : null;
+  const out: ProfileActions = {
+    self,
+    relation: relation(w, mine?.id ?? null, theirs?.id ?? null),
+    myTribe: mine ? { id: mine.id, tag: mine.tag, name: mine.name } : null,
+    invite: null, kick: null, rights: null, diplomacy: null,
+    attack: { ok: !self },
+  };
+  if (self) return out;
+  const gone = !!target.eliminated;
+  if (!gone && theirs && mine && theirs.id === mine.id) {
+    out.attack = { ok: false, reason: 'You cannot attack a member of your own tribe.' };
+  } else if (!gone && target.protectedUntil > w.now) {
+    out.attack = { ok: false, reason: `${target.name} is still under beginner protection.` };
+  }
+  if (!mine || gone) return out;
+  const iAmFounder = mine.founderId === viewer;
+  if (theirs?.id === mine.id) {
+    const isFounder = mine.founderId === target.id;
+    const isLeader = hasRight(mine, target.id, 'lead');
+    if (hasRight(mine, viewer, 'invite')) {
+      out.kick = isFounder ? { ok: false, reason: 'The founder cannot be removed.' }
+        : isLeader && !iAmFounder ? { ok: false, reason: 'Only the founder can remove a leader.' }
+        : { ok: true };
+    }
+    if (hasRight(mine, viewer, 'lead')) {
+      const current = isFounder ? [...TRIBE_RIGHTS] : [...(mine.rights?.[target.id] ?? [])];
+      const grantable = TRIBE_RIGHTS.filter((r) => r !== 'lead' || iAmFounder);
+      out.rights = isFounder ? { ok: false, reason: 'The founder always has every right.', current, grantable }
+        : isLeader && !iAmFounder ? { ok: false, reason: 'Only the founder can change a leader\'s rights.', current, grantable }
+        : { ok: true, current, grantable };
+    }
+    return out;
+  }
+  // someone outside the tribe
+  const recruiter = hasRight(mine, viewer, 'invite');
+  if ((mine.applications ?? []).some((a) => a.pid === target.id) && recruiter) {
+    out.invite = { state: 'applied', mayWithdraw: false };
+  } else if ((mine.invites ?? []).some((i) => i.pid === target.id)) {
+    out.invite = { state: 'invited', mayWithdraw: recruiter };
+  } else if (!recruiter) {
+    out.invite = { state: 'blocked', reason: 'Only your tribe\'s recruiters and leaders can invite rulers.', mayWithdraw: false };
+  } else if (tribeFull(mine)) {
+    out.invite = { state: 'blocked', reason: `Your tribe is full: ${TRIBE_MAX_MEMBERS} seats, open invitations included.`, mayWithdraw: false };
+  } else {
+    out.invite = { state: 'can', mayWithdraw: false, note: theirs ? `${target.name} is in [${theirs.tag}] and would have to leave it to accept.` : undefined };
+  }
+  if (theirs && hasRight(mine, viewer, 'diplomacy')) out.diplomacy = { ok: true, current: mine.diplomacy?.[theirs.id] ?? null };
+  return out;
+}
+
+export function playerProfile(w: World, pid: number, viewer?: number) {
   const p = w.players[pid];
   if (!p) return null;
+  // ranked the way the rankings list them (points first; the attacker and defender lists re-sort that)
+  const ranked = Object.values(w.players).filter((x) => !x.eliminated).sort((a, b) => b.points - a.points);
+  const place = (list: Player[]) => (p.eliminated ? null : list.findIndex((x) => x.id === p.id) + 1 || null);
+  const tribe = p.tribeId != null && w.tribes[p.tribeId] ? profileTribe(w, w.tribes[p.tribeId], p.id) : null;
   return {
     id: p.id, name: p.name, color: p.color, kind: p.kind, points: p.points,
-    tribe: p.tribeId ? w.tribes[p.tribeId] : null,
-    villages: p.villages.map((id) => w.villages[id]).filter(Boolean).map((v) => ({ id: v.id, name: v.name, x: v.x, y: v.y, points: v.points })),
+    tribe,
+    villages: p.villages.map((id) => w.villages[id]).filter(Boolean).map((v): ProfileVillage => ({ id: v.id, name: v.name, x: v.x, y: v.y, points: v.points, theme: themeOfHero(v.heroKind) })),
     stats: { ...p.stats },
     personality: p.ai?.personality,
     history: p.history,
@@ -407,8 +523,23 @@ export function playerProfile(w: World, pid: number) {
     awards: awardsSummary(p),
     /** the world's calendar day, for 'yesterday' in award histories */
     today: dayOf(w),
+    /** the banner this ruler flies (unset: they never made one) */
+    flag: p.flag ? { ...p.flag } as FlagDesign : undefined,
+    /** when they came to the realm (world time) */
+    joinedAt: p.createdAt,
+    protectedUntil: p.protectedUntil,
+    eliminated: !!p.eliminated,
+    /** place on the rankings, by points, and among attackers and defenders (null when they have defeated nobody) */
+    rank: place(ranked),
+    rulers: ranked.length,
+    odaRank: p.stats.killsAtt > 0 ? place([...ranked].sort((a, b) => b.stats.killsAtt - a.stats.killsAtt)) : null,
+    oddRank: p.stats.killsDef > 0 ? place([...ranked].sort((a, b) => b.stats.killsDef - a.stats.killsDef)) : null,
+    /** what the viewer may do about them (when a viewer is given) */
+    you: viewer !== undefined ? profileActions(w, p, viewer) : null,
   };
 }
+
+export type PlayerProfile = NonNullable<ReturnType<typeof playerProfile>>;
 
 export function achievementsFor(w: World, pid: number) {
   return achievementLevels(w, w.players[pid]);
@@ -427,6 +558,8 @@ export interface TribeMemberView {
   rank: number;
   founder: boolean;
   rights: TribeRight[];
+  /** the banner they fly (unset: they never made one) */
+  flag?: FlagDesign;
 }
 
 export interface TribeProfileView {
@@ -456,6 +589,8 @@ export interface TribeProfileView {
   invited: boolean;
   /** every seat taken (members and open invitations) */
   full: boolean;
+  /** the viewer is a diplomat of another tribe and may set how their tribe sees this one */
+  canDiplomacy: boolean;
 }
 
 /** Requests to join my tribe waiting on an answer, if I am one who answers them. */
@@ -477,6 +612,7 @@ export function tribeProfile(w: World, tid: number, viewer: number): TribeProfil
     .map((m) => ({
       id: m.id, name: m.name, kind: m.kind, points: m.points, villages: m.villages.length, rank: rankOf.get(m.id) ?? 0,
       founder: t.founderId === m.id, rights: t.founderId === m.id ? [...TRIBE_RIGHTS] : [...(t.rights?.[m.id] ?? [])],
+      ...(m.flag ? { flag: { ...m.flag } } : {}),
     }))
     .sort((a, b) => b.points - a.points);
   const me = w.players[viewer];
@@ -498,6 +634,7 @@ export function tribeProfile(w: World, tid: number, viewer: number): TribeProfil
     canApply: !!t.recruiting && me?.tribeId == null && !me?.eliminated && !tribeFull(t),
     invited: me?.tribeId == null && !!t.invites?.some((i) => i.pid === viewer),
     full: tribeFull(t),
+    canDiplomacy: me?.tribeId != null && me.tribeId !== t.id && !!w.tribes[me.tribeId] && hasRight(w.tribes[me.tribeId], viewer, 'diplomacy'),
   };
 }
 

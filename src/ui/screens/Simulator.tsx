@@ -1,6 +1,7 @@
 import { useState } from 'preact/hooks';
-import { HEROES, ITEM_BY_ID, UNITS, UNIT_ORDER, itemsFor, itemHero } from '../../engine/data/units';
+import { HEROES, ITEM_BY_ID, UNITS, UNIT_ORDER, isHero, itemsFor, itemHero } from '../../engine/data/units';
 import type { UnitId, Units } from '../../engine/types';
+import { EffectFactors } from './ReportsScreen';
 import { Icon } from '../art/icons';
 import { Btn, NumInput, Section, UnitTable, UnitIcon, unitName } from '../components/common';
 import { fmt } from '../format';
@@ -19,7 +20,8 @@ export function Simulator() {
   const [luck, setLuck] = useState<number | ''>(0);
   const [morale, setMorale] = useState<number | ''>(100);
   const [item, setItem] = useState('');
-  const units = (list: UnitId[]) => list.filter((u) => (pv.config.archers || (u !== 'archer' && u !== 'marcher')) && (pv.config.paladin || u !== 'paladin'));
+  // (a world without heroes has none of the statue's heroes, not just no paladin)
+  const units = (list: UnitId[]) => list.filter((u) => (pv.config.archers || (u !== 'archer' && u !== 'marcher')) && (pv.config.paladin || !isHero(u)));
   const r = host.value!.simulate({
     att,
     attTech: v.tech,
@@ -89,6 +91,11 @@ export function Simulator() {
               { label: 'Survivors', units: defSurv },
             ]} />
             {Number(wall || 0) > 0 && <p class="small">Wall after the battle: <b class="num">{r.wallAfter}</b></p>}
+            {!r.pureScout && (r.effects?.length ?? 0) > 0 && (
+              <div class="rep-factors sim-effects" aria-label="Hero abilities in play">
+                <EffectFactors effects={r.effects} wall={Number(wall || 0)} />
+              </div>
+            )}
           </>
         )}
       </Section>

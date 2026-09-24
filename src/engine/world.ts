@@ -5,6 +5,10 @@ import { PLAYER_COLORS, rulerName, tribeName, villageName } from './data/names';
 import { pushEvent } from './events';
 import { HOUR, res, villagePoints } from './formulas';
 import { fractalNoise, nextRandom, pick, randInt, shuffle } from './rng';
+import { flagFor } from './data/flags';
+import { isDesert, isJungle, isVolcanic, isWinter, regionAt } from './regions';
+
+export { isDesert, isJungle, isVolcanic, isWinter, regionAt };
 import { invalidateSpatial } from './spatial';
 import type { AIState, BonusType, BuildingId, Player, PlayerStats, UnitId, Village, World, WorldConfig } from './types';
 import { commandsOf, removeCommand } from './cmdindex';
@@ -66,11 +70,6 @@ export function inRealm(x: number, y: number, size: number): boolean {
   return Math.hypot(x + 0.5 - c, y + 0.5 - c) < shore;
 }
 
-/** The far west of every realm is a volcanic waste: ash plains, lava lakes and smoking peaks. */
-export function isVolcanic(x: number, y: number, size: number): boolean {
-  const edge = size * 0.22 + (fractalNoise(0, y, 613, 9) - 0.5) * size * 0.1 + (fractalNoise(x, y, 719, 4) - 0.5) * 3;
-  return x < edge;
-}
 
 /**
  * Terrain codes: '.' meadow, 'f' forest, 'w' water, 'm' mountains,
@@ -89,6 +88,10 @@ export function genTerrain(size: number, seed: number, off = 0): string {
       let c = '.';
       if (!inRealm(x, y, size)) c = 'w';
       else if (isVolcanic(x, y, size)) c = e < 0.24 ? 'l' : e > 0.72 ? 'm' : 'v';
+      // the desert: dry open sand, rare oases, red mesas, a palm grove here and there
+      else if (isDesert(x, y, size)) c = e < 0.2 ? 'w' : e > 0.78 ? 'm' : m > 0.78 ? 'f' : '.';
+      // the jungle: thick green nearly everywhere, rivers and pools between
+      else if (isJungle(x, y, size)) c = e < 0.26 ? 'w' : e > 0.8 ? 'm' : m > 0.42 ? 'f' : '.';
       else if (e < 0.26) c = 'w';
       else if (e > 0.76) c = 'm';
       else if (m > 0.6) c = 'f';
@@ -99,12 +102,6 @@ export function genTerrain(size: number, seed: number, off = 0): string {
   return rows.join('');
 }
 
-/** The northern frontier of every realm lies under snow. */
-export function isWinter(x: number, y: number, size: number): boolean {
-  if (isVolcanic(x, y, size)) return false;
-  const edge = size * 0.28 + (fractalNoise(x, 0, 911, 9) - 0.5) * size * 0.12 + (fractalNoise(x, y, 377, 4) - 0.5) * 3;
-  return y < edge;
-}
 
 export function terrainAt(w: World, x: number, y: number): string {
   const s = w.config.size;
@@ -153,6 +150,8 @@ export function migrateWorld(w: World): void {
   for (const id in w.players) {
     const p = w.players[id];
     if (p.protectedUntil > cap) p.protectedUntil = cap;
+    // every AI ruler flies a banner of its own
+    if (p.kind === 'ai' && !p.flag) p.flag = flagFor(p.id);
     // the village manager needs five villages: anyone who had it on with fewer has it switched off
     if (p.manager && !managerUnlocked(p)) switchOffManager(p);
   }
@@ -272,6 +271,7 @@ export function createWorld(o: NewWorldOptions): World {
     place(spot[0], spot[1]);
     spots.push(spot);
     const p = newPlayer(w, uniqueName(w), 'ai', colors[i % colors.length]);
+    p.flag = flagFor(p.id);
     const personality = i < 2 ? (i === 0 ? 'warlord' : 'farmer') : pick(w, PERSONALITIES);
     p.ai = aiState(w, personality);
     const v = createVillage(w, spot[0], spot[1], villageName(w), p.id);
@@ -605,6 +605,7 @@ function foundAiRuler(w: World, headStart = 0): Player | null {
     return null;
   }
   p.ai = aiState(w, pick(w, PERSONALITIES));
+  p.flag = flagFor(p.id);
   if (headStart > 0) {
     const b = v.buildings;
     b.timber = headStart + randInt(w, 0, 2); b.claypit = headStart + randInt(w, 0, 2); b.ironmine = headStart + randInt(w, 0, 1);

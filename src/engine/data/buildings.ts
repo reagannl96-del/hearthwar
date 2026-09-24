@@ -66,7 +66,7 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
   },
   statue: {
     id: 'statue', name: 'Statue', short: 'Statue',
-    description: 'Home of the village hero: a paladin, sorcerer, druid, goblin chief, necromancer or orc king who fights beside your troops.',
+    description: 'Home of the village hero who fights beside your troops: one of the six heroes of the heartland, or the hero of the wild land the village stands in.',
     max: 1, min: 0, cost: f(220, 220, 220), factor: f(1, 1, 1), pop: 10, popFactor: 1,
     time: 1500, timeFactor: 1.2, points: 25, req: {},
   },

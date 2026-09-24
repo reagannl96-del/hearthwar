@@ -43,3 +43,20 @@ describe('the banners at the gate', () => {
     expect(CLOTH_W).toBeLessThan(POLE_H);
   });
 });
+
+describe('AI rulers fly banners of their own', () => {
+  it('every AI gets a steady, varied banner', async () => {
+    const { createWorld, defaultConfig, migrateWorld } = await import('../src/engine/world');
+    const { flagFor } = await import('../src/engine/data/flags');
+    const w = createWorld({ worldName: 'F', playerName: 'P', villageName: 'Home', seed: 3, config: { ...defaultConfig(), aiCount: 30, size: 120 } });
+    const ais = Object.values(w.players).filter((p) => p.kind === 'ai');
+    expect(ais.every((p) => p.flag)).toBe(true);
+    expect(new Set(ais.map((p) => JSON.stringify(p.flag))).size).toBeGreaterThan(ais.length * 0.9);
+    expect(flagFor(1234)).toEqual(flagFor(1234));
+    for (const p of ais) expect(p.flag!.accent).not.toBe(p.flag!.field);
+    // an older save's rulers get theirs on load
+    for (const p of ais) delete p.flag;
+    migrateWorld(w);
+    expect(ais.every((p) => p.flag)).toBe(true);
+  });
+});

@@ -12,13 +12,13 @@ export type Side = 'att' | 'def';
 /** How a unit fights on screen. */
 export type Role = 'melee' | 'shooter' | 'thrower' | 'caster' | 'ram' | 'catapult' | 'noble' | 'scout';
 
-export const HEROES: UnitId[] = ['paladin', 'sorcerer', 'druid', 'goblin', 'necromancer', 'orc'];
+export const HEROES: UnitId[] = ['paladin', 'sorcerer', 'druid', 'goblin', 'necromancer', 'orc', 'djinn', 'dwarf', 'frost', 'saurian'];
 
 export function roleOf(u: UnitId): Role {
   switch (u) {
     case 'archer': case 'marcher': return 'shooter';
     case 'spear': return 'thrower';
-    case 'sorcerer': case 'necromancer': return 'caster';
+    case 'sorcerer': case 'necromancer': case 'frost': return 'caster';
     case 'ram': return 'ram';
     case 'catapult': return 'catapult';
     case 'noble': return 'noble';
@@ -27,7 +27,7 @@ export function roleOf(u: UnitId): Role {
   }
 }
 
-export const isMounted = (u: UnitId) => u === 'light' || u === 'marcher' || u === 'heavy' || u === 'paladin';
+export const isMounted = (u: UnitId) => u === 'light' || u === 'marcher' || u === 'heavy' || u === 'paladin' || u === 'saurian';
 
 /**
  * How many figures stand for this many troops: you never see a thousand
@@ -43,7 +43,7 @@ export function figuresFor(u: UnitId, n: number): number {
 }
 
 /** Front to back, the order an army marches in: horsemen, foot, archers, siege, then the nobles with the banner. */
-const MARCH_ORDER: UnitId[] = ['light', 'heavy', 'paladin', 'marcher', 'axe', 'sword', 'spear', 'militia', 'orc', 'goblin', 'druid', 'archer', 'sorcerer', 'necromancer', 'scout', 'ram', 'catapult', 'noble'];
+const MARCH_ORDER: UnitId[] = ['light', 'heavy', 'paladin', 'saurian', 'marcher', 'axe', 'sword', 'spear', 'militia', 'orc', 'djinn', 'dwarf', 'goblin', 'druid', 'archer', 'sorcerer', 'frost', 'necromancer', 'scout', 'ram', 'catapult', 'noble'];
 
 /**
  * The figures to put on screen for an army, capped at `cap` in all (every kind

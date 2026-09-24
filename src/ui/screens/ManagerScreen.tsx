@@ -56,7 +56,7 @@ export function ManagerScreen() {
   const dirty = JSON.stringify({ ...draft, tickAt: undefined }) !== savedJson;
   // if the server's copy changes while we have nothing unsaved, follow it
   useEffect(() => { if (!dirty) setDraft(clone(saved)); }, [savedJson]);
-  const save = (m = draft) => { act({ type: 'manager', manager: m }); setDraft(clone(m)); };
+  const save = (m = draft, done?: string) => { if (act({ type: 'manager', manager: m }, done)) setDraft(clone(m)); };
   /** assignments save at once; template edits wait for "Save templates" */
   const assign = (vid: number, patch: { build?: number; army?: number; paused?: boolean }) => {
     const m = clone(draft);
@@ -94,7 +94,7 @@ export function ManagerScreen() {
     <div class="stack">
       <div class="page-head">
         <h1>Village manager</h1>
-        {dirty && <Btn onClick={() => save()}>Save templates</Btn>}
+        {dirty && <Btn onClick={() => save(draft, 'Templates saved.')}>Save templates</Btn>}
       </div>
       <p class="muted small mgr-lede">
         Give each village a <b>build template</b> (buildings to raise, in order) and an <b>army template</b> (troops to keep).
@@ -194,7 +194,7 @@ export function ManagerScreen() {
         <div class="mgr-savebar">
           <span>You have unsaved template changes.</span>
           <Btn small variant="ghost" onClick={() => setDraft(clone(saved))}>Discard</Btn>
-          <Btn small onClick={() => save()}>Save templates</Btn>
+          <Btn small onClick={() => save(draft, 'Templates saved.')}>Save templates</Btn>
         </div>
       )}
       <span hidden>{now.value}{liveRes.length}</span>

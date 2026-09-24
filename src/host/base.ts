@@ -89,7 +89,7 @@ export abstract class HostBase {
   }
 
   profile(pid: number) {
-    return playerProfile(this.world, pid);
+    return playerProfile(this.world, pid, this.pid);
   }
 
   achievements() {

@@ -10,8 +10,9 @@ import {
 import type { BuildingId, RecruitBuilding, ResKey, UnitId } from '../../engine/types';
 import type { VillageView } from '../../engine/view';
 import { Icon } from '../art/icons';
-import { Bar, Btn, Cost, Countdown, Empty, NumInput, Progress, Section, UnitList, UnitIcon, unitName } from '../components/common';
-import { fmt, fmtDur } from '../format';
+import { Bar, Btn, Cost, Countdown, Empty, NumInput, Progress, RegionChip, Section, UnitList, UnitIcon, regionTitle, unitName } from '../components/common';
+import { REGION_NAMES, regionAt, type Region } from '../../engine/regions';
+import { coords, fmt, fmtDur } from '../format';
 import { act, host, liveRes, now, view, warp, usePane } from '../store';
 import { MarketPanel } from './MarketScreen';
 import { RecruitQueue } from '../components/RecruitQueue';
@@ -397,6 +398,11 @@ function StatuePanel({ v }: { v: VillageView }) {
   const sworn = v.hero;
   const chk0 = h.recruitCheck(v.id, 'sorcerer', 1);
   const away = !current && !chk0.ok && /already has a hero/.test(chk0.reason ?? '');
+  // the land this village stands in: the heroes of the wilds answer only their own
+  const here = regionAt(v.x, v.y, pv.config.size);
+  const heartland = HEROES.filter((u) => !HERO_INFO[u]?.region);
+  const wilds = HEROES.filter((u) => HERO_INFO[u]?.region);
+  const card = (u: UnitId) => <HeroCard v={v} u={u} current={current} sworn={sworn} away={away} here={here} have={have} />;
   return (
     <div class="stack">
       <RecruitQueue v={v} b="statue" />
@@ -415,50 +421,121 @@ function StatuePanel({ v }: { v: VillageView }) {
           <p class="hero-current"><Icon name={sworn} size={22} /> This statue is sworn to the <b>{unitName(sworn)}</b>. It can raise a new one, but never another kind of hero.</p>
         )}
         {!sworn && <p class="muted small">Choose carefully: the first hero trained here is the only kind this village will ever raise, and its look becomes the village's.</p>}
-        <div class="hero-grid">
-          {HEROES.map((u) => {
-            const d = UNITS[u];
-            const info = HERO_INFO[u];
-            const chk = h.recruitCheck(v.id, u, 1);
-            const mine = current === u;
-            return (
-              <article class={`hero-card hero-${u} ${mine ? 'is-mine' : ''} ${sworn && sworn !== u ? 'is-locked' : ''}`}>
-                <header>
-                  <span class="hero-portrait"><UnitIcon u={u} size={44} /></span>
-                  <div>
-                    <h3>{d.name}</h3>
-                    <span class="hero-ability">{info.ability}</span>
-                    <span class="hero-vs">Best at <b>{info.vsLabel}</b></span>
-                  </div>
+        <div class="hero-roster">
+          <div class="hero-groups">
+            <section class="hero-group" aria-labelledby="heroes-heartland">
+              <header class="hero-group-head">
+                <h4 id="heroes-heartland">Heroes of the heartland</h4>
+                <span class="muted small">They answer any village with a statue, wherever it stands.</span>
+              </header>
+              <div class="hero-grid">{heartland.map(card)}</div>
+            </section>
+            {wilds.length > 0 && (
+              <section class="hero-group is-wild" aria-labelledby="heroes-wilds">
+                <header class="hero-group-head">
+                  <h4 id="heroes-wilds">Heroes of the wilds</h4>
+                  <span class="muted small">
+                    Each answers only villages in its own land. {v.name} lies in{' '}
+                    <RegionChip r={here}>{REGION_NAMES[here]}</RegionChip>.
+                  </span>
                 </header>
-                <p class="small">{d.description}</p>
-                <ul class="hero-perks">
-                  {info.perks.map((p) => <li>{p}</li>)}
-                </ul>
-                <dl class="hero-stats">
-                  <dt>Attack</dt><dd class="num">{d.attack}</dd>
-                  <dt>Defense</dt><dd class="num">{d.def[0]} / {d.def[1]} / {d.def[2]}</dd>
-                  <dt>Speed</dt><dd class="num">{d.speed} min/field</dd>
-                  {d.carry > 0 && <><dt>Carries</dt><dd class="num">{d.carry}</dd></>}
-                </dl>
-                {mine ? <span class="pill">Your hero</span> : sworn && sworn !== u ? (
-                  <span class="muted small">This village is sworn to the {unitName(sworn)}.</span>
-                ) : (
-                  <>
-                    <Cost cost={d.cost} have={have} pop={d.pop} time={h.recruitTime(v.id, u)} />
-                    <div class="row gap">
-                      <Btn small disabled={!chk.ok} onClick={() => act({ type: 'recruit', vid: v.id, unit: u, count: 1 }, `${d.name} answers the call.`)}>Train {d.name}</Btn>
-                    </div>
-                    {!chk.ok && !current && !away && <span class="reason">{chk.reason}</span>}
-                  </>
-                )}
-              </article>
-            );
-          })}
+                <div class="hero-grid">{wilds.map(card)}</div>
+              </section>
+            )}
+          </div>
         </div>
       </Section>
       <HeroItems kind={current ?? sworn ?? null} />
     </div>
+  );
+}
+
+/** The kinds of troops shown on a hero's card, in the form a village sworn to it gives them. */
+const HERO_ARMY: UnitId[] = ['spear', 'axe', 'light', 'heavy', 'ram', 'noble'];
+
+/** One hero on the statue's roster: what it does, what it costs, and whether this village can raise it. */
+function HeroCard({ v, u, current, sworn, away, here, have }: {
+  v: VillageView; u: UnitId; current?: UnitId; sworn: UnitId | null; away: boolean; here: Region; have: ReturnType<typeof liveRes>;
+}) {
+  const h = host.value!;
+  const d = UNITS[u];
+  const info = HERO_INFO[u];
+  const chk = h.recruitCheck(v.id, u, 1);
+  const mine = current === u;
+  const locked = !!sworn && sworn !== u;
+  // a hero of the wilds: raised only in its own land
+  const land = info.region;
+  const afar = !!land && land !== here;
+  const native = !!land && land === here && !locked;
+  const theme = themeOfHero(u);
+  return (
+    <article class={`hero-card hero-${u} ${mine ? 'is-mine' : ''} ${locked ? 'is-locked' : ''} ${afar && !locked ? 'is-afar' : ''} ${native ? 'is-native' : ''}`}>
+      {land && (
+        <RegionChip r={land} class={`hero-region ${native ? 'is-here' : ''}`} title={native ? `${v.name} lies in ${REGION_NAMES[land]}: the ${d.name} answers it` : `The ${d.name} answers only villages in ${REGION_NAMES[land]}`}>
+          {regionTitle(land)} only
+        </RegionChip>
+      )}
+      <header>
+        <span class="hero-portrait"><UnitIcon u={u} size={44} /></span>
+        <div>
+          <h3>{d.name}</h3>
+          <span class="hero-ability">{info.ability}</span>
+          <span class="hero-vs">Best at <b>{info.vsLabel}</b></span>
+        </div>
+      </header>
+      <p class="small">{d.description}</p>
+      <ul class="hero-perks">
+        {info.perks.map((p) => <li>{p}</li>)}
+      </ul>
+      <dl class="hero-stats">
+        <dt>Attack</dt><dd class="num">{d.attack}</dd>
+        <dt>Defense</dt><dd class="num">{d.def[0]} / {d.def[1]} / {d.def[2]}</dd>
+        <dt>Speed</dt><dd class="num">{d.speed} min/field</dd>
+        {d.carry > 0 && <><dt>Carries</dt><dd class="num">{d.carry}</dd></>}
+      </dl>
+      <div class="hero-army" title={`A village sworn to the ${d.name} raises ${HERO_ARMY.map((t) => unitName(t, true, theme)).join(', ')}`}>
+        <span class="hero-army-label">Army</span>
+        {HERO_ARMY.map((t) => <UnitIcon u={t} size={20} theme={theme} title={unitName(t, false, theme)} />)}
+      </div>
+      {mine ? <span class="pill">Your hero</span> : locked ? (
+        <span class="muted small">This village is sworn to the {unitName(sworn!)}.</span>
+      ) : (
+        <>
+          <Cost cost={d.cost} have={have} pop={d.pop} time={h.recruitTime(v.id, u)} />
+          <div class="row gap">
+            <Btn small disabled={!chk.ok} onClick={() => act({ type: 'recruit', vid: v.id, unit: u, count: 1 }, `${d.name} answers the call.`)}>Train {d.name}</Btn>
+          </div>
+          {!chk.ok && (afar || (!current && !away)) && <span class="reason">{chk.reason}</span>}
+          {afar && <WildVillages u={u} land={land!} vid={v.id} />}
+        </>
+      )}
+    </article>
+  );
+}
+
+/** Where a hero of the wilds could be raised instead: the ruler's villages in its land that are free to swear to it. */
+function WildVillages({ u, land, vid }: { u: UnitId; land: Region; vid: number }) {
+  const pane = usePane();
+  const pv = view.value!;
+  const there = pv.villages.filter((x) => x.id !== vid && regionAt(x.x, x.y, pv.config.size) === land);
+  const open = there.filter((x) => !x.hero || x.hero === u);
+  if (there.length === 0) return <p class="hero-where muted small">You hold no village in {REGION_NAMES[land]} yet.</p>;
+  if (open.length === 0) return <p class="hero-where muted small">Your villages in {REGION_NAMES[land]} are sworn to other heroes.</p>;
+  const shown = open.slice(0, 3);
+  return (
+    <p class="hero-where small">
+      <span class="muted">Your villages in {REGION_NAMES[land]}: </span>
+      {shown.map((x, i) => (
+        <>
+          {i > 0 && ', '}
+          <button type="button" class="link" onClick={() => { pane.vid.value = x.id; }} title={`Switch to ${x.name} and its statue`}>
+            {x.name} <span class="coords">({coords(x.x, x.y)})</span>
+          </button>
+          {x.buildings.statue <= 0 && <span class="muted"> (no statue yet)</span>}
+        </>
+      ))}
+      {open.length > shown.length && <span class="muted"> and {open.length - shown.length} more</span>}
+    </p>
   );
 }
 

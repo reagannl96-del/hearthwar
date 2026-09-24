@@ -13,6 +13,7 @@ import { buildModel, visualTier } from './buildings';
 import { C, bake, box, disposeTree, mat, rng, setSeason, setTheme, type Season, type Theme } from './kit';
 import { isRider, militiaman, person, plot, scaffold, troop, type TroopModel } from './props';
 import { heroAura, type Aura, type AuraHero } from './heroAura';
+import { bakeFigure, oasisNight } from './oasis';
 import { FOOT_LOOPS, PEOPLE_LOOPS, RIDE_LOOPS } from './paths';
 import { CAMP_FIRE, FESTIVAL, wallGuardPosts } from './scene';
 import { buildFestival, disposeFestival, festivalPeople, stepFestival } from './festival';
@@ -57,7 +58,7 @@ interface Slot {
 
 const ALL: BuildingId[] = ['main', 'barracks', 'stable', 'workshop', 'academy', 'smithy', 'rally', 'statue', 'market', 'warehouse', 'hiding', 'watchtower', 'timber', 'claypit', 'ironmine', 'farm', 'wall'];
 
-const TROOP_KINDS: TroopModel[] = ['spear', 'sword', 'axe', 'archer', 'scout', 'light', 'marcher', 'heavy', 'paladin', 'sorcerer', 'druid', 'goblin', 'necromancer', 'orc', 'noble'];
+const TROOP_KINDS: TroopModel[] = ['spear', 'sword', 'axe', 'archer', 'scout', 'light', 'marcher', 'heavy', 'paladin', 'sorcerer', 'druid', 'goblin', 'necromancer', 'orc', 'djinn', 'dwarf', 'frost', 'saurian', 'noble'];
 const TUNICS = [0x8e3a1f, 0x2f5d99, 0x6f7c35, 0xc98f2e, 0x5a3a22, 0x7a2f4a, 0xd9c7a0];
 
 /** default camera: polar angle, azimuth, distance */
@@ -173,6 +174,8 @@ export class VillageRenderer {
   private militia: { g: THREE.Group; from: THREE.Vector3; to: THREE.Vector3; delay: number; t: number; face: number; a: number }[] = [];
   private militiaOn = false;
   private motes: THREE.Object3D[] = [];
+  /** scenery that only comes out after dark (the jungle's fireflies) */
+  private nightScenery: THREE.Object3D[] = [];
   /** floating isles and crystals out on the land */
   private floaters: THREE.Object3D[] = [];
   /** attacks on the village, acted out */
@@ -207,7 +210,7 @@ export class VillageRenderer {
     this.season = opts.season ?? 'fall';
     setSeason(this.season);
     setTheme(opts.theme ?? 'classic');
-    const sky = new THREE.Color(this.season === 'winter' ? 0xdfe7ee : this.season === 'volcanic' ? 0x9a6a58 : 0xe8cf9f);
+    const sky = new THREE.Color(this.season === 'winter' ? 0xdfe7ee : this.season === 'volcanic' ? 0x9a6a58 : this.season === 'desert' ? 0xf2dcaa : this.season === 'jungle' ? 0xcfe2c4 : 0xe8cf9f);
     this.scene.background = sky;
     this.scene.fog = new THREE.Fog(sky, 260, 470);
 
@@ -263,6 +266,7 @@ export class VillageRenderer {
     scenery.traverse((o) => {
       if (o.userData.mote) this.motes.push(o);
       if (o.userData.orbit || o.userData.bob) this.floaters.push(o);
+      if (o.userData.nightOnly) this.nightScenery.push(o);
     });
 
     const ringGeo = new THREE.RingGeometry(0.86, 1, 40);
@@ -410,7 +414,10 @@ export class VillageRenderer {
     this.night = n;
     const winter = this.season === 'winter';
     const volc = this.season === 'volcanic';
-    const sky = new THREE.Color(n ? (winter ? 0x1c2a44 : volc ? 0x2e1816 : 0x1c2240) : winter ? 0xdfe7ee : volc ? 0x9a6a58 : 0xe8cf9f);
+    const desert = this.season === 'desert', jungle = this.season === 'jungle';
+    const sky = new THREE.Color(n
+      ? (winter ? 0x1c2a44 : volc ? 0x2e1816 : desert ? 0x262244 : jungle ? 0x14302c : 0x1c2240)
+      : winter ? 0xdfe7ee : volc ? 0x9a6a58 : desert ? 0xf2dcaa : jungle ? 0xcfe2c4 : 0xe8cf9f);
     this.scene.background = n ? this.starSky(sky) : sky;
     (this.scene.fog as THREE.Fog).color = sky;
     this.container.classList.toggle('is-night', n);
@@ -429,20 +436,24 @@ export class VillageRenderer {
     } else {
       this.fill.color.set(0xb9c7ff);
       this.hemi.color.set(winter ? 0xf2f6ff : 0xfff0d8);
-      this.hemi.groundColor.set(winter ? 0x8a8f99 : 0x5b4a2e);
+      // (hot sand throws warm light back up into the shade; under the jungle it comes back green)
+      this.hemi.groundColor.set(winter ? 0x8a8f99 : desert ? 0x8a6a3e : jungle ? 0x3f5a2e : 0x5b4a2e);
       this.hemi.intensity = winter ? 1.1 : 1.35;
-      this.sun.color.set(winter ? 0xfff2e0 : volc ? 0xffd2b4 : 0xffd29a);
+      this.sun.color.set(winter ? 0xfff2e0 : volc ? 0xffd2b4 : desert ? 0xffe6b8 : 0xffd29a);
       this.sun.intensity = winter ? 2.1 : 2.6;
       this.fill.intensity = 0.35;
       this.renderer.toneMappingExposure = 1.05;
     }
     // windows glow warm at night
     mat(C.window).emissive.set(n ? 0xffa53a : 0x000000);
+    // (the Oasis's brass lanterns light and its glazed domes glow)
+    oasisNight(n);
     mat(C.window).emissiveIntensity = n ? 1.5 : 1;
     mat(SHUTTERED).emissive.set(n ? 0xc0703a : 0x000000);
     mat(SHUTTERED).emissiveIntensity = n ? 0.35 : 1;
     for (const l of this.lanterns) l.visible = n;
     for (const s of this.slots.values()) s.group.traverse((o) => { if (o.userData.nightOnly) o.visible = n; });
+    for (const o of this.nightScenery) o.visible = n;
     this.placeNightLights();
   }
 
@@ -683,7 +694,8 @@ export class VillageRenderer {
     const loops: THREE.Vector3[][] = PEOPLE_LOOPS.map((p) => p.map(([x, z]) => new THREE.Vector3(x, Math.hypot(x, z) > WALL_R ? heightAt(x, z) : 0, z)));
     while (this.people.length < want) {
       const r = rng(this.people.length * 97 + 5);
-      const g = person(TUNICS[this.people.length % TUNICS.length]);
+      // (the Oasis's robed folk are many pieces: merged, they cost a few draws each)
+      const g = this.opts.theme === 'djinn' ? bakeFigure(person(TUNICS[this.people.length % TUNICS.length])) : person(TUNICS[this.people.length % TUNICS.length]);
       g.scale.setScalar(1.3);
       const lantern = makeLantern();
       lantern.visible = this.night;
@@ -715,7 +727,7 @@ export class VillageRenderer {
     for (const k of TROOP_KINDS) {
       const n = units[k] ?? 0;
       if (n > 0) want.push(k);
-      if (n >= 100 && !['paladin', 'sorcerer', 'druid', 'goblin', 'necromancer', 'orc', 'noble'].includes(k)) want.push(k);
+      if (n >= 100 && !['paladin', 'sorcerer', 'druid', 'goblin', 'necromancer', 'orc', 'djinn', 'dwarf', 'frost', 'saurian', 'noble'].includes(k)) want.push(k);
     }
     const key = want.join(',');
     if (key === this.troopKey) return;
@@ -730,7 +742,7 @@ export class VillageRenderer {
     const ride: THREE.Vector3[][] = RIDE_LOOPS.map((p) => p.map(([x, z]) => new THREE.Vector3(x, Math.hypot(x, z) > WALL_R ? heightAt(x, z) : 0, z)));
     want.forEach((kind, i) => {
       const r = rng(i * 131 + kind.length * 7);
-      const g = troop(kind);
+      const g = this.opts.theme === 'djinn' ? bakeFigure(troop(kind)) : troop(kind);
       g.scale.setScalar(1.3);
       g.traverse((o) => { if (o.userData.pulse) this.pulses.push({ o, ph: this.pulses.length * 1.3 }); });
       const pool = isRider(kind) ? ride : foot;
@@ -796,7 +808,7 @@ export class VillageRenderer {
 
   /** The hero at home leaves his mark on the village. */
   private updateAura(): void {
-    const hero = (['paladin', 'sorcerer', 'druid', 'goblin', 'necromancer', 'orc'] as AuraHero[]).find((h) => (this.units[h] ?? 0) > 0) ?? null;
+    const hero = (['paladin', 'sorcerer', 'druid', 'goblin', 'necromancer', 'orc', 'djinn', 'dwarf', 'frost', 'saurian'] as AuraHero[]).find((h) => (this.units[h] ?? 0) > 0) ?? null;
     const wall = this.lastBuildings?.wall ?? 0;
     const tier = wall <= 0 ? 0 : wall < 5 ? 1 : wall < 10 ? 2 : wall < 15 ? 3 : 4;
     const key = hero ? `${hero}:${hero === 'druid' ? tier : ''}` : '';
@@ -1044,7 +1056,10 @@ export class VillageRenderer {
     const ash = this.season === 'volcanic';
     // (a druid grove sheds green leaves and blossom petals, a gold leaf here and there, rather than autumn's reds)
     const grove = this.opts.theme === 'druid';
-    const cols = snow ? [0xffffff, 0xf2f6fb, 0xe6eef7] : ash ? [0x8a8480, 0x6e6864, 0xa09a94, 0xff7a2a] : grove ? [0x78a843, 0xa6c552, 0xf3a9c4, 0x5e9a3a, 0xfaf0ee, 0xe8c65a] : [C.leafOrange, C.leafRed, C.leafYellow, C.leafGold];
+    // (sand motes drift over the desert; the jungle sheds green leaves and bright petals)
+    const sand = this.season === 'desert', wet = this.season === 'jungle';
+    const cols = snow ? [0xffffff, 0xf2f6fb, 0xe6eef7] : ash ? [0x8a8480, 0x6e6864, 0xa09a94, 0xff7a2a]
+      : sand ? [0xe8cf96, 0xd8b878, 0xf2e0b0] : wet ? [0x3c9a3c, 0x5cb444, 0xf05a7a, 0x2e7c34, 0xffc83a] : grove ? [0x78a843, 0xa6c552, 0xf3a9c4, 0x5e9a3a, 0xfaf0ee, 0xe8c65a] : [C.leafOrange, C.leafRed, C.leafYellow, C.leafGold];
     const r = rng(99);
     const col = new THREE.Color();
     for (let i = 0; i < n; i++) {
@@ -1243,7 +1258,7 @@ export class VillageRenderer {
     // smoke puffs
     for (const s of this.smoke) {
       if (s.puffs.length < 7 && Math.random() < dt * 2.2) {
-        const m = new THREE.Mesh(PUFF_GEO, new THREE.MeshLambertMaterial({ color: this.opts.theme === 'necromancer' ? 0x1a171c : this.opts.theme === 'goblin' ? 0x8a9a6a : this.opts.theme === 'orc' ? 0x5a524c : 0xcfc6b8, transparent: true, opacity: this.opts.theme === 'necromancer' ? 0.78 : 0.6, flatShading: true }));
+        const m = new THREE.Mesh(PUFF_GEO, new THREE.MeshLambertMaterial({ color: this.opts.theme === 'necromancer' ? 0x1a171c : this.opts.theme === 'goblin' ? 0x8a9a6a : this.opts.theme === 'orc' ? 0x5a524c : this.opts.theme === 'dwarf' ? 0x6e6660 : this.opts.theme === 'djinn' ? 0xdccdb0 : this.opts.theme === 'frost' ? 0xe2ecf4 : this.opts.theme === 'saurian' ? 0xd8e0d0 : 0xcfc6b8, transparent: true, opacity: this.opts.theme === 'necromancer' ? 0.78 : 0.6, flatShading: true }));
         s.src.getWorldPosition(m.position);
         this.scene.add(m);
         s.puffs.push({ m, age: 0, life: 3 + Math.random() * 1.5 });
@@ -1315,7 +1330,7 @@ const MARCH_ROAD: [number, number][] = [[0, 11], [0, 44], [0, 72], [-5, 84], [-1
 function marchFigures(units: Units): TroopModel[] {
   const map: Partial<Record<keyof Units, TroopModel>> = {
     spear: 'spear', sword: 'sword', axe: 'axe', archer: 'archer', scout: 'scout', light: 'light', marcher: 'marcher',
-    heavy: 'heavy', paladin: 'paladin', sorcerer: 'sorcerer', druid: 'druid', goblin: 'goblin', orc: 'orc', noble: 'noble', ram: 'axe', catapult: 'axe', trader: 'trader',
+    heavy: 'heavy', paladin: 'paladin', sorcerer: 'sorcerer', druid: 'druid', goblin: 'goblin', orc: 'orc', djinn: 'djinn', dwarf: 'dwarf', frost: 'frost', saurian: 'saurian', noble: 'noble', ram: 'axe', catapult: 'axe', trader: 'trader',
   };
   // horse merchants travel alone: one figure for each, up to a string of six
   if (units.trader && Object.keys(units).length === 1) return Array.from({ length: Math.min(6, units.trader) }, () => 'trader' as TroopModel);
@@ -1329,7 +1344,7 @@ function marchFigures(units: Units): TroopModel[] {
     if (i > 20) break;
   }
   // the heroes and noblemen always ride along if present
-  for (const [k] of kinds) { const m = map[k]; if (m && ['paladin', 'sorcerer', 'druid', 'goblin', 'necromancer', 'orc', 'noble'].includes(m) && !out.includes(m)) out.push(m); }
+  for (const [k] of kinds) { const m = map[k]; if (m && ['paladin', 'sorcerer', 'druid', 'goblin', 'necromancer', 'orc', 'djinn', 'dwarf', 'frost', 'saurian', 'noble'].includes(m) && !out.includes(m)) out.push(m); }
   return out;
 }
 

@@ -7,8 +7,12 @@
 import * as THREE from 'three';
 import { bake, blob, box, cone, cyl, mesh } from './kit';
 import { LAYOUT, WALL_R } from './scene';
+import { oasisAura } from './oasis';
+import { forgeAura } from './deepforge';
+import { frostAura } from './frosthold';
+import { saurianAura } from './templecity';
 
-export type AuraHero = 'paladin' | 'sorcerer' | 'druid' | 'goblin' | 'necromancer' | 'orc';
+export type AuraHero = 'paladin' | 'sorcerer' | 'druid' | 'goblin' | 'necromancer' | 'orc' | 'djinn' | 'dwarf' | 'frost' | 'saurian';
 
 export interface Aura {
   group: THREE.Group;
@@ -300,5 +304,16 @@ export function heroAura(hero: AuraHero, wallLevel: number): Aura {
     case 'goblin': return goblinAura(r);
     case 'necromancer': return necromancerAura(r);
     case 'orc': return orcAura(r);
+    // the Forgelord: rune-pillars round his statue, the ground-runes flaring with each blow of his hammer
+    case 'dwarf': return forgeAura(LAYOUT.statue[0], LAYOUT.statue[1], r);
+    // the Frost Queen's rime: ice growing thick along the foot of the walls, a ring of frost and snowflakes spiralling round her statue
+    case 'frost': return frostAura(r, wallLevel, LAYOUT.statue, WALL_R);
+    // the Saurian King's pack: raptors prowling round his statue, the ground throbbing jade under them
+    case 'saurian': return saurianAura(r, [LAYOUT.statue[0], LAYOUT.statue[1]]);
+    case 'djinn': {
+      // the desert wind he commands: sand and gold whirling up round his statue, smoke from his lamp, orbs adrift over the village
+      const a = oasisAura(LAYOUT.statue[0], LAYOUT.statue[1], r);
+      return { group: a.group, step: a.step, dispose() { disposeAll(a.group); } };
+    }
   }
 }

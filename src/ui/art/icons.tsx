@@ -81,6 +81,26 @@ const PAL: Record<VillageTheme, Pal> = {
     blade: '#858079', bladeLt: '#c4bdb0', bladeDk: '#4a4540', wood: '#6a4226', woodLt: '#9a6a3e', woodDk: '#3a2414',
     accent: '#b02a1e', accentLt: '#e0503a', trim: '#e8dcc0', trimLt: '#fbf3de', trimDk: '#a8977a', gem: '#ff8a2a', roof: '#7a4a2c', shot: '#8e877b',
   },
+  // the Frost Queen's north: ice and pale birch, winter-navy cloth, white fur and silver
+  frost: {
+    blade: '#d6eefc', bladeLt: '#ffffff', bladeDk: '#7fb0d8', wood: '#8e99a8', woodLt: '#c9d3de', woodDk: '#4c586c',
+    accent: '#27528f', accentLt: '#6a9bd8', trim: '#f3f1ec', trimLt: '#ffffff', trimDk: '#a9b8c8', gem: '#7fdcff', roof: '#f6f9fc', shot: '#c4e6fa',
+  },
+  // the Forgelord's dwarves: dark iron and bronze, forge-red, runes glowing like coals
+  dwarf: {
+    blade: '#a39e96', bladeLt: '#dcd6cc', bladeDk: '#5a5550', wood: '#6e4526', woodLt: '#9e6c3e', woodDk: '#3c2412',
+    accent: '#b3402a', accentLt: '#e8703c', trim: '#d4a03c', trimLt: '#f4d27a', trimDk: '#8a6220', gem: '#ff9a2a', roof: '#56504a', shot: '#6a6560',
+  },
+  // the Djinn's desert: bright steel, turquoise and gold, ruby and sand
+  djinn: {
+    blade: '#eef1f4', bladeLt: '#ffffff', bladeDk: '#98a2ac', wood: '#9a6436', woodLt: '#c8925a', woodDk: '#5a3818',
+    accent: '#17979c', accentLt: '#5cd4d0', trim: '#ecb83a', trimLt: '#ffe38a', trimDk: '#9a7420', gem: '#e0384e', roof: '#17979c', shot: '#f4b82a',
+  },
+  // the Saurian King's jungle: knapped obsidian, temple gold, jade, and feathers red as blood
+  saurian: {
+    blade: '#2e2a3a', bladeLt: '#8a84a4', bladeDk: '#16121c', wood: '#7a5430', woodLt: '#a87c48', woodDk: '#44301a',
+    accent: '#d8402a', accentLt: '#f5824a', trim: '#e2b23a', trimLt: '#ffe07a', trimDk: '#8e6a18', gem: '#34d07e', roof: '#5f8a3a', shot: '#b8ae90',
+  },
 };
 
 const BONE = '#e6dfcc', BONE_DK = '#b9b19c', GHOST = '#5cff9a';
@@ -745,6 +765,993 @@ const UNIT_ART: Partial<Record<UnitId, Art>> = {
     ),
 };
 
+// ---- the wilds: four peoples who answer only their own lands ----
+// Each draws its whole army its own way (no shared silhouettes with the realms above):
+// the Frost Queen's court in ice, birch and fur on white wolves and mammoths; the
+// Forgelord's dwarves in iron and bronze with runes like live coals, on goats and
+// war-rams; the Djinn's host in steel, turquoise and gold on camels; the Saurian
+// King's cold-blooded warband in obsidian, jade and feathers on raptors.
+
+const ICE = '#cdeafb', ICE_LT = '#f5fcff', ICE_DK = '#86b8de', ICE_SHADE = '#a8d2f0', FUR = '#f4f1ea', FUR_DK = '#b3ac9e';
+const BIRCH = '#eee9de', BIRCH_DK = '#5e564c', SNOWWOLF = '#eef3f7', MAMMOTH = '#7a5234', MAMMOTH_LT = '#a8784e', MAMMOTH_DK = '#4e3220';
+const BRONZE = '#c9893a', BRONZE_LT = '#ecb86a', RUNE = '#ff9a2a', RUNE_LT = '#ffe08a', IRON = '#5c5650', IRON_LT = '#8f8a82';
+const BEARD = '#b9572a', BEARD_LT = '#e08a4e', BEARD_DK = '#7a3416', GREYBEARD = '#e4dfd4', GREYBEARD_DK = '#a39c8e';
+const GOAT = '#8e7a62', GOAT_DK = '#6e5c48', RAM_WOOL = '#6e5846', HORN = '#dccfae';
+const LINEN = '#f7f1e3', SAND_DK = '#b8975a', CAMEL = '#c9955a', CAMEL_LT = '#e8c08a', CAMEL_DK = '#8a5c30';
+const DJINN = '#3f86d8', DJINN_LT = '#8ac0f4', DJINN_DK = '#23559c';
+const SCALE = '#5f9a3a', SCALE_LT = '#9acb5a', SCALE_DK = '#35601f', BELLY = '#ead9a0', JADE = '#34c07a', QUETZAL = '#1f9e6e', PLUME = '#2f78c8', MAW = '#7a2016';
+
+const f2 = (n: number) => Math.round(n * 100) / 100;
+/** a six-armed snowflake; drawn big, each arm grows two little branches */
+function flakePath(x: number, y: number, r: number, branches: boolean) {
+  let d = '';
+  for (let i = 0; i < 6; i++) {
+    const a = (i * Math.PI) / 3, dx = Math.sin(a), dy = -Math.cos(a);
+    d += `M${f2(x)} ${f2(y)}L${f2(x + dx * r)} ${f2(y + dy * r)}`;
+    if (branches) {
+      const px = x + dx * r * 0.58, py = y + dy * r * 0.58;
+      for (const s of [-1, 1]) {
+        const b = a + (s * Math.PI) / 4;
+        d += `M${f2(px)} ${f2(py)}L${f2(px + Math.sin(b) * r * 0.34)} ${f2(py - Math.cos(b) * r * 0.34)}`;
+      }
+    }
+  }
+  return d;
+}
+const Snowflake = ({ x, y, r = 1.8, c = ICE_LT }: { x: number; y: number; r?: number; c?: string }) => {
+  const d = flakePath(x, y, r, r >= 2.6);
+  return (
+    <>
+      <path d={d} fill="none" stroke={O} stroke-width={f2(Math.max(1.4, r * 0.6))} />
+      <path d={d} fill="none" stroke={c} stroke-width={f2(Math.max(0.6, r * 0.24))} />
+    </>
+  );
+};
+/** an n-pointed star (the desert's eight-pointed star, a sun's rays) */
+function starPath(x: number, y: number, R: number, r: number, n: number) {
+  let d = '';
+  for (let i = 0; i < n * 2; i++) {
+    const a = (i * Math.PI) / n, k = i % 2 ? r : R;
+    d += `${i ? 'L' : 'M'}${f2(x + Math.sin(a) * k)} ${f2(y - Math.cos(a) * k)}`;
+  }
+  return `${d}Z`;
+}
+/** a feather, quill at (x, y), pointing along a (degrees clockwise from straight up) */
+const Feather = ({ x, y, a, len, c, w = 1.2 }: { x: number; y: number; a: number; len: number; c: string; w?: number }) => (
+  <g transform={`translate(${x} ${y}) rotate(${a})`}>
+    <path d={`M0 0C${-w} ${f2(-len * 0.3)} ${-w} ${f2(-len * 0.72)} 0 ${-len}C${w} ${f2(-len * 0.72)} ${w} ${f2(-len * 0.3)} 0 0Z`} fill={c} stroke-width=".6" />
+    <path d={`M0 ${f2(-len * 0.12)}V${f2(-len * 0.82)}`} stroke={O} stroke-width=".35" />
+  </g>
+);
+/** a rune cut into iron or bronze, glowing like a coal */
+const Rune = ({ d, w = 0.8 }: { d: string; w?: number }) => (
+  <>
+    <path d={d} fill="none" stroke={RUNE_LT} stroke-width={f2(w + 1.2)} opacity=".45" />
+    <path d={d} fill="none" stroke={RUNE} stroke-width={w} />
+  </>
+);
+/** a flickering flame, base at (x, y) */
+const Flame = ({ x, y, s = 1, c = '#f0a030' }: { x: number; y: number; s?: number; c?: string }) => (
+  <g transform={`translate(${x} ${y}) scale(${s})`}>
+    <path d="M0 0C-1.8-.4-2.6-2-2-3.6c.4 .6 .8.8 1.2.6-.2-1.4.4-2.8 1.8-3.6-.2 1 .2 1.8.8 2.4 1 .8 1.4 2 .8 3.2C2 -.2 1.2.2 0 0Z" fill={c} stroke-width=".7" />
+    <path d="M.2-1c-.8-.4-1-1.2-.6-2 .2.6.6.8 1 .6" fill="none" stroke="#fde38a" stroke-width=".7" />
+  </g>
+);
+
+// more mounts, all facing right like the horse
+const goatHead = 'M5.4 22 6.8 14.4C5.4 12.2 5.6 9 7.6 7 9.4 5.2 12 4.6 14.2 5.4L18.8 8C20.4 8.8 21.6 10.2 21.8 11.6 22 12.8 21.2 13.6 20 13.6L17.4 13.4 15 14.4 13.4 22Z';
+const warRamHead = 'M4.8 22 6.2 14.6C4.4 12.4 4.6 8.6 7 6.4 9.2 4.4 12.6 4 15.4 5.2L19.8 8C21.4 9 22.2 10.8 21.8 12.4 21.4 13.8 20.2 14.6 18.8 14.4L15.8 13.8 14 22Z';
+const ramHorn = 'M12.6 5.6C9.2 3.8 5.2 5.4 4.6 9c-.6 3.2 1.6 5.8 4.6 5.8 2.6 0 4.2-2 3.8-4.2-.4-1.8-2-2.8-3.6-2.4-1.4.4-2 1.8-1.4 3';
+const camelHead = 'M4 23C4 18.4 5.4 14.6 8 11.6 9.6 9.8 10.6 7.8 11.4 5.6 12 4 13.4 3 15 3.2L15.6 1.8 16.6 3.4C18.8 3.6 21 4.6 22.4 5.8 23.4 6.8 23.6 8.2 23 9.2L22.6 10.4C22 11.2 21 11.4 20.2 11L18.4 10.4 16.2 10C14.6 10.8 13.6 12.8 13.2 15.4L12.6 23Z';
+const raptorHead = 'M5.4 22 6.4 14.6C4.8 12 5.2 8.4 7.6 6.2 10 4 13.8 3.8 17 5L21.8 7.4C22.8 8 23 9.2 22.4 10L21.2 11 17.8 11.4 18 12.4 21 12.8C20.4 14 19 14.8 17.4 14.6L14.6 14.2 13 22Z';
+const lizardHead = 'M5 22.4 6 14.8C4.4 12.4 4.8 9 7.2 7 9.6 5 13.4 4.8 16.4 5.8L21 7.6C22.4 8.2 23 9.6 22.6 11L22 12.6 17.4 13.2C16.4 14.6 15.2 15.4 13.8 15.6L13 22.4Z';
+
+/** a white wolf of the north, eyes like blue ice */
+const SnowWolf = ({ band }: { band?: string }) => (
+  <>
+    <path d={wolfHead} fill={SNOWWOLF} />
+    <path d="M10.2 4.4 11.4 3l.5 1.9Z" fill="#9fb6cc" stroke-width=".4" />
+    <path d="M9.4 14.8c1-1.6 2.8-2.4 4.8-2.2M6.8 13c.6-1.2 1.4-2 2.4-2.4" fill="none" stroke="#b6c4d2" stroke-width=".9" />
+    {band && <path d="M8 13.2c3 .6 6 .2 9-1.4" fill="none" stroke={band} stroke-width="1.5" />}
+    <path d="M11.6 7.4 14.4 8" stroke={O} stroke-width=".9" />
+    <circle cx="13.1" cy="8.8" r=".95" fill="#3fb4f4" stroke-width=".5" />
+    <circle cx="22.4" cy="11.8" r=".8" fill={O} />
+    <path d="m17.6 14.2.4 1.4.8-1.6M19.6 14l.4 1.2.6-1.4" fill="#fff" stroke-width=".4" />
+  </>
+);
+/** a reindeer: great swept antlers, a pale muzzle and a white ruff, a bell at the throat */
+const Reindeer = ({ band }: { band: string }) => (
+  <>
+    <path d="M10.4 5C9.6 3 7.8 1.6 5.2 1.2M8.4 3.2 8.6.6M6.8 2.1 6-.2M10.8 4.8c.8-1.4 1.8-2.4 3-3M12.6 3.4 12.6.8" fill="none" stroke={O} stroke-width="2.2" />
+    <path d="M10.4 5C9.6 3 7.8 1.6 5.2 1.2M8.4 3.2 8.6.6M6.8 2.1 6-.2M10.8 4.8c.8-1.4 1.8-2.4 3-3M12.6 3.4 12.6.8" fill="none" stroke="#eadfc4" stroke-width="1" />
+    <path d={horseHead} fill="#8a6c52" />
+    <path d="M7.3 15.2c2.4 1 5.2 1 7.8-.2l-.4 2.4c-2.4 1-5 1-7.8.2Z" fill={FUR} stroke-width=".8" />
+    <path d="M17.4 10.4c1.6.2 2.8 1 3.2 2.2l-1.9 2.2-2.6-1.4Z" fill="#e6ddd0" stroke-width=".7" />
+    <path d="M8.2 12.4c3 .6 6.2.2 9.4-1.6" fill="none" stroke={band} stroke-width="1.4" />
+    <circle cx="11.2" cy="14.2" r="1.1" fill={GOLD} stroke-width=".6" />
+    <Eye x={12.6} y={8.4} />
+  </>
+);
+/** a mountain goat: long horns swept back, a beard at the chin, a bronze browband */
+const GoatHead = ({ coat, band }: { coat: string; band: string }) => (
+  <>
+    <path d="M9 6.6C8.4 4 6.8 2.2 4.4 1.6c-.8-.2-1.4.2-1.4 1 2 .6 3.4 2.4 3.8 5Z" fill="#b8ab90" />
+    <path d={goatHead} fill={coat} />
+    <path d="M11.8 6.2C11.2 3.4 9.4 1.2 6.6.6c-.9-.2-1.6.3-1.5 1.1 2.4.6 4.2 2.6 4.8 5.4Z" fill={HORN} />
+    <path d="M9.2 3.4l.9-.7M7.8 2.4l.6-.9M10.4 4.8l1-.5" stroke={O} stroke-width=".55" />
+    <path d="M8.6 8.6C7 8.4 5.6 9 4.8 10.2c1.4.4 2.8.2 4.2-.6Z" fill={coat} stroke-width=".7" />
+    <path d="M17.2 13.4c.6 1.8.4 3.6-.6 5-.8-1.4-1.6-3-1.6-4.8Z" fill="#4e3e2e" stroke-width=".7" />
+    <path d="M9.4 12.4c2.8.4 5.8 0 8.6-1.4" fill="none" stroke={band} stroke-width="1.5" />
+    <circle cx="13.6" cy="8.6" r="1" fill="#e8c24a" stroke-width=".5" />
+    <path d="M13 8.6h1.2" stroke={O} stroke-width=".55" />
+    <path d="M20.8 11.2l.6.4" stroke={O} stroke-width=".8" />
+  </>
+);
+/** a camel: long neck, droopy lip, a turquoise headstall with red tassels */
+const CamelHead = ({ coat, P }: { coat: string; P: Pal }) => (
+  <>
+    <path d={camelHead} fill={coat} />
+    <path d="M6.6 14.4c.8-2.6 2.2-4.6 3.8-6.2" fill="none" stroke={CAMEL_LT} stroke-width="1" />
+    <path d="M13.3 16c-.2 1.6-.2 3.2 0 4.8" fill="none" stroke={CAMEL_DK} stroke-width=".8" />
+    <path d="M15.2 4c.6 2 .8 4 .6 6M20 5.2c.6 1.8.6 3.6 0 5.6" fill="none" stroke={P.accent} stroke-width="1.4" />
+    <path d="M15.6 7 20.2 7.4" stroke={P.accent} stroke-width="1.1" />
+    <circle cx="15.6" cy="7" r=".6" fill={P.trim} stroke-width=".4" />
+    <path d="M16 10.2 15.7 12.8M20 10.8l-.2 2.4" stroke={P.gem} stroke-width="1.1" />
+    <path d="M16.8 4.8c.8-.4 1.6-.4 2.2.2" fill="none" stroke={O} stroke-width=".8" />
+    <circle cx="17.8" cy="5.7" r=".75" fill={O} />
+    <path d="M23 9.2c-.8.4-1.6.4-2.4.2M22.2 6.8l.6.3" fill="none" stroke={O} stroke-width=".7" />
+  </>
+);
+/** a raptor: a crest of feathers, a slit-eyed stare, a mouthful of teeth */
+const RaptorHead = ({ coat, crest }: { coat: string; crest: string }) => (
+  <>
+    <Feather x={9.4} y={6.6} a={-26} len={6} c={crest} />
+    <Feather x={10.8} y={5.4} a={2} len={5} c={GOLD} />
+    <path d="M17.8 11.4 21.2 11 21 12.8 18 12.4Z" fill={MAW} stroke="none" />
+    <path d={raptorHead} fill={coat} />
+    <path d="M9.2 9.4c.6 1.4.6 2.8 0 4M11.6 9.8c.4 1.2.4 2.4 0 3.6M7.2 15.4c1.4.4 2.8.4 4.2 0M7.6 18.6c1.4.4 2.8.4 4.2 0" fill="none" stroke={SCALE_DK} stroke-width=".8" />
+    <path d="M13 6.9 16 7.3" stroke={O} stroke-width="1" />
+    <circle cx="14.6" cy="8.4" r="1.05" fill="#ffd23a" stroke-width=".5" />
+    <path d="M14.6 7.6v1.6" stroke={O} stroke-width=".55" />
+    <path d="M18.4 11.3l.4 1 .5-1.1M19.8 11.2l.4 1 .5-1.1M18.8 12.5l.4-.9.4.9" fill="#fff" stroke-width=".35" />
+    <path d="M21.2 8.2l.5.4" stroke={O} stroke-width=".8" />
+  </>
+);
+
+type WildSet = Partial<Record<UnitId, (P: Pal) => JSX.Element>>;
+
+const FROST_ART: WildSet = {
+  // ice wardens: a birch spear crowned with a long crystal of ice, bound in fur
+  spear: (P) => (
+    <Ink>
+      <g transform="rotate(45 12 12)">
+        <rect x="11.2" y="6.2" width="1.6" height="20.4" rx=".7" fill={BIRCH} />
+        <path d="M11.3 12.6h.9M12.1 16.8h.8M11.3 21h.9" stroke={BIRCH_DK} stroke-width=".7" />
+        <path d="M10.4 6.2 8.2 2.8l2.7 1.6ZM13.6 6.2l2.2-3.4-2.7 1.6Z" fill={P.blade} stroke-width=".6" />
+        <path d="M12-3.2 14.4 1.4 13.4 6.6h-2.8l-1-5.2Z" fill={P.blade} />
+        <path d="M12-3.2 14.4 1.4 13.4 6.6H12Z" fill={ICE_SHADE} stroke-width=".5" />
+        <path d="M11.6-.8 10.6 1.6l.6 3.6" fill="none" stroke={P.bladeLt} stroke-width=".8" />
+        <rect x="10.1" y="6.4" width="3.8" height="2.4" rx="1.1" fill={P.trim} />
+        <path d="M10.9 7.2l.5.8M12.5 7l.5.9" stroke={FUR_DK} stroke-width=".5" />
+        <path d="M11.2 10h1.6M11.2 11.3h1.6" stroke={P.accent} stroke-width=".9" />
+      </g>
+      <Snowflake x={19.6} y={13.2} r={1.7} />
+    </Ink>
+  ),
+  // frostguards: a winter-navy shield bearing a great snowflake, a sword of pale steel
+  sword: (P) => (
+    <Ink>
+      <g transform="rotate(18 17.4 12)">
+        <path d="M16.2 15.2V3.4L17.4.4l1.2 3v11.8Z" fill={P.blade} />
+        <path d="M17.4 2.6v11.8" stroke={P.bladeLt} stroke-width=".8" />
+        <path d="M13.2 16.1 14.4 15h6l1.2 1.1-1.2 1.1h-6Z" fill={ICE_DK} />
+        <rect x="16.6" y="17.2" width="1.6" height="3.4" fill={P.woodDk} />
+        <circle cx="17.4" cy="21.4" r="1.2" fill={P.gem} />
+      </g>
+      <path d="M1.4 6.6c4.2-1.4 8.4-1.4 12.6 0v6c0 4.8-2.8 7.8-6.3 9.6-3.5-1.8-6.3-4.8-6.3-9.6Z" fill={ICE} stroke-width="1.1" />
+      <path d="M2.9 7.8c3.2-1 6.4-1 9.6 0v4.8c0 3.8-2.1 6.3-4.8 7.8-2.7-1.5-4.8-4-4.8-7.8Z" fill={P.accent} stroke-width=".6" />
+      <Snowflake x={7.7} y={13} r={3.3} />
+    </Ink>
+  ),
+  // rime reavers: a bearded axe whose blade is a slab of ice, icicles hanging from its horn
+  axe: (P) => (
+    <Ink>
+      <path d="m4 22-1.6-1.4L17.4 4.6 19 6Z" fill={BIRCH} />
+      <path d="m4.4 18.6 1.4 1.2M5.7 17.2 7 18.4" stroke={P.accent} stroke-width="1.1" />
+      <path d="M9.9 12.6 11.4 11l1.6 1.4-1.5 1.6Z" fill={P.trim} stroke-width=".7" />
+      <path d="M13.6 9.2C12 9.6 10 9.8 8.2 9.4 7.4 6.8 8 3.4 10.4 1c1.4.2 3 1 4.6 2.2.6.6 1.2 1.4 1.8 2.2Z" fill={P.blade} />
+      <path d="M15.2 6.8 8.6 7M15.2 6.8 9 3.6M15.2 6.8 11.6 1.6" fill="none" stroke={ICE_DK} stroke-width=".6" />
+      <path d="M9.2 7.8c-.4-1.8 0-3.8 1.4-5.6" fill="none" stroke={P.bladeLt} stroke-width="1" />
+      <path d="m9.4 9.5.3 2.9.9-2.8ZM11.4 9.5l.3 2.2.8-2.3Z" fill={P.blade} stroke-width=".55" />
+      <path d="M13.4 7.2 15.6 4.8l2 1.9-2.2 2.4Z" fill={P.woodDk} />
+      <path d="M17.6 4.6 21.6 1.4 19.4 6Z" fill={P.blade} stroke-width=".7" />
+    </Ink>
+  ),
+  // frost archers: a pale birch bow tipped with icicles, an arrow headed with ice
+  archer: (P) => (
+    <Ink>
+      <path d="M5.6 2.8 4.2.2l2.6 2ZM5.6 21.2l-1.4 2.6 2.6-2Z" fill={P.blade} stroke-width=".6" />
+      <path d="M6 2.2c9.6 3.6 9.6 16 0 19.6l-1.2-1.4c7.8-3.6 7.8-13.2 0-16.8Z" fill={BIRCH} />
+      <path d="M8.8 5.4l.9-.4M11.4 9.2h1M11.4 14.8h1M8.8 18.6l.9.4" stroke={BIRCH_DK} stroke-width=".6" />
+      <path d="M5.4 3v18" stroke={P.bladeLt} stroke-width=".8" />
+      <path d="M10.6 10h3v4h-3Z" fill={P.accent} stroke-width=".6" />
+      <path d="M3 12h14.4" stroke={P.woodDk} stroke-width="1.4" />
+      <path d="M16.4 12 18.6 9.4 23 12l-4.4 2.6Z" fill={P.blade} />
+      <path d="M18.6 9.4 19.4 12l-.8 2.6" fill="none" stroke={ICE_DK} stroke-width=".5" />
+      <path d="M1.2 9.6 4.4 12l-3.2 2.4L2.8 12Z" fill={P.trim} stroke-width=".7" />
+      <Snowflake x={20.4} y={5.4} r={1.7} />
+    </Ink>
+  ),
+  // snow owls: white wings spread wide, flecked with black, yellow eyes
+  scout: () => (
+    <Ink>
+      <path d="M8.6 9.4C6.4 6.6 3.8 5.2.8 5.4c.2 2 .8 3.8 1.6 5.2l-1 .6 1.8.6-.6 1 2 .4-.2 1 2 .2c.8.2 1.6.2 2.4-.2Z" fill={FUR} />
+      <path d="M15.4 9.4c2.2-2.8 4.8-4.2 7.8-4-.2 2-.8 3.8-1.6 5.2l1 .6-1.8.6.6 1-2 .4.2 1-2 .2c-.8.2-1.6.2-2.4-.2Z" fill={FUR} />
+      <path d="M3.4 8.4l.9.5M5.4 10.6l.9.5M20.6 8.4l-.9.5M18.6 10.6l-.9.5" stroke="#5a6272" stroke-width=".6" />
+      <path d="M12 4.4c-3.2 0-5.2 2.4-5.2 5.8 0 5 2.2 9.6 5.2 9.6s5.2-4.6 5.2-9.6c0-3.4-2-5.8-5.2-5.8Z" fill="#fff" />
+      <path d="M9.8 15.2l.6.5.6-.5M12.6 16.8l.6.5.6-.5M11.4 18.2l.5.4.5-.4" fill="none" stroke="#5a6272" stroke-width=".55" />
+      <circle cx="10.1" cy="9.6" r="1.6" fill="#ffd23a" stroke-width=".6" />
+      <circle cx="13.9" cy="9.6" r="1.6" fill="#ffd23a" stroke-width=".6" />
+      <circle cx="10.2" cy="9.7" r=".75" fill={O} stroke="none" />
+      <circle cx="13.8" cy="9.7" r=".75" fill={O} stroke="none" />
+      <path d="M11.2 11.4h1.6L12 13.2Z" fill="#4a4e58" stroke-width=".5" />
+      <path d="M10.4 19.6v1.6M11.4 19.8l-.2 1.4M13.6 19.6v1.6M12.6 19.8l.2 1.4" stroke="#4a4e58" stroke-width=".7" />
+    </Ink>
+  ),
+  light: (P) => (
+    <Ink>
+      <Lance shaft={BIRCH} flag={P.accent} tip={P.blade} edge={ICE_LT} />
+      <SnowWolf band={P.accent} />
+    </Ink>
+  ),
+  // sleigh archers: a winter-navy sleigh on silver runners, a fur thrown over the back
+  marcher: (P) => (
+    <Ink>
+      <RiderBow wood={BIRCH} string={P.bladeLt} tip={P.blade} />
+      <path d="M.8 21.4h12.4c2 0 3.2-1.2 3.2-2.8 0-1-.7-1.6-1.5-1.4" fill="none" stroke={O} stroke-width="2.4" />
+      <path d="M.8 21.4h12.4c2 0 3.2-1.2 3.2-2.8 0-1-.7-1.6-1.5-1.4" fill="none" stroke={P.trimDk} stroke-width="1" />
+      <path d="M3.4 18.8v2.4M10.6 18.8v2.4" stroke={O} stroke-width="1.2" />
+      <path d="M1.2 12.4c0-.9.6-1.4 1.4-1.4h2.2v4.2h6.4c.9 0 1.5-.5 1.7-1.4l.2-.7c.3-1.1 1.3-1.6 2.2-1.1.8.4 1 1.3.5 2-1.2 2.4-2.6 5-5.4 5H3.2c-1.1 0-2-.9-2-2Z" fill={P.accent} />
+      <path d="M2.2 16.8h9.4" stroke={P.trimDk} stroke-width=".8" />
+      <path d="M1.8 11.6c1-.8 2.6-.9 3.6 0l.6 4c-1 .6-2.6.8-3.8.2Z" fill={FUR} stroke-width=".7" />
+      <path d="M2.8 13.2l.3.8M4.4 13l.3.8" stroke={FUR_DK} stroke-width=".5" />
+      <circle cx="14.4" cy="13" r=".6" fill={P.trimLt} stroke-width=".4" />
+    </Ink>
+  ),
+  // mammoth riders: a shaggy mammoth in a winter-navy browplate, great tusks curling up
+  heavy: (P) => (
+    <Ink>
+      <path d="M3.2 22.6C2.4 17.6 2.6 12 4.4 8 6.2 4.2 9.2 2.2 12.6 2.4c3.4.2 5.8 2.4 6.2 5.6.2 1.4 0 2.6-.4 3.6L16 15l-2.8.2-.4 7.4Z" fill={MAMMOTH} />
+      <path d="M4.8 12.4c.6-2 1.6-3.6 3-4.8M4.2 17.4c.2-1.4.6-2.6 1.2-3.6M11 20.2c0-1.4.4-2.6 1-3.6" fill="none" stroke={MAMMOTH_LT} stroke-width=".9" />
+      <path d="M16.2 10.8c1.8.2 3 1.2 3.4 2.8.6 2.2.4 4.6.6 6.4.1.8.6 1.2 1.2 1l.3-1.1c.9.2 1.3.9 1.1 1.7-.4 1.3-1.7 2.1-3.1 1.9-1.7-.3-2.6-1.8-2.8-3.6l-.7-4.4Z" fill={MAMMOTH} />
+      <path d="M17.4 14.4h2.2M17.8 16.8h2.3" stroke={MAMMOTH_DK} stroke-width=".6" />
+      <path d="M10 8.2C8.4 8 7.2 9.2 7.2 10.8s1.2 2.4 2.6 2Z" fill={MAMMOTH_DK} stroke-width=".7" />
+      <path d="M10.6 3c2.8-.6 5.6.6 7.2 3l-.6 2.6-5.6-.2c-1-1.8-1.4-3.6-1-5.4Z" fill={P.accent} />
+      <path d="M11.4 3.8c1.8-.4 3.4 0 4.8 1" fill="none" stroke={P.accentLt} stroke-width=".8" />
+      <Snowflake x={13.8} y={6} r={1.4} />
+      <circle cx="15.6" cy="9.8" r=".8" fill={O} />
+      <path d="M14.6 12.6c-.4 4.2 1.4 7.6 4.8 8.4 2.2.5 3.8-.8 4.2-3.4-1 1.2-2.2 1.6-3.4 1.4-2.4-.4-4-2.8-4.2-6.2Z" fill={TUSK} />
+      <path d="M16.2 15.4c.6 1.6 1.6 2.8 3 3.4" fill="none" stroke="#c9bd9e" stroke-width=".7" />
+      <KiteShield fill={P.accent} trim={ICE_LT} />
+      <Snowflake x={5.4} y={17.2} r={1.9} />
+    </Ink>
+  ),
+  // ice rams: a snow-laden roof, a log shod with a great wedge of ice, icicles underneath
+  ram: (P) => (
+    <Ink>
+      <path d="M4 10 11 4.4 18 10Z" fill={P.wood} />
+      <path d="M11 4.4 16.4 8.7c-.7.7-1.7.6-2.2 0-.6.7-1.6.7-2.2 0-.6.7-1.6.7-2.2 0-.6.7-1.6.7-2.2 0-.6.6-1.4.6-2 .1Z" fill={P.roof} stroke-width=".8" />
+      <path d="M4 10h14v3H4Z" fill={P.woodDk} />
+      <rect x="1.8" y="11" width="17" height="3.6" rx="1.6" fill={P.wood} />
+      <path d="M3.4 12h4.4M10.6 13.4h5.6" stroke={P.woodDk} stroke-width=".7" />
+      <path d="M8.8 12h3" stroke={P.woodLt} stroke-width=".8" />
+      <path d="m9.4 14.6.4 2.2.5-2.2M11.4 14.6l.3 1.6.4-1.6" fill={P.blade} stroke-width=".5" />
+      <path d="M18 10.2 21.2 10.6 23.6 12.8 21.2 15 18 15.4Z" fill={P.blade} />
+      <path d="M18 10.2 21.2 10.6 23.6 12.8H18Z" fill={P.bladeLt} stroke-width=".5" />
+      <path d="M21.2 10.6V15" stroke={ICE_DK} stroke-width=".5" />
+      <circle cx="6" cy="18" r="2.8" fill={P.woodLt} />
+      <circle cx="16" cy="18" r="2.8" fill={P.woodLt} />
+      <path d="M6 15.2v5.6M3.2 18h5.6M16 15.2v5.6M13.2 18h5.6" stroke={P.woodDk} stroke-width=".7" />
+      <circle cx="6" cy="18" r=".8" fill={P.gem} stroke-width=".5" />
+      <circle cx="16" cy="18" r=".8" fill={P.gem} stroke-width=".5" />
+    </Ink>
+  ),
+  // frost trebuchets: an A-frame and a long arm, a snowflake-marked counterweight, a block of ice to throw
+  catapult: (P) => (
+    <Ink>
+      <path d="M4.6 19.4 10.2 8l5.6 11.4M7.2 15h6" fill="none" stroke={O} stroke-width="2.6" />
+      <path d="M4.6 19.4 10.2 8l5.6 11.4M7.2 15h6" fill="none" stroke={P.wood} stroke-width="1.2" />
+      <path d="M6.6 10.7 18.4 1.9" stroke={O} stroke-width="2.8" />
+      <path d="M6.6 10.7 18.4 1.9" stroke={P.woodLt} stroke-width="1.3" />
+      <path d="M6.6 10.7v1.4" stroke={O} stroke-width="1" />
+      <rect x="4" y="12" width="5.2" height="4.4" rx=".5" fill={P.accent} />
+      <Snowflake x={6.6} y={14.2} r={1.4} />
+      <circle cx="10.2" cy="8" r="1" fill={P.trimDk} stroke-width=".6" />
+      <path d="M17.6 2.2 19.6.6l2.8.6.8 2.4-1.4 2.2-3 .4Z" fill={P.shot} />
+      <path d="M19.6.6 20.2 3.4l3-.2M20.2 3.4l-1.4 2.8" fill="none" stroke={ICE_DK} stroke-width=".5" />
+      <path d="M18.4 2.4c.4-.6 1-1 1.6-1.2" fill="none" stroke="#fff" stroke-width=".7" />
+      <rect x="2" y="19" width="17.2" height="2.4" rx=".6" fill={P.woodDk} />
+      <circle cx="4.8" cy="21.4" r="1.6" fill={P.woodLt} />
+      <circle cx="16.4" cy="21.4" r="1.6" fill={P.woodLt} />
+    </Ink>
+  ),
+  // ice heralds: a crown of ice crystals on a silver band
+  noble: (P) => (
+    <Ink>
+      <path d="M2.8 17.8 3.4 10.2 5.6 12.8 6.8 6.6 9 11.2 12 1.6 15 11.2 17.2 6.6 18.4 12.8 20.6 10.2 21.2 17.8Z" fill={ICE} />
+      <path d="M12 1.6 15 11.2H12ZM6.8 6.6 9 11.2H6.8ZM17.2 6.6l1.2 6.2h-1.2Z" fill={ICE_SHADE} stroke="none" />
+      <path d="M12 3v14.4M6.8 8v9.4M17.2 8v9.4" stroke={ICE_DK} stroke-width=".6" />
+      <path d="M11.2 4.6 9.8 9.6" stroke="#fff" stroke-width=".8" />
+      <path d="M2.4 17.4h19.2v3.6H2.4Z" fill={P.trimDk} />
+      <circle cx="12" cy="19.2" r="1.1" fill={P.accent} />
+      <circle cx="6.4" cy="19.2" r=".9" fill={P.gem} />
+      <circle cx="17.6" cy="19.2" r=".9" fill={P.gem} />
+      <Snowflake x={12} y={13.8} r={2.2} c={P.accent} />
+    </Ink>
+  ),
+  // hearth guard: a torch and a woodcutter's axe
+  militia: (P) => (
+    <Ink>
+      <path d="m20.6 21.8 1.2-1.2L9.6 8.4 8.4 9.6Z" fill={P.woodDk} />
+      <path d="m10.6 11.8 1.4-1.4 1.4 1.4-1.4 1.4Z" fill={FUR} stroke-width=".6" />
+      <Flame x={7.6} y={9.6} s={1.15} />
+      <path d="m3.4 21.8-1.2-1.2L16 6.8 17.2 8Z" fill={BIRCH} />
+      <path d="m4.6 19.4 1.2 1.2" stroke={P.accent} stroke-width="1.2" />
+      <path d="M15.6 10.2 17.8 8l3.8 1c.2 2.2-.8 4.2-2.6 5.4Z" fill={P.blade} />
+      <path d="M18.4 9.2c1 .2 1.8.6 2.4 1.2" fill="none" stroke={P.bladeLt} stroke-width=".8" />
+    </Ink>
+  ),
+  // reindeer sledges: a reindeer in harness, a sledge of furs behind
+  trader: (P) => (
+    <Ink>
+      <g transform="translate(3.8 .4) scale(.88)">
+        <Reindeer band={P.accent} />
+      </g>
+      <path d="M10.8 16.6 13.8 17.2" stroke={O} stroke-width="1" />
+      <path d="M.6 21.4h11.8c1.6 0 2.6-1 2.6-2.4 0-.8-.6-1.4-1.4-1.2" fill="none" stroke={O} stroke-width="2.2" />
+      <path d="M.6 21.4h11.8c1.6 0 2.6-1 2.6-2.4 0-.8-.6-1.4-1.4-1.2" fill="none" stroke={P.trimDk} stroke-width=".9" />
+      <path d="M2.6 19v2.4M9.4 19v2.4" stroke={O} stroke-width="1.1" />
+      <path d="M.8 15.4h10.4v2.8c0 .7-.6 1.2-1.2 1.2H2c-.7 0-1.2-.5-1.2-1.2Z" fill={P.accent} />
+      <path d="M1.6 17.2h8.8" stroke={P.trimDk} stroke-width=".7" />
+      <rect x="1.4" y="10.8" width="5" height="4.6" rx=".5" fill={WOOD} />
+      <path d="M1.4 12.4h5" stroke={WOOD_DK} stroke-width=".8" />
+      <rect x="3.3" y="11.8" width="1.2" height="1.4" fill={GOLD} stroke-width=".5" />
+      <path d="M6 15.4c-.4-2.8.8-4.6 2.6-4.6s3 1.8 2.6 4.6Z" fill={FUR} />
+      <path d="M7.6 11.6c-.3 1.2-.3 2.6 0 3.8M9.6 11.6c.3 1.2.3 2.6 0 3.8" fill="none" stroke={FUR_DK} stroke-width=".6" />
+    </Ink>
+  ),
+};
+
+const DWARF_ART: WildSet = {
+  // shieldbearers: a great round shield, bronze-rimmed, an inscription of runes burning round its boss
+  spear: (P) => (
+    <Ink>
+      <path d="m2.4 22.6-1-1L16.4 6.8l1 1Z" fill={P.wood} />
+      <path d="M15.2 6.6 16.4 3.6 22.4 1.6l-2 6-3 1.2Z" fill={P.blade} />
+      <path d="m17.2 6.4 3.6-3.4" stroke={P.bladeLt} stroke-width="1" />
+      <path d="m13.6 7.6 2.8 2.8" stroke={P.trim} stroke-width="2" />
+      <circle cx="9.2" cy="13.8" r="8" fill={P.trim} stroke-width="1.1" />
+      <path d="M3.2 9.4c1.2-1.8 3-3 5-3.4" fill="none" stroke={P.trimLt} stroke-width=".9" />
+      {[0, 45, 90, 135, 180, 225, 270, 315].map((a) => (
+        <circle cx={f2(9.2 + Math.sin((a * Math.PI) / 180) * 7.15)} cy={f2(13.8 - Math.cos((a * Math.PI) / 180) * 7.15)} r=".42" fill={P.trimDk} stroke="none" />
+      ))}
+      <circle cx="9.2" cy="13.8" r="6.3" fill={IRON} stroke-width=".7" />
+      <circle cx="9.2" cy="13.8" r="4.3" fill="none" stroke={RUNE_LT} stroke-width="1.9" opacity=".3" />
+      <circle cx="9.2" cy="13.8" r="4.3" fill="none" stroke={RUNE} stroke-width=".9" stroke-dasharray="1.7 .9" />
+      <circle cx="9.2" cy="13.8" r="2.2" fill={P.trim} stroke-width=".8" />
+      <circle cx="8.6" cy="13.2" r=".7" fill={P.trimLt} stroke="none" />
+    </Ink>
+  ),
+  // ironbreakers: a heavy rune-hammer, and an iron shield with a rune burning on it
+  sword: (P) => (
+    <Ink>
+      <g transform="rotate(45 12 12)">
+        <rect x="11.1" y="6.6" width="1.8" height="18.4" rx=".6" fill={P.wood} />
+        <path d="M11.1 19.4h1.8M11.1 21.2h1.8" stroke={P.trim} stroke-width=".9" />
+        <path d="M6.8 1.8h10.4v5.4H6.8Z" fill={P.blade} />
+        <path d="M5.8 1.4 6.8 1.8v5.4l-1 .4ZM18.2 1.4l-1 .4v5.4l1 .4Z" fill={P.bladeDk} />
+        <path d="M9.6 1.8h4.8v5.4H9.6Z" fill={P.trim} stroke-width=".7" />
+        <Rune d="M12 2.8v3.4M12 3.6l1.1.9-1.1.9" w={0.7} />
+        <path d="M7.4 2.8h1.4" stroke={P.bladeLt} stroke-width=".8" />
+      </g>
+      <path d="M1.4 12h9.6v5.4c0 3-2.2 4.8-4.8 5.8-2.6-1-4.8-2.8-4.8-5.8Z" fill={P.trim} />
+      <path d="M2.6 13.2h7.2v4.2c0 2.2-1.6 3.6-3.6 4.4-2-.8-3.6-2.2-3.6-4.4Z" fill={IRON} stroke-width=".6" />
+      <Rune d="M6.2 14.4v5.4M6.2 15.4l1.8 1.3-1.8 1.3" />
+    </Ink>
+  ),
+  // longbeards: a grey-bearded veteran under an iron helm, his great axe at his shoulder
+  axe: (P) => (
+    <Ink>
+      <path d="M17.2 4.6 21.2 23" stroke={O} stroke-width="2.8" />
+      <path d="M17.2 4.6 21.2 23" stroke={P.woodLt} stroke-width="1.3" />
+      <path d="M16.8 4.2 14.6 4.8l2.4 1.4Z" fill={P.bladeDk} stroke-width=".6" />
+      <path d="M16.8 3.4C19.2 1.4 21.8.8 23.4 1.2c.4 3.4 0 6.8-1.6 9.6-1-1.4-2.6-2.4-4.4-2.8Z" fill={P.blade} />
+      <path d="M22.4 2.2c.2 2.6-.2 5.2-1.2 7.2" fill="none" stroke={P.bladeLt} stroke-width=".9" />
+      <Rune d="M19.4 3.8v3.6M19.4 4.8l1.1.8" w={0.7} />
+      <path d="M3.4 10.4c0-4.6 2.8-7.6 6.4-7.6s6.4 3 6.4 7.6Z" fill={P.blade} />
+      <path d="M9.8 2.8v7.6" stroke={P.trim} stroke-width="1.3" />
+      <path d="M5.4 7.8c.3-2 1.4-3.4 2.8-4" fill="none" stroke={P.bladeLt} stroke-width="1" />
+      <path d="M4.6 11.4h10.4v3.4H4.6Z" fill={SKIN} />
+      <circle cx="7.6" cy="12.7" r=".6" fill={O} stroke="none" />
+      <circle cx="12" cy="12.7" r=".6" fill={O} stroke="none" />
+      <path d="M3 10.2h13.6V12H3Z" fill={P.trim} />
+      <path d="M9 10.6v2.8c0 .8.4 1.2.8 1.4.4-.2.8-.6.8-1.4v-2.8Z" fill={P.blade} stroke-width=".6" />
+      <path d="M3.8 13.4c-.6 3.8 0 7 2 9.4l1.3-1.2 1.2 1.6 1.3-1.6 1.3 1.6 1.2-1.6 1.3 1.2c2-2.4 2.6-5.6 2-9.4-1.6.9-3.6 1.3-5.8 1.3s-4.2-.4-5.8-1.3Z" fill={GREYBEARD} />
+      <path d="M7 16.6c0 1.6.2 3 .8 4.2M9.8 16.8v4.4M12.6 16.6c0 1.6-.2 3-.8 4.2" fill="none" stroke={GREYBEARD_DK} stroke-width=".6" />
+      <path d="M5.6 14.2c1.4-.8 3-.8 4.2.4 1.2-1.2 2.8-1.2 4.2-.4-.6 1.6-2.4 2-4.2 1.4-1.8.6-3.6.2-4.2-1.4Z" fill="#fff" stroke-width=".6" />
+      <path d="M7.4 20h1.6M10.6 20h1.6" stroke={P.trim} stroke-width="1.2" />
+    </Ink>
+  ),
+  // quarrellers: a heavy crossbow with a steel prod, cocked, a bolt on the rail
+  archer: (P) => (
+    <Ink>
+      <Crossbow P={P} />
+    </Ink>
+  ),
+  // tunnel scouts: a miner's lantern, glowing, hung from a pick
+  scout: (P) => (
+    <Ink>
+      <g transform="rotate(45 12 12)">
+        <rect x="11.2" y="3.6" width="1.6" height="21" rx=".6" fill={P.wood} />
+        <path d="M2.8 6.6C5.6 4 8.6 2.6 12 2.6s6.4 1.4 9.2 4C18.4 5.6 15.4 5 12 5S5.6 5.6 2.8 6.6Z" fill={P.blade} />
+        <path d="M6 4.6c1.8-.8 3.8-1.2 5.8-1.2" fill="none" stroke={P.bladeLt} stroke-width=".8" />
+        <path d="M10.8 2.4h2.4v3.4h-2.4Z" fill={P.trim} stroke-width=".6" />
+      </g>
+      <circle cx="15.8" cy="16.4" r="6.6" fill={RUNE_LT} stroke="none" opacity=".4" />
+      <circle cx="15.8" cy="9.8" r="1.1" fill="none" stroke={O} stroke-width="1.7" />
+      <circle cx="15.8" cy="9.8" r="1.1" fill="none" stroke={P.trim} stroke-width=".7" />
+      <path d="M13.4 13.2 14.6 10.8h2.4l1.2 2.4Z" fill={P.trim} />
+      <path d="M13 13.2h5.6v6.4H13Z" fill="#ffd45a" />
+      <path d="M15.8 14.4c-1.2 1.2-1.4 2.6-.6 3.4.6.6 1.4.4 1.8-.2.6-1-.2-2.2-1.2-3.2Z" fill="#fff4c0" stroke="#e8801a" stroke-width=".6" />
+      <path d="M14.8 13.2v6.4M16.8 13.2v6.4" stroke={P.trimDk} stroke-width=".8" />
+      <path d="M12.4 19.6h6.8v1.8h-6.8Z" fill={P.trim} />
+    </Ink>
+  ),
+  light: (P) => (
+    <Ink>
+      <Lance shaft={P.woodLt} flag={P.accent} tip={P.blade} edge={P.trimLt} />
+      <GoatHead coat={GOAT} band={P.trim} />
+    </Ink>
+  ),
+  marcher: (P) => (
+    <Ink>
+      <g transform="translate(9.4 -.6) scale(.6)"><Crossbow P={P} /></g>
+      <g transform="translate(-1.2 5.6) scale(.76)"><GoatHead coat={GOAT_DK} band={P.trim} /></g>
+    </Ink>
+  ),
+  // anvil knights: a war-ram with a great curled horn, steel-faced, behind a rune shield
+  heavy: (P) => (
+    <Ink>
+      <path d={warRamHead} fill={RAM_WOOL} />
+      <path d="M7.4 17.6c.6.6 1.4.6 2 0M10.2 19.4c.6.6 1.4.6 2 0M8 20.8c.6.6 1.4.6 2 0" fill="none" stroke="#a09486" stroke-width=".7" />
+      <path d={ramHorn} fill="none" stroke={O} stroke-width="3.6" />
+      <path d={ramHorn} fill="none" stroke={HORN} stroke-width="2.1" />
+      <path d="M10.4 4.6l-.3 1M7.4 5.2l.4.9M5.2 7.6l.9.3M5.2 11.4l.9-.3" stroke={O} stroke-width=".5" />
+      <path d="M13.4 5.2c2.6-.2 4.8 1 6.4 2.8L22 11l-2.2 1.4-5-.6c-1.2-2.2-1.6-4.4-1.4-6.6Z" fill={P.blade} />
+      <path d="M14.2 6c1.8 0 3.4.8 4.6 2" fill="none" stroke={P.bladeLt} stroke-width=".8" />
+      <path d="M14 8.6h2" stroke={O} stroke-width="1.1" />
+      <Rune d="M17.8 7.6l.9 1.6.9-1.6" w={0.6} />
+      <circle cx="5.2" cy="17.8" r="4.4" fill={P.trim} stroke-width="1.1" />
+      <circle cx="5.2" cy="17.8" r="3.2" fill={IRON} stroke-width=".6" />
+      <Rune d="M5.2 15.6v4.4M5.2 17.2l1.4-1.2M5.2 17.2l-1.4-1.2" w={0.7} />
+    </Ink>
+  ),
+  // steam drills: a riveted bronze boiler on iron wheels, smoke-stack puffing, a spiral bit
+  ram: (P) => (
+    <Ink>
+      <circle cx="5.4" cy="2.6" r="1.6" fill="#efebe4" stroke-width=".6" />
+      <circle cx="8" cy="1.8" r="1.2" fill="#efebe4" stroke-width=".6" />
+      <circle cx="3.2" cy="1.4" r=".9" fill="#efebe4" stroke-width=".5" />
+      <path d="M4 4.2h2.6v5.4H4Z" fill={IRON} />
+      <path d="M3.4 3.6h3.8v1.2H3.4Z" fill={P.trim} stroke-width=".6" />
+      <rect x="1.8" y="9" width="12.6" height="7.2" rx="3" fill={P.trim} />
+      <path d="M5.8 9v7.2M11 9v7.2" stroke={P.trimDk} stroke-width=".9" />
+      <path d="M3.4 10.6h9" stroke={P.trimLt} stroke-width=".8" />
+      <Rune d="M8.4 11.2v3.6M8.4 12l1.1.9-1.1.9" w={0.7} />
+      <path d="M14 8.4h1.8v8.6H14Z" fill={IRON} />
+      <path d="M15.8 8.6 23.6 12.7 15.8 16.8Z" fill={P.blade} />
+      <path d="M17.2 9.4 18 15.6M19.4 10.6l.6 4M21.4 11.6l.4 2" stroke={P.bladeDk} stroke-width=".8" />
+      <path d="M16.6 9.6l5.4 2.8" stroke={P.bladeLt} stroke-width=".7" />
+      <rect x="1.4" y="16" width="14" height="2" rx=".4" fill={P.woodDk} />
+      <circle cx="5" cy="19.4" r="2.6" fill={IRON} />
+      <circle cx="12" cy="19.4" r="2.6" fill={IRON} />
+      <circle cx="5" cy="19.4" r="1" fill={P.trim} stroke-width=".6" />
+      <circle cx="12" cy="19.4" r="1" fill={P.trim} stroke-width=".6" />
+    </Ink>
+  ),
+  // flame ballistae: a bolt-thrower on an iron-wheeled carriage, its bolt wrapped in fire
+  catapult: (P) => (
+    <Ink>
+      <path d="M9.4 17.6 11 12.8h2.4l-1 4.8Z" fill={P.woodDk} />
+      <rect x="2" y="17.2" width="16.8" height="2.6" rx=".6" fill={P.wood} />
+      <circle cx="5.2" cy="20.4" r="2.2" fill={IRON} />
+      <circle cx="15.6" cy="20.4" r="2.2" fill={IRON} />
+      <circle cx="5.2" cy="20.4" r=".8" fill={P.trim} stroke-width=".5" />
+      <circle cx="15.6" cy="20.4" r=".8" fill={P.trim} stroke-width=".5" />
+      <g transform="translate(12.4 10.4) rotate(45)">
+        <path d="M-1.1-4h2.2v9.6h-2.2Z" fill={P.wood} />
+        <path d="M-6.4 0C-4.4-2.4-2.2-3.4 0-3.4S4.4-2.4 6.4 0" fill="none" stroke={O} stroke-width="2.8" />
+        <path d="M-6.4 0C-4.4-2.4-2.2-3.4 0-3.4S4.4-2.4 6.4 0" fill="none" stroke={P.trim} stroke-width="1.4" />
+        <path d="M-6.2 0 0 4.2 6.2 0" fill="none" stroke="#efe3c8" stroke-width=".7" />
+        <path d="M0 4V-9" stroke={O} stroke-width="1.8" />
+        <path d="M0 4V-9" stroke={P.woodLt} stroke-width=".8" />
+        <path d="M-1.2-8.6 0-11.4l1.2 2.8Z" fill={P.blade} stroke-width=".6" />
+      </g>
+      <Flame x={18.2} y={5.6} s={1.05} c="#ff7a2a" />
+    </Ink>
+  ),
+  // thanes: a squat, heavy crown of gold, square-toothed, a rune-gem at its heart
+  noble: (P) => (
+    <Ink>
+      <path d="M3 13.4 3.6 8.4h3.8l.6 5ZM16 13.4l.6-5h3.8l.6 5ZM8.6 13.4 9.4 4.2h5.2l.8 9.2Z" fill={P.trim} />
+      <path d="M10.4 5.4v6.4M4.6 9.6v3" stroke={P.trimLt} stroke-width=".9" />
+      <path d="M2.4 13h19.2l-.6 8H3Z" fill={P.trim} />
+      <path d="M3.2 15h17.6M3.4 19h17.2" stroke={P.trimDk} stroke-width=".8" />
+      <path d="M10 17 11 15.2h2l1 1.8-1 1.8h-2Z" fill={P.gem} stroke-width=".7" />
+      <path d="M11.4 16.2h.8" stroke="#fff4c0" stroke-width=".6" />
+      <Rune d="M5.6 15.6v2.8M5.6 16.2l1 .7M18.4 15.6v2.8M18.4 16.4l-1 .7-.1 1" w={0.6} />
+      <circle cx="5.5" cy="10.8" r=".9" fill={P.accent} stroke-width=".5" />
+      <circle cx="18.5" cy="10.8" r=".9" fill={P.accent} stroke-width=".5" />
+      <circle cx="12" cy="8.4" r="1.3" fill={P.gem} stroke-width=".6" />
+    </Ink>
+  ),
+  // mine carts: an iron-banded cart on the rails, heaped with ore, gold and a fire-gem
+  trader: (P) => (
+    <Ink>
+      <path d="M3.4 9 4.4 6.2 7.2 5.4 9 7 8.6 9Z" fill={IRON_LT} />
+      <path d="M13 9l.8-2.6 2.8-.6 2.2 1.6.6 1.6Z" fill={IRON_LT} />
+      <path d="M8.2 9 9 5.6l2.8-1 1.8 1.6-.4 2.8Z" fill={GOLD} />
+      <path d="M11.6 5.6 12.8 2.8l1.6 2.2-1.2 2Z" fill={P.gem} stroke-width=".7" />
+      <path d="M9.6 6.8c.4-.6 1-.8 1.6-.8M5.4 6.8l1-.4" fill="none" stroke={GOLD_LT} stroke-width=".7" />
+      <path d="M2 8.6h19.6l-1.8 8.2H3.8Z" fill={P.wood} />
+      <path d="M2 8.6h19.6v1.8H2Z" fill={P.bladeDk} />
+      <path d="M7.6 10.4v6.4M15.8 10.4v6.4" stroke={P.bladeDk} stroke-width="1.2" />
+      <path d="M4.4 12h1.6M9.4 12h4.6" stroke={P.woodLt} stroke-width=".8" />
+      <path d="M21.4 10.2h1.4l.8-1.8" fill="none" stroke={O} stroke-width="1.1" />
+      <path d="M.6 21.4h22.8" stroke={O} stroke-width="1.8" />
+      <path d="M.6 21.4h22.8" stroke={P.blade} stroke-width=".8" />
+      <path d="M2.6 22.2v1.2M8.2 22.2v1.2M14 22.2v1.2M19.8 22.2v1.2" stroke={P.woodDk} stroke-width="1" />
+      <circle cx="7" cy="18.4" r="2.4" fill={IRON} />
+      <circle cx="16.4" cy="18.4" r="2.4" fill={IRON} />
+      <circle cx="7" cy="18.4" r=".8" fill={P.trim} stroke-width=".5" />
+      <circle cx="16.4" cy="18.4" r=".8" fill={P.trim} stroke-width=".5" />
+    </Ink>
+  ),
+  // miners: pick and shovel, crossed
+  militia: (P) => (
+    <Ink>
+      <path d="m3.4 21.8-1.2-1.2L13 9.8l1.2 1.2Z" fill={P.wood} />
+      <path d="M1.2 19.8 4.2 22.8" stroke={O} stroke-width="2.4" />
+      <path d="M1.2 19.8 4.2 22.8" stroke={P.woodDk} stroke-width="1.1" />
+      <path d="M12 9.8 16.4 5.4c1.6-1.6 4-2 5.6-1.2.8 1.6.4 4-1.2 5.6L16.4 14.2Z" fill={P.blade} />
+      <path d="M16.8 6.4c1.2-1 2.6-1.4 4-1.2" fill="none" stroke={P.bladeLt} stroke-width=".8" />
+      <g transform="rotate(-45 12 12)">
+        <rect x="11.2" y="4.6" width="1.6" height="19.8" rx=".6" fill={P.woodLt} />
+        <path d="M3.6 7C6.2 4.6 9 3.4 12 3.4s5.8 1.2 8.4 3.6C17.8 6.2 15 5.8 12 5.8S6.2 6.2 3.6 7Z" fill={P.blade} />
+        <path d="M10.8 3.2h2.4v3h-2.4Z" fill={P.trim} stroke-width=".6" />
+      </g>
+    </Ink>
+  ),
+};
+
+/** a heavy crossbow, aimed up and to the right (the quarreller's, and the goat crossbowman's) */
+function Crossbow({ P }: { P: Pal }) {
+  return (
+    <g transform="rotate(45 12 12)">
+      <path d="M10.9 5.4h2.2v11.8l1 1.4v5.6c0 .5-.4.9-.9.9h-2.4c-.5 0-.9-.4-.9-.9v-5.6l1-1.4Z" fill={P.wood} />
+      <path d="M11.4 7v9" stroke={P.woodLt} stroke-width=".7" />
+      <Rune d="M12 19.2v3.2M12 20l.9.7-.9.7" w={0.6} />
+      <path d="M3.4 8.8C6 5.6 9 4.4 12 4.4s6 1.2 8.6 4.4" fill="none" stroke={O} stroke-width="2.8" />
+      <path d="M3.4 8.8C6 5.6 9 4.4 12 4.4s6 1.2 8.6 4.4" fill="none" stroke={P.blade} stroke-width="1.3" />
+      <path d="M3.6 8.8 12 13l8.4-4.2" fill="none" stroke="#efe3c8" stroke-width=".7" />
+      <path d="M12 12.8V-1" stroke={O} stroke-width="1.8" />
+      <path d="M12 12.8V-1" stroke={P.woodLt} stroke-width=".7" />
+      <path d="M10.8 12.6 12 10.6l1.2 2Z" fill={P.accent} stroke-width=".5" />
+      <path d="M10.8-.4 12-3.2l1.2 2.8Z" fill={P.blade} stroke-width=".6" />
+      <path d="M10.4 4.2h3.2v2h-3.2Z" fill={P.trim} stroke-width=".6" />
+      <circle cx="12" cy="13" r="1" fill={P.trim} stroke-width=".6" />
+      <path d="m13.2 15.8 1.2 1.8" stroke={O} stroke-width="1" />
+    </g>
+  );
+}
+
+/** a scimitar: a broad curved blade, a gilded guard, a turquoise grip */
+const Scimitar = ({ P }: { P: Pal }) => (
+  <>
+    <path d="M6.8 16.6C10.8 12.4 15.4 6.8 21.8 1.4 21.4 6.8 16.8 12.6 8.8 18.6Z" fill={P.blade} />
+    <path d="M9.2 16.6c3.8-3.4 7.6-7.8 11.2-12.4" fill="none" stroke={P.bladeLt} stroke-width=".8" />
+    <path d="M4.8 15 10.4 20.6" stroke={O} stroke-width="2.6" />
+    <path d="M4.8 15 10.4 20.6" stroke={P.trim} stroke-width="1.2" />
+    <path d="M7.2 18.4 4.4 21.2" stroke={O} stroke-width="3" />
+    <path d="M7.2 18.4 4.4 21.2" stroke={P.accent} stroke-width="1.6" />
+    <circle cx="3.8" cy="21.8" r="1.2" fill={P.trim} />
+  </>
+);
+
+const DJINN_ART: WildSet = {
+  // sand guards: a long leaf-bladed spear with a ruby tassel, a turquoise buckler with a golden star
+  spear: (P) => (
+    <Ink>
+      <path d="m3.2 21.8-1-1L16 7l1 1Z" fill={P.wood} />
+      <path d="M15.2 7.2C16.2 4.8 18.6 2.8 22 2c-.8 3.4-2.8 5.8-5.2 6.8Z" fill={P.blade} />
+      <path d="M16.8 6.6c1.2-1.6 2.8-2.8 4.4-3.6" fill="none" stroke={P.bladeLt} stroke-width=".8" />
+      <path d="m13.8 8.6 1.8 1.8" stroke={P.trim} stroke-width="2" />
+      <path d="M13.8 10.6c-1 1.2-1 2.8-.2 4.2.5-.9 1.1-1.6 1.9-2 0-.9-.6-1.7-1.7-2.2Z" fill={P.gem} stroke-width=".6" />
+      <circle cx="7" cy="16.6" r="5.2" fill={P.trim} stroke-width="1.1" />
+      <circle cx="7" cy="16.6" r="4" fill={P.accent} stroke-width=".6" />
+      <path d="M3.6 14.2c.6-1.2 1.6-2 2.8-2.4" fill="none" stroke={P.accentLt} stroke-width=".7" />
+      <path d={starPath(7, 16.6, 2.8, 1.3, 8)} fill={P.trimLt} stroke-width=".5" />
+      <circle cx="7" cy="16.6" r=".8" fill={P.gem} stroke-width=".4" />
+    </Ink>
+  ),
+  // blade dancers: two scimitars, crossed
+  sword: (P) => (
+    <Ink>
+      <g transform="matrix(-1 0 0 1 24 0)"><Scimitar P={P} /></g>
+      <Scimitar P={P} />
+    </Ink>
+  ),
+  // dune raiders: a crescent-bladed axe on a long haft, spiked at the top
+  axe: (P) => (
+    <Ink>
+      <g transform="rotate(45 12 12)">
+        <rect x="11.1" y="1.6" width="1.8" height="24" rx=".6" fill={P.wood} />
+        <path d="M11.1 1.8 12-1.6l.9 3.4Z" fill={P.blade} stroke-width=".6" />
+        <path d="M10.8.4C7 .6 4.2 3 3.4 6.6c-.6 3 1.4 5.8 7.2 5.8-2.2-.8-3.8-2.8-3.8-5.6 0-2.6 1.6-4.8 4-6.4Z" fill={P.blade} />
+        <path d="M6.8 5.8h4.4v1.8H6.8Z" fill={P.trim} stroke-width=".6" />
+        <path d="M5 4.8c-.8 1.4-1 3-.6 4.6" fill="none" stroke={P.bladeLt} stroke-width=".9" />
+        <path d="M10.8 4.4h2.4v4.4h-2.4Z" fill={P.trim} stroke-width=".6" />
+        <path d="M11.1 18h1.8M11.1 19.6h1.8M11.1 21.2h1.8" stroke={P.accent} stroke-width="1" />
+      </g>
+      <path d="M17.4 9.4c.4 1.4 1.2 2.4 2.4 3 .2-1.2-.2-2.4-1.2-3.2Z" fill={P.gem} stroke-width=".6" />
+    </Ink>
+  ),
+  // desert archers: a sharply recurved bow, gold at the tips, a ruby-fletched arrow
+  archer: (P) => (
+    <Ink>
+      <path d="M8.8 1C6.6.8 5.8 2.6 6.8 4.4c1.8 2.8 5.6 3.8 5.6 7.6s-3.8 4.8-5.6 7.6c-1 1.8-.2 3.6 2 3.4" fill="none" stroke={O} stroke-width="3" />
+      <path d="M8.8 1C6.6.8 5.8 2.6 6.8 4.4c1.8 2.8 5.6 3.8 5.6 7.6s-3.8 4.8-5.6 7.6c-1 1.8-.2 3.6 2 3.4" fill="none" stroke={P.wood} stroke-width="1.5" />
+      <path d="M8.8 1c-.8 0-1.4.3-1.8.8M8.8 23c-.8 0-1.4-.3-1.8-.8" fill="none" stroke={P.trim} stroke-width="1.5" />
+      <path d="M6.6 3.8v16.4" stroke="#efe3c8" stroke-width=".8" />
+      <path d="M11 10.2h2.8v3.6H11Z" fill={P.accent} stroke-width=".6" />
+      <path d="M3 12h15.6" stroke={P.woodDk} stroke-width="1.4" />
+      <path d="M17.6 9.4 22.6 12l-5 2.6 1.2-2.6Z" fill={P.blade} />
+      <path d="M1.4 10 4.4 12l-3 2L3 12Z" fill={P.gem} stroke-width=".6" />
+    </Ink>
+  ),
+  // desert falcons: a falcon on the wing, a jess and a golden bell trailing
+  scout: (P) => (
+    <Ink>
+      <path d="M12.4 11.6C12.6 8 14.2 4.6 17.2 2.2c.2 3.4-.8 6.8-3 9.6Z" fill="#6e4a2c" />
+      <path d="M6.6 15.4 1.4 18.6l.6 1.4 1.2-.2.4 1.2 5-3.2Z" fill="#9a6a42" />
+      <path d="M5.8 15.8C8 13.4 11.4 12 14.6 12.2c2.2.2 3.6 1.2 4.2 2.4-1 2.2-3.4 3.6-6.4 3.8-2.6.2-4.8-.6-6.6-2.6Z" fill="#f2e2c0" />
+      <path d="M9.4 15.6l.6.5M12 16l.6.5M14.4 15.6l.6.5" stroke="#8a6a42" stroke-width=".6" />
+      <path d="M16.6 13.4c.2-1.8 1.4-3 3-3.2 1.4-.2 2.6.6 3 1.8l-1.2.8c-.8-.4-1.8-.4-2.6.2Z" fill="#9a6a42" />
+      <path d="M21.4 12.8 22.6 12c.4.6.4 1.4 0 2Z" fill="#f0c040" stroke-width=".5" />
+      <circle cx="19.6" cy="11.8" r=".75" fill={O} />
+      <path d="M19.2 12.8c-.2.6-.2 1.2 0 1.8" stroke={O} stroke-width=".8" />
+      <path d="M13.8 12.8C12 9.2 8.6 5.2 3 1.8c.4 3 1.6 5.8 3.4 8.2l-1.2.4 1.8 1.2-.6.8 2.2.6c1.6.8 3.4 1.2 5.2-.2Z" fill="#9a6a42" />
+      <path d="M6.4 5.4c1.4 1 2.6 2.2 3.6 3.6M9 4.8c1.2 1 2.2 2.2 3 3.4" fill="none" stroke="#6e4a2c" stroke-width=".7" />
+      <path d="M11 18.2c-.4 1.6-1.4 2.8-2.8 3.4" fill="none" stroke={P.accent} stroke-width="1.1" />
+      <circle cx="8" cy="21.8" r=".9" fill={P.trim} stroke-width=".5" />
+    </Ink>
+  ),
+  light: (P) => (
+    <Ink>
+      <Lance shaft={P.woodLt} flag={P.accent} tip={P.blade} edge={P.trimLt} />
+      <CamelHead coat={CAMEL} P={P} />
+    </Ink>
+  ),
+  marcher: (P) => (
+    <Ink>
+      <RiderBow wood={P.wood} string="#efe3c8" tip={P.blade} />
+      <g transform="translate(-1.2 5.6) scale(.76)"><CamelHead coat={CAMEL_DK} P={P} /></g>
+    </Ink>
+  ),
+  // sun lancers: a white desert charger in a golden sun-mask and plume, behind a sun-shield
+  heavy: (P) => (
+    <Ink>
+      <path d={horseHead} fill="#f3eee6" />
+      <path d="M6 22 7.4 15.2c2.8 1 6.2.9 9.4-.9L13.6 22Z" fill={P.accent} />
+      <path d="M8.2 18c.6.6 1.4.6 2 0 .6.6 1.4.6 2 0M8.8 20.4c.6.6 1.4.6 2 0 .6.6 1.4.6 2 0" fill="none" stroke={P.accentLt} stroke-width=".7" />
+      <path d="M7.4 15.2c2.8 1 6.2.9 9.4-.9" fill="none" stroke={P.trim} stroke-width="1.1" />
+      <path d="M8.4 5.4 11.2 5c3.2 0 5.8 1.6 7.4 4l-2.6 2.2-7.6.4c-.9-2.2-.9-4.4 0-6.2Z" fill={P.trim} />
+      <path d="M9.6 6.4c2.4-.4 4.8.4 6.6 2" fill="none" stroke={P.trimLt} stroke-width="1" />
+      <circle cx="12.8" cy="8.6" r=".9" fill={O} />
+      <path d="M9.6 5.2C8.6 3 9 1 10.8 0c.2 1.8.6 3.4 1.4 4.8Z" fill={P.gem} />
+      <circle cx="5.4" cy="17.4" r="4.6" fill={P.trim} stroke-width="1.1" />
+      <path d={starPath(5.4, 17.4, 3.4, 2.2, 12)} fill="#fff1a8" stroke-width=".5" />
+      <circle cx="5.4" cy="17.4" r="1.7" fill={P.trimDk} stroke-width=".6" />
+      <circle cx="5.4" cy="17.4" r=".8" fill={P.trimLt} stroke="none" />
+    </Ink>
+  ),
+  // brass rams: an onion dome of turquoise over the frame, a log capped with a brass ram's head
+  ram: (P) => (
+    <Ink>
+      <path d="M11 2V.6" stroke={O} stroke-width="1" />
+      <circle cx="11" cy=".9" r=".7" fill={P.trim} stroke-width=".5" />
+      <path d="M4.2 10.2C4 7.6 6 6.2 8.4 5.2 9.8 4.6 10.8 3.6 11 2c.2 1.6 1.2 2.6 2.6 3.2 2.4 1 4.4 2.4 4.2 5Z" fill={P.roof} />
+      <path d="M5 8.6c3.8-1 8.2-1 12 0" fill="none" stroke={P.trim} stroke-width="1" />
+      <path d="M6.6 7.2c.8-.8 2-1.4 3-1.8" fill="none" stroke={P.accentLt} stroke-width=".8" />
+      <path d="M4 10h14v3H4Z" fill={P.trimDk} />
+      <rect x="1.8" y="11" width="17" height="3.6" rx="1.6" fill={P.wood} />
+      <path d="M5.4 11v3.6M10 11v3.6M14.4 11v3.6" stroke={P.trim} stroke-width="1.2" />
+      <path d="M17.4 10.4c2-.8 4-.4 5.2 1l.8 2-1 1.8c-1 1-2.8 1.2-5 .6Z" fill={P.trim} />
+      <path d="M19.8 11.4c-1.4-.8-2.8.2-2.6 1.6.2 1.2 1.6 1.6 2.4.8.6-.6.2-1.4-.4-1.4" fill="none" stroke={P.trimDk} stroke-width=".8" />
+      <circle cx="21.4" cy="12" r=".5" fill={O} stroke="none" />
+      <circle cx="6" cy="18" r="2.8" fill={P.woodLt} />
+      <circle cx="16" cy="18" r="2.8" fill={P.woodLt} />
+      <circle cx="6" cy="18" r="1" fill={P.trim} stroke-width=".6" />
+      <circle cx="16" cy="18" r="1" fill={P.trim} stroke-width=".6" />
+    </Ink>
+  ),
+  // sun engines: a gilded mangonel that flings a blazing sun
+  catapult: (P) => (
+    <Ink>
+      <path d="m7.4 15.4 1.6 1 9.4-12.2-1.6-1.2Z" fill={P.woodLt} />
+      <path d={starPath(18.4, 4.6, 4.1, 2.5, 8)} fill="#ffb02a" stroke-width=".6" />
+      <circle cx="18.4" cy="4.6" r="2.2" fill={P.trimLt} stroke-width=".8" />
+      <path d="M10 15.6 12.6 9h1.8l-1.6 6.6Z" fill={P.woodDk} />
+      <rect x="2" y="15" width="17" height="3" rx=".8" fill={P.wood} />
+      <path d="M3.2 16.5h14.6" stroke={P.accent} stroke-width="1" />
+      <circle cx="5" cy="19.6" r="2.2" fill={P.woodLt} />
+      <circle cx="16" cy="19.6" r="2.2" fill={P.woodLt} />
+      <circle cx="5" cy="19.6" r=".8" fill={P.trim} stroke-width=".5" />
+      <circle cx="16" cy="19.6" r=".8" fill={P.trim} stroke-width=".5" />
+    </Ink>
+  ),
+  // viziers: a great white turban, a ruby in a golden setting, a turquoise plume
+  noble: (P) => (
+    <Ink>
+      <path d="M3 17.6C2.4 11.6 6.4 6.4 12 6.4s9.6 5.2 9 11.2Z" fill={LINEN} />
+      <path d="M4.2 13.4c4.4-2.4 11-2.4 15.6 1.4M4 16.2c5-3 11.4-2.6 16 .4M6.4 9.6c3.6-.6 7.2.4 10 2.8" fill="none" stroke={SAND_DK} stroke-width=".8" />
+      <path d="M12.2 9.6C11 6.8 11.6 3.4 14.2.8c1 3 .4 6.4-2 8.8Z" fill={P.accentLt} />
+      <path d="M12.6 8.6c.2-2.4.8-4.6 1.8-6.6" fill="none" stroke="#fff" stroke-width=".6" />
+      <circle cx="12" cy="11.4" r="2.2" fill={P.trim} />
+      <circle cx="12" cy="11.4" r="1.2" fill={P.gem} stroke-width=".5" />
+      <path d="M2.4 17.4h19.2v3.6H2.4Z" fill={P.accent} />
+      <circle cx="12" cy="19.2" r="1.1" fill={P.trim} />
+      <circle cx="6.4" cy="19.2" r=".9" fill={P.gem} />
+      <circle cx="17.6" cy="19.2" r=".9" fill={P.gem} />
+    </Ink>
+  ),
+  // oasis watch: a torch and a tasselled spear
+  militia: (P) => (
+    <Ink>
+      <path d="m20.6 21.8 1.2-1.2L9.6 8.4 8.4 9.6Z" fill={P.woodDk} />
+      <path d="m10.6 11.8 1.4-1.4 1.4 1.4-1.4 1.4Z" fill={P.accent} stroke-width=".6" />
+      <Flame x={7.6} y={9.6} s={1.15} />
+      <path d="m3.4 21.8-1.2-1.2L15.6 7.2l1.2 1.2Z" fill={P.wood} />
+      <path d="M15 7.6C16 5.2 18.2 3.2 21.4 2.4c-.8 3.2-2.8 5.4-5.2 6.4Z" fill={P.blade} />
+      <path d="m13.8 9.2 1.6 1.6" stroke={P.trim} stroke-width="1.8" />
+      <path d="M14.2 11.2c-.6 1-.6 2.2 0 3.2.4-.6.8-1.2 1.4-1.4 0-.8-.6-1.4-1.4-1.8Z" fill={P.gem} stroke-width=".6" />
+    </Ink>
+  ),
+  // camel caravans: a camel under a rolled carpet and turquoise saddlebags
+  trader: (P) => (
+    <Ink>
+      <g transform="translate(3.2 1.2) scale(.86)">
+        <CamelHead coat={CAMEL} P={P} />
+      </g>
+      <path d="M1.4 15c0-1.4 1-2.4 2.4-2.4h4.8c1.4 0 2.4 1 2.4 2.4v5c0 1.2-1 2.2-2.2 2.2H3.6c-1.2 0-2.2-1-2.2-2.2Z" fill={P.accent} />
+      <path d="M1.6 16.4h9.4" stroke={P.trim} stroke-width=".9" />
+      <path d={starPath(6.2, 19.2, 1.5, .7, 4)} fill={P.trimLt} stroke-width=".45" />
+      <rect x=".8" y="9.4" width="10.6" height="3.2" rx="1.6" fill={P.gem} />
+      <path d="M3 9.4v3.2M5.6 9.4v3.2M8.2 9.4v3.2" stroke={P.trim} stroke-width=".7" />
+      <ellipse cx="10.9" cy="11" rx="1.1" ry="1.55" fill="#f0c890" stroke-width=".7" />
+      <path d="M10.9 10.5c.4.2.4.8 0 1" fill="none" stroke={P.gem} stroke-width=".5" />
+    </Ink>
+  ),
+};
+
+const SAURIAN_ART: WildSet = {
+  // skink spears: a knapped obsidian point, gold-bound, hung with red and green feathers
+  spear: (P) => (
+    <Ink>
+      <path d="m3.2 21.8-1-1L16 7l1 1Z" fill={P.wood} />
+      <path d="M14.8 7.8 16 5.2 22.2 1.8 18.8 8 16.2 9.2Z" fill={P.blade} />
+      <path d="M16.9 5.6l.8 1.1M18.6 4.5l.7 1.1M20.2 3.4l.5 1" stroke={P.bladeLt} stroke-width=".6" />
+      <path d="m13.2 8.2 2.6 2.6" stroke={P.trim} stroke-width="1.8" />
+      <Feather x={13.2} y={10.6} a={205} len={6.4} c={P.accent} />
+      <Feather x={14.2} y={11.2} a={180} len={5.4} c={QUETZAL} />
+    </Ink>
+  ),
+  // saurus guards: a round feathered shield of gold and jade, an obsidian-edged club behind
+  sword: (P) => (
+    <Ink>
+      <g transform="rotate(45 12 12)">
+        <path d="M13.4 3.2l1.6 1-1.6 1.2ZM13.4 6.6l1.6 1-1.6 1.2ZM10.6 3.2 9 4.2l1.6 1.2ZM10.6 6.6 9 7.6l1.6 1.2Z" fill={P.blade} stroke-width=".5" />
+        <path d="M10.4 11V2.4C10.4 1.2 11.1.4 12 .4s1.6.8 1.6 2V11Z" fill={P.woodLt} />
+        <path d="M12 1.6V10" stroke={P.trim} stroke-width=".9" />
+      </g>
+      <Feather x={4.6} y={16.6} a={200} len={6} c={P.accent} />
+      <Feather x={7.2} y={17.6} a={188} len={6.2} c={QUETZAL} />
+      <Feather x={9.8} y={17.8} a={176} len={6} c={PLUME} />
+      <Feather x={12.4} y={17.2} a={164} len={5.6} c={P.accent} />
+      <circle cx="8.6" cy="11.2" r="7" fill={P.trim} stroke-width="1.1" />
+      <circle cx="8.6" cy="11.2" r="5.6" fill={QUETZAL} stroke-width=".6" />
+      <path d={starPath(8.6, 11.2, 4.6, 2.8, 8)} fill={P.accent} stroke-width=".5" />
+      <circle cx="8.6" cy="11.2" r="2.3" fill={P.trim} stroke-width=".6" />
+      <circle cx="8.6" cy="11.2" r=".9" fill={P.gem} stroke-width=".4" />
+      <path d="M3.4 7.6c1-1.6 2.6-2.6 4.4-3" fill="none" stroke={P.trimLt} stroke-width=".9" />
+    </Ink>
+  ),
+  // saurus warriors: a great war-club edged along both sides with obsidian teeth
+  axe: (P) => (
+    <Ink>
+      <g transform="rotate(45 12 12)">
+        {[1.4, 4.4, 7.4, 10.4, 13.4].map((y) => (
+          <path d={`M9.6 ${y}l-2 1.2 2 1.4ZM14.4 ${y}l2 1.2-2 1.4Z`} fill={P.blade} stroke-width=".6" />
+        ))}
+        <path d="M9.4 17V2.4C9.4.8 10.6-.2 12-.2s2.6 1 2.6 2.6V17Z" fill={P.woodLt} />
+        <path d="M10.6 2.6v13M13.4 2.6v13" stroke={P.wood} stroke-width=".6" />
+        <path d="M11 4.4 12 3l1 1.4-1 1.4ZM11 9.4 12 8l1 1.4-1 1.4Z" fill={P.gem} stroke-width=".5" />
+        <rect x="11.1" y="17" width="1.8" height="8" rx=".6" fill={P.woodDk} />
+        <path d="M11.1 17.4h1.8M11.1 19h1.8" stroke={P.trim} stroke-width=".9" />
+      </g>
+      <Feather x={4.6} y={19.4} a={210} len={4.6} c={P.accent} />
+    </Ink>
+  ),
+  // blowpipers: a long gold-banded cane, a poisoned dart just leaving it
+  archer: (P) => (
+    <Ink>
+      <path d="M2.6 21.4 16.2 7.8" stroke={O} stroke-width="3.8" />
+      <path d="M2.6 21.4 16.2 7.8" stroke="#c9b870" stroke-width="2.3" />
+      <path d="M3.8 19.2 14.4 8.6" stroke="#e8dca0" stroke-width=".7" />
+      <path d="m5.8 17 1.5 1.5M9.6 13.2l1.5 1.5M13.4 9.4l1.5 1.5" stroke={P.trimDk} stroke-width="1.1" />
+      <circle cx="2.4" cy="21.6" r="1.3" fill={P.trim} />
+      <Feather x={4.4} y={19.6} a={200} len={4.2} c={P.accent} />
+      <path d="M17.4 6.6 20.6 3.4" stroke={P.woodDk} stroke-width="1" />
+      <path d="m20.2 2.6 3-1.8-1.8 3Z" fill={P.blade} stroke-width=".5" />
+      <path d="M16.8 6.2c-.4.8-.2 1.6.6 1.8.2-.8 0-1.4-.6-1.8Z" fill={P.accent} stroke-width=".4" />
+      <path d="M22.4 4.6c-.7.9-.7 1.8 0 2.2.7-.4.7-1.3 0-2.2Z" fill={P.gem} stroke-width=".5" />
+      <path d="M17.6 9.6c.6.2 1.2.2 1.8-.2M18.8 11c.6.2 1.2 0 1.6-.4" fill="none" stroke="#c9b870" stroke-width=".7" />
+    </Ink>
+  ),
+  // chameleons: a casque-headed chameleon on a branch, turret eye rolling, tail curled tight
+  scout: (P) => (
+    <Ink>
+      <path d="M1 20.4c4-.8 9-1.4 13.4-1.6 3-.2 5.8-.8 8.6-1.8" fill="none" stroke={O} stroke-width="2.4" />
+      <path d="M1 20.4c4-.8 9-1.4 13.4-1.6 3-.2 5.8-.8 8.6-1.8" fill="none" stroke={P.wood} stroke-width="1.1" />
+      <Leaf x={19.6} y={17.8} r={-30} c={SCALE_LT} />
+      <path d="M7 13.4c-1.8.4-3 1.6-3 3.2 0 1.4 1.2 2.4 2.4 2.2 1.2-.2 1.6-1.4 1-2.2-.6-.6-1.4-.4-1.4.2" fill="none" stroke={O} stroke-width="2.6" />
+      <path d="M7 13.4c-1.8.4-3 1.6-3 3.2 0 1.4 1.2 2.4 2.4 2.2 1.2-.2 1.6-1.4 1-2.2-.6-.6-1.4-.4-1.4.2" fill="none" stroke="#4cb04a" stroke-width="1.3" />
+      <path d="M9.2 15.4 8.4 19.6M15 15.2l.8 3.8" stroke={O} stroke-width="1.6" />
+      <path d="M9.2 15.4 8.4 19.6M15 15.2l.8 3.8" stroke="#3a9a3a" stroke-width=".7" />
+      <path d="M5.8 12.6C6.6 8.8 9.8 7 13.4 7.4L16.8 5.4C19.4 5 21.8 6.6 22.6 9 23 10.8 22 12.4 20.4 12.6L17.4 13.2C16.2 15.2 13.6 16.4 10.4 16.2 7.8 16 6 14.6 5.8 12.6Z" fill="#5cc04a" />
+      <path d="M8.2 13.6c1.6.8 3.6 1 5.6.6M7.6 11.2c.6.6 1.2.8 1.8.6M10.6 9.8c.4.6 1 1 1.6 1" fill="none" stroke="#f0d040" stroke-width=".9" />
+      <path d="M7.4 9.8 8 8.8l.6.9M9.6 8.2l.6-1 .6.9M12 7.4l.6-1 .6.9" fill="#3a9a3a" stroke-width=".5" />
+      <path d="M22.4 10.6c-1 .6-2.2.8-3.4.6" fill="none" stroke={O} stroke-width=".7" />
+      <circle cx="18.6" cy="9" r="2.1" fill="#8ad05a" stroke-width=".7" />
+      <circle cx="18.6" cy="9" r="1.2" fill="#f0d040" stroke-width=".5" />
+      <circle cx="18.9" cy="8.9" r=".55" fill={O} stroke="none" />
+    </Ink>
+  ),
+  light: (P) => (
+    <Ink>
+      <Lance shaft={P.wood} flag={QUETZAL} tip={P.blade} edge={P.trimLt} />
+      <RaptorHead coat="#7a9a3a" crest={P.accent} />
+    </Ink>
+  ),
+  marcher: (P) => (
+    <Ink>
+      <RiderBow wood={P.wood} string="#efe3c8" tip={P.blade} />
+      <g transform="translate(-1.2 5.6) scale(.76)"><RaptorHead coat="#5e7e2e" crest={PLUME} /></g>
+    </Ink>
+  ),
+  // horned riders: a three-horned beast behind its great spiked frill, studded with gold
+  heavy: (P) => (
+    <Ink>
+      <path d="M13.4 5.2C11.2 2.2 7.4 1 4 2.2l.6 1.6-2.2.8 1 1.6-2 1.2 1.4 1.4-1.8 1.8 1.8 1-1.2 2 2 .6-.6 2.2h2.2l.4 2.4 2-1.2L9.4 16Z" fill="#c9542c" />
+      <path d="M11.6 5.8C9.4 4.2 6.8 4 4.6 5M10.8 8.2C8.8 7 6.6 7 4.4 8" fill="none" stroke="#e88a4a" stroke-width=".8" />
+      <circle cx="5.2" cy="5.4" r=".6" fill={P.trim} stroke-width=".4" />
+      <circle cx="3.6" cy="9.4" r=".6" fill={P.trim} stroke-width=".4" />
+      <circle cx="4.4" cy="13.4" r=".6" fill={P.trim} stroke-width=".4" />
+      <path d="M4.8 22.6 6.4 16.4 13 13.4 14.6 22.6Z" fill="#7e8a5a" />
+      <path d="M8.4 8.6C10 6.2 13 5.2 16 6.2L20.6 9C22 9.8 22.8 11.4 22.8 13L21.8 15.4 19.4 15.4C18 16.6 15.6 16.8 13.6 16 10.6 15 8.6 12.4 8.4 8.6Z" fill="#7e8a5a" />
+      <path d="M20.6 11.4 23.4 13.2 22.2 15.8 20 15Z" fill="#3e3a2e" stroke-width=".7" />
+      <path d="M13.4 7.2 20 1.2 15.6 8.4Z" fill={BONE} />
+      <path d="M15.4 8 22.6 3.4l-5.4 5.8Z" fill={BONE} />
+      <path d="M19 9.8 20.2 6.6l.8 3.4Z" fill={BONE} stroke-width=".7" />
+      <circle cx="15.6" cy="10.8" r=".85" fill="#ffd23a" stroke-width=".5" />
+      <path d="M10.4 12.6c1.4 1.4 3.4 2 5.4 1.8" fill="none" stroke="#a8b47a" stroke-width=".8" />
+      <path d="M12.2 5.6c-.6 1.8-.6 3.8 0 5.6" fill="none" stroke={P.trim} stroke-width="1.3" />
+      <circle cx="12.2" cy="8.4" r=".8" fill={P.gem} stroke-width=".4" />
+    </Ink>
+  ),
+  // boneheads: a thick-skulled beast charging head-down, its dome ringed with knobs of bone
+  ram: (P) => (
+    <Ink>
+      <path d="M7 11.4C4.4 10.4 2.2 9.4.6 7.4c1.4 3 3.4 5 6 6.2Z" fill="#b0763a" />
+      <path d="M7.4 14.8c-.8 2.4-.6 4.6.6 6.4l-1.8 1.2h4.2l.6-1.6c-.6-1.8-.4-3.6.4-5.2Z" fill="#8a5a2a" />
+      <ellipse cx="11" cy="12.8" rx="6.4" ry="4.4" fill="#b0763a" />
+      <path d="M11.2 15.2c-.6 2.2-.4 4.2.6 6l-1.6 1.2h4l.4-1.4c-.6-1.8-.6-3.6 0-5.2Z" fill="#b0763a" />
+      <path d="M6.6 11.2c1.2-.6 2.4-.8 3.6-.6M9.8 9.2c1-.4 2.2-.4 3.2 0" fill="none" stroke="#7a4a1e" stroke-width=".8" />
+      <path d="M5.4 10.4c2.2-1.6 5.4-2.2 8.4-1.8l-.6 2.6c-2.6-.2-5 .2-7 1.2Z" fill={P.accent} />
+      <path d="M6.6 10.4l.2-1.4M9.4 9.4l.2-1.2M12.2 9l.2-1.2" stroke={P.trim} stroke-width=".9" />
+      <path d="M15.4 11c1-2.4 3.4-3.8 5.8-3.4 2 .4 3 2.2 2.6 4.2-.2 1.4-1.2 2.6-2.4 3l.4 2.2-1.8.4-.8-1.8c-1.6 0-3-.6-3.8-1.8Z" fill="#b0763a" />
+      <path d="M16.6 9.4c.8-1.8 2.6-2.8 4.4-2.6 1.8.2 3 1.6 3 3.4 0 1-.4 1.8-1 2.4-1.8 0-3.6-.6-5-1.8Z" fill={BONE} />
+      <path d="M17.8 9c.6-.8 1.6-1.2 2.6-1.2" fill="none" stroke="#fff" stroke-width=".7" />
+      <circle cx="16.4" cy="11.8" r=".55" fill={BONE_DK} stroke-width=".4" />
+      <circle cx="17.6" cy="13" r=".55" fill={BONE_DK} stroke-width=".4" />
+      <circle cx="16.2" cy="9.6" r=".55" fill={BONE_DK} stroke-width=".4" />
+      <circle cx="20" cy="13" r=".7" fill="#ffd23a" stroke-width=".4" />
+      <path d="M22.6 15.2c-.4.4-1 .6-1.6.4" fill="none" stroke={O} stroke-width=".6" />
+    </Ink>
+  ),
+  // temple slingers: a war-engine on a stepped stone base, flinging a golden sunstone
+  catapult: (P) => (
+    <Ink>
+      <path d="m7.4 15 1.6 1 9.4-12.2-1.6-1.2Z" fill={P.woodLt} />
+      <circle cx="18.6" cy="3.6" r="2.8" fill={P.trim} />
+      <circle cx="18.6" cy="3.6" r="1.8" fill="none" stroke={P.trimDk} stroke-width=".6" stroke-dasharray=".8 .6" />
+      <circle cx="18.6" cy="3.6" r=".9" fill={P.gem} stroke-width=".5" />
+      <path d="M10.2 14.6 12.6 9h1.8l-1.4 5.6Z" fill={P.woodDk} />
+      <Feather x={12.6} y={10.4} a={-120} len={3.6} c={P.accent} />
+      <path d="M1.6 22V19h2.4v-2.4H7V14.4h10v2.2h3V19h2.4v3Z" fill={P.shot} />
+      <path d="M1.6 19h20.8M4 16.6h16M7 14.4h10" fill="none" stroke="#8a8068" stroke-width=".8" />
+      <path d="M8.6 15.4h6.8" stroke={P.gem} stroke-width="1" />
+      <path d="M4 20.4h2.4M10.8 20.4h2.4M17.6 20.4H20" stroke={P.trim} stroke-width="1.1" />
+    </Ink>
+  ),
+  // sun priests: a headdress of long plumes around a golden sun, on a jade-set band
+  noble: (P) => (
+    <Ink>
+      <Feather x={12} y={16} a={-62} len={10} c={QUETZAL} w={1.4} />
+      <Feather x={12} y={16} a={62} len={10} c={QUETZAL} w={1.4} />
+      <Feather x={12} y={16} a={-40} len={12} c={P.accent} w={1.5} />
+      <Feather x={12} y={16} a={40} len={12} c={P.accent} w={1.5} />
+      <Feather x={12} y={16} a={-18} len={13.4} c={PLUME} w={1.5} />
+      <Feather x={12} y={16} a={18} len={13.4} c={PLUME} w={1.5} />
+      <Feather x={12} y={16} a={0} len={14.6} c={QUETZAL} w={1.5} />
+      <circle cx="12" cy="13.2" r="3.4" fill={P.trim} />
+      <path d={starPath(12, 13.2, 2.6, 1.6, 8)} fill={P.trimLt} stroke-width=".5" />
+      <circle cx="12" cy="13.2" r="1" fill={P.accent} stroke-width=".5" />
+      <path d="M2.4 17.4h19.2v3.6H2.4Z" fill={P.trim} />
+      <path d="M4 19.2h2.2M17.8 19.2H20" stroke={P.trimDk} stroke-width="1" />
+      <circle cx="12" cy="19.2" r="1.1" fill={P.gem} />
+      <circle cx="8.4" cy="19.2" r=".9" fill={P.gem} />
+      <circle cx="15.6" cy="19.2" r=".9" fill={P.gem} />
+    </Ink>
+  ),
+  // jungle folk: a torch and a hunter's club, a feather tied at the grip
+  militia: (P) => (
+    <Ink>
+      <path d="m20.6 21.8 1.2-1.2L9.6 8.4 8.4 9.6Z" fill={P.woodDk} />
+      <path d="m10.6 11.8 1.4-1.4 1.4 1.4-1.4 1.4Z" fill={P.trim} stroke-width=".6" />
+      <Flame x={7.6} y={9.6} s={1.15} />
+      <path d="M3.4 21.8 2.2 20.6 13 9.8C13.4 7.4 15.4 5.6 18 5.4c2.4-.2 3.6 1.4 3.2 3.4-.4 2.4-2.8 4-5.6 3.6Z" fill={P.woodLt} />
+      <path d="m16.6 6.4.4-1.4M19.8 7.6l1.2-.6M18.6 11.2l.4 1.2" stroke={P.blade} stroke-width="1.2" />
+      <circle cx="17.2" cy="8.8" r="1" fill={P.gem} stroke-width=".5" />
+      <Feather x={5.4} y={18.8} a={220} len={4.4} c={P.accent} />
+    </Ink>
+  ),
+  // pack lizards: a great slow lizard with woven baskets of the jungle's goods
+  trader: (P) => (
+    <Ink>
+      <g transform="translate(4 .8) scale(.86)">
+        <path d="M6.4 8.4 5 6.8l2 .2L6.8 5l1.8.8.2-2 1.4 1.6" fill="#8a6e2a" stroke-width=".6" />
+        <path d={lizardHead} fill="#a8903e" />
+        <path d="M13.8 15.6c.2 2 1.4 3.4 3 3.8.2-1.6-.4-3.4-1.4-4.6Z" fill={P.accent} stroke-width=".7" />
+        <path d="M8.4 9c.6 1.4.6 2.8 0 4.2M11 9.4c.4 1.2.4 2.4 0 3.6M7.2 16.4c1.4.4 2.8.4 4.2 0" fill="none" stroke="#6e5a1e" stroke-width=".8" />
+        <path d="M14 7.6 17 8" stroke={O} stroke-width="1" />
+        <circle cx="15.6" cy="9.2" r=".9" fill="#ffd23a" stroke-width=".5" />
+        <path d="M15.6 8.5v1.4" stroke={O} stroke-width=".5" />
+        <path d="M22 11.2c-1.4.6-3.2.8-5 .6" fill="none" stroke={O} stroke-width=".7" />
+      </g>
+      <path d="M1.4 12.4h10l-1 8.6c-.1.8-.8 1.4-1.6 1.4H4c-.8 0-1.5-.6-1.6-1.4Z" fill="#c9a060" />
+      <path d="M2 15.2h9M2.4 18.2h8.2M4.6 12.4l.6 10M8.2 12.4l-.6 10" stroke="#8a6230" stroke-width=".7" />
+      <path d="M2.4 12.4c0-2 1.2-3.6 3-3.6.4-1.2 1.6-1.8 2.8-1.4 1.6.4 2.6 2 2.2 3.6l.2 1.4Z" fill="#e8c83a" />
+      <circle cx="4.8" cy="10.8" r="1.2" fill={P.accent} stroke-width=".6" />
+      <path d="M8 8.4c.4 1 .4 2 0 3" fill="none" stroke="#a88a1e" stroke-width=".6" />
+      <path d="M1 13.6h11" stroke={P.accent} stroke-width="1.2" />
+    </Ink>
+  ),
+};
+
+/** the wilds' troops, by village theme (the older realms are drawn in UNIT_ART) */
+const WILD_ART: Partial<Record<VillageTheme, WildSet>> = { frost: FROST_ART, dwarf: DWARF_ART, djinn: DJINN_ART, saurian: SAURIAN_ART };
+
 const paths: Record<string, () => JSX.Element> = {
   // ---- the haul: a stuffed loot sack (drawn solid for a full haul, faded for a partial one) ----
   haul: () => (
@@ -954,6 +1961,120 @@ const paths: Record<string, () => JSX.Element> = {
       <path d="M8.6 15.6c1.8 1.4 5 1.4 6.8 0-.6 2.2-2 3.2-3.4 3.2s-2.8-1-3.4-3.2Z" fill="#3a1f10" stroke-width=".7" />
       <path d="m10.2 16.2.5 1 .6-1M12.8 16.2l.5 1 .6-1" fill="#fff6e0" stroke-width=".4" />
       <path d="M8.2 6.4c1-1 2.4-1.6 3.8-1.6" fill="none" stroke="#b3d677" stroke-width="1.1" />
+    </Ink>
+  ),
+  // the Frost Queen: silver hair, a crown of ice, a high crystal collar, her staff crowned with a star of ice
+  frost: () => (
+    <Ink>
+      <path d="M19 8.6 20.8 22.8" stroke={O} stroke-width="2.6" />
+      <path d="M19 8.6 20.8 22.8" stroke="#e4ecf4" stroke-width="1.2" />
+      <path d={starPath(18.8, 4.6, 4, 1.3, 6)} fill={ICE} stroke-width=".8" />
+      <circle cx="18.8" cy="4.6" r="1" fill="#3f7fc6" stroke-width=".5" />
+      <path d="M4.6 17.2 3.4 9.8 6 12.2l.4-4.8 2.2 3.6h6.8l2.2-3.6.4 4.8 2.6-2.4-1.2 7.4Z" fill={ICE} />
+      <path d="M3.4 9.8 6 12.2M20.6 9.8 18 12.2" stroke={ICE_DK} stroke-width=".6" />
+      <path d="M2.2 23.2c.4-3.8 2.4-6.2 5.6-7h8.4c3.2.8 5.2 3.2 5.6 7Z" fill="#9ccaee" />
+      <path d="M12 18.6v4.6" stroke="#6fa4d4" stroke-width=".8" />
+      <path d="M4.4 18.6c2.2 1 4.6.6 6-.8l1.6 1.2 1.6-1.2c1.4 1.4 3.8 1.8 6 .8-1-1.6-2.4-2.6-3.8-3H8.2c-1.4.4-2.8 1.4-3.8 3Z" fill={FUR} />
+      <circle cx="12" cy="18.8" r="1" fill="#3f7fc6" stroke-width=".5" />
+      <path d="M6.8 17.4c-1-3.4-1-7.2.4-9.8 1.2-2 3-3 4.8-3s3.6 1 4.8 3c1.4 2.6 1.4 6.4.4 9.8-1.2-.8-2-2.4-2.2-4.4H9c-.2 2-1 3.6-2.2 4.4Z" fill="#eef2f8" />
+      <path d="M8.2 15.2c-.6-2-.6-4.2.2-6M15.8 15.2c.6-2 .6-4.2-.2-6" fill="none" stroke="#b9c6da" stroke-width=".8" />
+      <path d="M12 7.2c1.9 0 3 1.5 3 3.7 0 2.5-1.3 4.3-3 4.3s-3-1.8-3-4.3c0-2.2 1.1-3.7 3-3.7Z" fill="#f7e8e0" />
+      <path d="M10.2 10.8h1.2M12.6 10.8h1.2" stroke="#2c5a9a" stroke-width=".85" />
+      <path d="M11.5 13.4h1" stroke="#b86a86" stroke-width=".7" />
+      <path d="M8.4 7.6 7.8 3.6l2 1.6L10.8 2 12 .2 13.2 2l1 3.2 2-1.6-.6 4Z" fill={ICE} />
+      <path d="M12 .2 13.2 2l1 3.2-2.2 2.4ZM7.8 3.6l2 1.6-.2 2.4" fill={ICE_SHADE} stroke-width=".4" />
+      <path d="M8.4 7h7.2v1.4H8.4Z" fill="#9fb8d0" stroke-width=".6" />
+      <circle cx="12" cy="7.7" r=".6" fill="#3f7fc6" stroke="none" />
+    </Ink>
+  ),
+  // the Forgelord: a dwarf-king in bronze, a great braided beard ringed with gold, a heavy crown, his rune-hammer on his shoulder
+  dwarf: () => (
+    <Ink>
+      <path d="M17 7.6 21 22.8" stroke={O} stroke-width="3" />
+      <path d="M17 7.6 21 22.8" stroke={WOOD} stroke-width="1.5" />
+      <g transform="translate(-1.2 .2) rotate(-15 18.6 5.6)">
+        <path d="M14.6 3h8v5.2h-8Z" fill="#8f8a82" />
+        <path d="M13.6 2.6h1v6h-1ZM22.6 2.6h1v6h-1Z" fill={IRON} />
+        <path d="M17.2 3H20v5.2h-2.8Z" fill={BRONZE} stroke-width=".6" />
+        <Rune d="M18.6 3.8v3.6M18.6 4.6l1 .8-1 .8" w={0.6} />
+      </g>
+      <path d="M1.2 23.2c.2-3.8 2-6.4 5-7.6h11.6c3 1.2 4.8 3.8 5 7.6Z" fill="#8a2a1e" />
+      <path d="M3.6 23.2c.2-2.8 1.4-4.8 3.4-5.8h10c2 1 3.2 3 3.4 5.8Z" fill={BRONZE} />
+      <path d="M2.6 18.8c-.6-1.8.2-3.6 2.2-4l2.4 2.6ZM21.4 18.8c.6-1.8-.2-3.6-2.2-4l-2.4 2.6Z" fill={BRONZE_LT} />
+      <path d="M12 4.8c2.8 0 4.8 2 4.8 5v1.6c0 1.4-.4 2.6-1.2 3.4H8.4c-.8-.8-1.2-2-1.2-3.4V9.8c0-3 2-5 4.8-5Z" fill={SKIN} />
+      <path d="M6.8 10.6c-.8 3.8 0 7.4 2.2 10l1.4-1.2 1.6 2.2 1.6-2.2 1.4 1.2c2.2-2.6 3-6.2 2.2-10-1.2 1.8-3 2.8-5.2 2.8s-4-1-5.2-2.8Z" fill={BEARD} />
+      <path d="M9.6 15.2c0 1.6.4 3 1 4M14.4 15.2c0 1.6-.4 3-1 4M12 15.4v4" fill="none" stroke={BEARD_DK} stroke-width=".6" />
+      <path d="M9.6 18.4h1.6M12.8 18.4h1.6" stroke={GOLD} stroke-width="1.2" />
+      <path d="M8.4 12c1.2-.8 2.6-.8 3.6.2 1-1 2.4-1 3.6-.2-.4 1.4-2 1.8-3.6 1.2-1.6.6-3.2.2-3.6-1.2Z" fill={BEARD_LT} stroke-width=".6" />
+      <path d="M11.2 9.6c0 1.2.2 2 .8 2.4.6-.4.8-1.2.8-2.4Z" fill="#d89a6a" stroke-width=".6" />
+      <path d="M8.8 8.4 11 9M15.2 8.4 13 9" stroke={BEARD_DK} stroke-width="1.1" />
+      <circle cx="10" cy="9.9" r=".6" fill={O} stroke="none" />
+      <circle cx="14" cy="9.9" r=".6" fill={O} stroke="none" />
+      <path d="M7 7.4 6.8 3.4h2.4V5h1.6V2.2h2.4V5h1.6V3.4h2.4l-.2 4Z" fill={GOLD} />
+      <path d="M7 6.4h10V8H7Z" fill={GOLD_DK} stroke-width=".7" />
+      <circle cx="12" cy="4" r=".8" fill={RUNE} stroke-width=".5" />
+      <path d="M8 4.4v1.6" stroke={GOLD_LT} stroke-width=".7" />
+    </Ink>
+  ),
+  // the Djinn: blue-skinned, arms folded in golden bracers, a topknot, trailing smoke down into his lamp
+  djinn: () => (
+    <Ink>
+      <path d="M8 15.4h8.2c.4 2.4-.6 4.2-2.6 5-1.6.6-3.2.4-4.2 1.2-.8.6-1 1.4-.8 2-1.4-.4-2-1.4-1.8-2.6.2-1.2 1.2-2 2.4-2.4-1.2-.8-1.6-1.8-1.2-3.2Z" fill={DJINN_LT} />
+      <path d="M14.6 17c-.6 1.2-1.8 1.8-3.2 2" fill="none" stroke={DJINN} stroke-width=".7" />
+      <path d="M5.4 16.2c-.2-2.8.8-4.8 3-5.4h7.2c2.2.6 3.2 2.6 3 5.4Z" fill={DJINN} />
+      <path d="M9.4 11c1.6 1 3.6 1 5.2 0" fill="none" stroke={GOLD} stroke-width=".9" />
+      <path d="M4.4 12.8c2.4-.6 5-.6 7.6.2 2.6-.8 5.2-.8 7.6-.2l.2 2.6c-2.6.6-5.2.6-7.8 0-2.6.6-5.2.6-7.8 0Z" fill={DJINN} />
+      <path d="M6.8 13.4c1.6-.2 3.2 0 4.6.6" fill="none" stroke={DJINN_LT} stroke-width=".7" />
+      <path d="M4.2 12.8h2.6v2.8H4.2ZM17.2 12.8h2.6v2.8h-2.6Z" fill={GOLD} stroke-width=".8" />
+      <path d="M8.8 6.4 6.4 5.4l1.8 2.8ZM15.2 6.4l2.4-1-1.8 2.8Z" fill={DJINN} stroke-width=".8" />
+      <path d="M12 3.2c2.1 0 3.4 1.6 3.4 3.8S14.1 10.8 12 10.8 8.6 9.2 8.6 7 9.9 3.2 12 3.2Z" fill={DJINN} />
+      <path d="M9.6 6.6c.2-1.4 1-2.4 2-2.8" fill="none" stroke={DJINN_LT} stroke-width=".8" />
+      <path d="M10 7.2h1.4M12.6 7.2H14" stroke="#ffe08a" stroke-width="1" />
+      <path d="M9.6 6.2 11.4 6.8M14.4 6.2l-1.8.6" stroke={DJINN_DK} stroke-width=".8" />
+      <path d="M11.2 9.6h1.6" stroke={DJINN_DK} stroke-width=".7" />
+      <path d="M11.4 10.6 12 12.2l.6-1.6Z" fill="#1e1a2a" stroke-width=".4" />
+      <path d="M11.2 3.4c-.2-1.2.2-2 .8-2.6.6.6 1 1.4.8 2.6Z" fill="#1e1a2a" stroke-width=".6" />
+      <path d="M12 .9c1.6-.8 3.6-.4 5 1-1.6-.2-3 .2-4 1Z" fill="#1e1a2a" stroke-width=".6" />
+      <path d="M13 1.1c1-.3 2-.2 2.8.3M11.7 1.4c-.2.4-.2.9 0 1.3" fill="none" stroke="#6a5aa0" stroke-width=".5" />
+      <path d="M11.2 2.8h1.6" stroke={GOLD} stroke-width=".9" />
+      <circle cx="7" cy="7.8" r=".6" fill={GOLD} stroke-width=".4" />
+      <circle cx="17" cy="7.8" r=".6" fill={GOLD} stroke-width=".4" />
+      <path d="M11.2 21.2c1.6-.4 3.2-.4 4.8 0h3.4c.6-.8 1.6-1.2 2.6-1l.2.8c-.8.2-1.2.8-1.4 1.4-.4 1-1.4 1.6-2.6 1.6h-4.8c-1 0-1.8-.4-2.2-1.2Z" fill={GOLD} />
+      <path d="M6.8 21.8c1.4-.8 3-1 4.4-.6l.8 1.2c-1.4-.4-2.8-.4-4 .2Z" fill={GOLD} stroke-width=".7" />
+      <path d="M15.8 21.2c.2-.8.8-1.2 1.4-1.2s1.2.4 1.4 1.2" fill={GOLD_DK} stroke-width=".6" />
+      <path d="M13.4 22.2h4.4" stroke={GOLD_LT} stroke-width=".6" />
+    </Ink>
+  ),
+  // the Saurian King: a great saurian in a diadem of gold and a fan of jungle plumes, jaws full of teeth
+  saurian: () => (
+    <Ink>
+      <path d="M1.2 23.2c.4-4 2.6-6.6 6-7.6h7.2c2.8.8 4.6 2.8 5.4 5.6l.2 2Z" fill={SCALE_DK} />
+      <path d="M4.6 17.6c3 1.8 7.8 2 11.2.2l.8 2.4c-4 2-9.4 1.8-12.8-.4Z" fill={GOLD} />
+      <circle cx="10.4" cy="19.6" r="1" fill={JADE} stroke-width=".5" />
+      <Feather x={7.6} y={9.4} a={-92} len={7} c={QUETZAL} />
+      <Feather x={7.8} y={8.4} a={-66} len={8} c="#d8402a" />
+      <Feather x={8.4} y={7.6} a={-40} len={8.4} c={PLUME} />
+      <Feather x={9.4} y={7} a={-16} len={7.8} c={QUETZAL} />
+      <Feather x={10.6} y={6.6} a={8} len={6.4} c={GOLD} />
+      <path d="M13.8 12.2 20.8 11.8 20.4 13.6 14.8 13.6Z" fill={MAW} stroke="none" />
+      <path d="M5.4 16C4.2 13.2 4.8 9.6 7.4 7.6 9.6 5.8 13 5.4 16 6.6l5 2.2c1.2.6 1.8 1.8 1.4 3l-.6 1.2-5.4.2.2.8 3.8.2c-.6 1.4-2 2.2-3.6 2l-4.4-.4c-1.2 1.2-2.8 1.8-4.6 1.6Z" fill={SCALE} />
+      <path d="M17.2 12.1l.4.9.4-.9M18.6 12.1l.4.9.4-.9M19.8 12.1l.3.8.3-.8M17.6 13.7l.4-.8.4.8" fill="#fff" stroke-width=".35" />
+      <path d="M8 12.4c1.2 1 2.8 1.4 4.4 1.2M6.8 9.8c.4.8 1 1.2 1.8 1.2" fill="none" stroke={SCALE_LT} stroke-width=".8" />
+      <circle cx="9.8" cy="13.8" r=".45" fill={SCALE_DK} stroke="none" />
+      <circle cx="11.8" cy="15" r=".45" fill={SCALE_DK} stroke="none" />
+      <circle cx="8.2" cy="15.4" r=".45" fill={SCALE_DK} stroke="none" />
+      <path d="M12.8 7.8 16.2 8.6" stroke={O} stroke-width="1.2" />
+      <circle cx="14.6" cy="9.6" r="1.1" fill="#ffd23a" stroke-width=".5" />
+      <path d="M14.6 8.8v1.6" stroke={O} stroke-width=".6" />
+      <path d="M21.2 9.4l.6.4" stroke={O} stroke-width=".8" />
+      <path d="M8.2 8.2C10.4 6.2 13.4 5.4 16.4 5.8l.4 1.8c-2.8-.4-5.6.2-7.8 1.8Z" fill={GOLD} />
+      <circle cx="12.6" cy="6.6" r=".9" fill={JADE} stroke-width=".5" />
+      <path d="M1.8 21.8c.6-1.6 1.6-2.8 2.8-3.4" fill="none" stroke={SCALE} stroke-width=".8" />
+      <circle cx="4" cy="21.4" r=".45" fill={SCALE} stroke="none" />
+      {/* and his raptor at his side */}
+      <g transform="translate(12.8 13.2) scale(.45)">
+        <RaptorHead coat="#b07a34" crest={PLUME} />
+      </g>
     </Ink>
   ),
 
@@ -1274,8 +2395,12 @@ const paths: Record<string, () => JSX.Element> = {
 };
 
 // every troop in each village's style: 'spear' is the classic, 'goblin_spear' the goblin one
+const DRAWN_THEMES: VillageTheme[] = ['classic', 'paladin', 'goblin', 'sorcerer', 'druid', 'necromancer', 'orc', 'frost', 'dwarf', 'djinn', 'saurian'];
 for (const [u, art] of Object.entries(UNIT_ART) as [UnitId, Art][]) {
-  for (const t of ['classic', 'paladin', 'goblin', 'sorcerer', 'druid', 'necromancer', 'orc'] as VillageTheme[]) paths[t === 'classic' ? u : `${t}_${u}`] = () => art(PAL[t], t);
+  for (const t of DRAWN_THEMES) {
+    const own = WILD_ART[t]?.[u];
+    paths[t === 'classic' ? u : `${t}_${u}`] = own ? () => own(PAL[t]) : () => art(PAL[t], t);
+  }
 }
 
 /** The icon name for a troop as a village of this theme fields it (heroes look the same everywhere). */

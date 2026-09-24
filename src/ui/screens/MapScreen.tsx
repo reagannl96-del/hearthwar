@@ -4,8 +4,8 @@ import { hasUnits } from '../../engine/formulas';
 import type { BonusType, UnitId, Units } from '../../engine/types';
 import type { MapData, MapVillage } from '../../engine/view';
 import { lsGet } from '../../host/storage';
-import { forestSprite, lookOfHero, onVillageArt, spriteBox, villageSprite, villageStage } from '../mapSprites';
-import { isVolcanic, isWinter } from '../../engine/world';
+import { forestSprite, jungleSprite, lonePalmSprite, lookOfHero, onVillageArt, palmSprite, spriteBox, villageSprite, villageStage, type Ground } from '../mapSprites';
+import { inRealm, regionAt } from '../../engine/world';
 import { Icon } from '../art/icons';
 import { Btn, CopyButton, UnitList, UnitIcon, unitName } from '../components/common';
 import { loadFarmTemplates, tplName } from '../farmTemplates';
@@ -39,10 +39,14 @@ export function MapScreen({ focus, at }: { focus?: number; at?: [number, number]
     for (const v of data.villages) g.set(v.y * data.size + v.x, v);
     return g;
   }, [data.rev]);
-  const snow = useMemo(() => {
-    const a = new Uint8Array(data.size * data.size);
-    for (let y = 0; y < data.size; y++) for (let x = 0; x < data.size; x++) a[y * data.size + x] = isWinter(x, y, data.size) ? 1 : isVolcanic(x, y, data.size) ? 2 : 0;
-    return a;
+  // the land every field lies in (see ZONE), and which water is the open sea rather than a lake or river
+  const { zones, sea } = useMemo(() => {
+    const n = data.size, z = new Uint8Array(n * n), s = new Uint8Array(n * n);
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+      z[y * n + x] = ZONE[regionAt(x, y, n)];
+      s[y * n + x] = inRealm(x, y, n) ? 0 : 1;
+    }
+    return { zones: z, sea: s };
   }, [data.size]);
   // my own villages wear the look of their hero; everyone else's look plain
   const myLooks = useMemo(() => new Map(pv.villages.map((vv) => [vv.id, lookOfHero(vv.hero)])), [pv.villages]);
@@ -138,13 +142,28 @@ export function MapScreen({ focus, at }: { focus?: number; at?: [number, number]
     const fx0 = Math.max(0, Math.floor(x0)), fy0 = Math.max(0, Math.floor(y0));
     const fx1 = Math.min(data.size - 1, Math.ceil(x0 + W / z)), fy1 = Math.min(data.size - 1, Math.ceil(y0 + H / z));
     // terrain
+    const n = data.size;
+    const lake = (xx: number, yy: number) => xx >= 0 && yy >= 0 && xx < n && yy < n && data.terrain[yy * n + xx] === 'w' && !sea[yy * n + xx];
+    const wet = (xx: number, yy: number) => xx < 0 || yy < 0 || xx >= n || yy >= n || data.terrain[yy * n + xx] === 'w';
+    const late: WildSprite[] = [];
     for (let y = fy0; y <= fy1; y++) {
       for (let x = fx0; x <= fx1; x++) {
         const t = data.terrain[y * data.size + x];
         const pair = TERRAIN_COLORS[t] ?? TERRAIN_COLORS['.'];
-        const cold = snow[y * data.size + x] === 1;
-        const hot = snow[y * data.size + x] === 2 && t !== 'w';
+        const zone = zones[y * data.size + x];
+        const cold = zone === ZONE.winter;
+        const hot = zone === ZONE.volcanic && t !== 'w';
         const hsh = (x * 73856093) ^ (y * 19349663);
+        if (zone === ZONE.desert || zone === ZONE.jungle) {
+          // the desert and the jungle read the stored terrain their own way (open sea stays sea)
+          const water = t === 'w';
+          const isSea = water && sea[y * n + x] === 1;
+          // which sides (left, right, up, down) meet the other element: a lake's shore, or the land's waterside
+          const side = (xx: number, yy: number) => (water ? !wet(xx, yy) : lake(xx, yy));
+          const shore = isSea ? 0 : (side(x - 1, y) ? 1 : 0) | (side(x + 1, y) ? 2 : 0) | (side(x, y - 1) ? 4 : 0) | (side(x, y + 1) ? 8 : 0);
+          wildField(ctx, { t, desert: zone === ZONE.desert, sea: isSea, px: sx(x), py: sy(y), z, hsh, taken: grid.has(y * n + x), shore, water: col['--map-water'] }, late);
+          continue;
+        }
         // forests keep the meadow colour underneath; the trees are drawn on top
         ctx.fillStyle = cold
           ? SNOW[t === 'w' ? 'w' : 'g']
@@ -224,6 +243,8 @@ export function MapScreen({ focus, at }: { focus?: number; at?: [number, number]
           }
         }
       }
+      // the row's palms, canopies, mesas and towers, over every field of the row (so none is cut off by its neighbour)
+      flushWild(ctx, late);
     }
     // continent grid
     ctx.strokeStyle = col['--map-grid'];
@@ -279,10 +300,10 @@ export function MapScreen({ focus, at }: { focus?: number; at?: [number, number]
         const px = sx(x), py = sy(y);
         let k = 1, sprite: HTMLCanvasElement | null = null;
         if (z >= 10) {
-          const ground = snow[y * data.size + x];
+          const ground = GROUNDS[zones[y * data.size + x]];
           const look = v.ownerId === me ? myLooks.get(v.id) ?? 'generic' : 'generic';
           const stage = villageStage(v.points);
-          sprite = villageSprite(stage, look, { barb: v.ownerId === null, ground: ground === 1 ? 'snow' : ground === 2 ? 'ash' : 'grass' });
+          sprite = villageSprite(stage, look, { barb: v.ownerId === null, ground });
           k = stageFit(stage, spriteBox(sprite));
         }
         // the island's ground centre: rings, glows and markers are laid out around it
@@ -430,10 +451,12 @@ export function MapScreen({ focus, at }: { focus?: number; at?: [number, number]
       for (let y = 0; y < data.size; y++)
         for (let x = 0; x < data.size; x++) {
           const t = data.terrain[y * data.size + x];
-          const zone = snow[y * data.size + x];
+          const zone = zones[y * data.size + x];
+          const wild = zone === ZONE.desert ? SAND : zone === ZONE.jungle ? JUNGLE : null;
           b.fillStyle = t === 'l' ? ASH.lava
-            : zone === 1 ? SNOW[t === 'w' ? 'w' : t === 'm' ? 'm' : t === 'f' ? 'f' : 'g']
-            : zone === 2 && t !== 'w' ? (t === 'm' ? ASH.rock : ASH.g)
+            : zone === ZONE.winter ? SNOW[t === 'w' ? 'w' : t === 'm' ? 'm' : t === 'f' ? 'f' : 'g']
+            : zone === ZONE.volcanic && t !== 'w' ? (t === 'm' ? ASH.rock : ASH.g)
+            : wild && !(t === 'w' && sea[y * data.size + x]) ? (t === 'w' ? wild.deep : t === 'm' ? wild.peak : t === 'f' ? wild.grove : wild.g)
             : col[(TERRAIN_COLORS[t] ?? TERRAIN_COLORS['.'])[0]];
           b.fillRect(x * P, y * P, P, P);
         }
@@ -662,6 +685,314 @@ export function MapScreen({ focus, at }: { focus?: number; at?: [number, number]
 const SNOW = { g: '#e7edf1', g2: '#dce4ea', f: '#c9d4d6', w: '#a7c4d6', m: '#c5cacf', peak: '#f5f8fa' };
 /** the volcanic west: ash plains, black rock and lava */
 const ASH = { g: '#5d534c', g2: '#5a504a', rock: '#3d3533', rock2: '#2b2422', lava: '#b3401c', lava2: '#f08a2c', crust: 'rgba(50,20,12,0.45)', ember: '#ff7a2a' };
+/** the eastern desert: warm sand and dunes, turquoise oases ringed with green, palm groves and red mesas */
+const SAND = {
+  g: '#d3b173', g2: '#d0ae70', light: '#dfc187', grove: '#a39c58', deep: '#319b9d', shallow: '#74c8b8', rim: '#7f9b45', rimDark: '#5e7e33',
+  crest: 'rgba(255,241,204,0.7)', lee: 'rgba(156,104,46,0.34)', ripple: 'rgba(150,100,45,0.24)', rock: '#b8683f', peak: '#b8683f', rockDark: '#8c4a2c', rockTop: '#d8966a', strata: 'rgba(96,42,20,0.3)',
+};
+/** the southern jungle: deep, wet green under a dense canopy, green-teal rivers and mossy limestone towers */
+const JUNGLE = {
+  g: '#3e7a2e', g2: '#3b762c', grove: '#285e23', floor: '#1d4c1f', deep: '#2b8676', shallow: '#52ab90',
+  rock: '#aaa78e', rockDark: '#78775f', peak: '#6f8a5a', moss: '#3f8a34', mossLight: '#66ad47', fern: '#27591f', fernLight: '#5aa840',
+};
+const FLOWERS = ['#f05a7a', '#ffc83a', '#f7f0e6', '#e8483a'];
+/** Which land a field lies in, as the map keeps it. */
+const ZONE = { heartland: 0, winter: 1, volcanic: 2, desert: 3, jungle: 4 } as const;
+/** The ground a village's island is repainted to, by zone. */
+const GROUNDS: Ground[] = ['grass', 'snow', 'ash', 'sand', 'jungle'];
+const TAU = Math.PI * 2;
+
+/** Something standing up off the ground, drawn once its whole row of fields is down: a sprite ([sprite, x, y, size]) or a painter. */
+type WildSprite = [HTMLCanvasElement, number, number, number] | (() => void);
+
+function flushWild(ctx: CanvasRenderingContext2D, late: WildSprite[]) {
+  for (const s of late) {
+    if (typeof s === 'function') s();
+    else ctx.drawImage(s[0], s[1], s[2], s[3], s[3]);
+  }
+  late.length = 0;
+}
+
+/**
+ * One field of the eastern desert or the southern jungle. Every realm, old or new, keeps its
+ * terrain codes; here they are read the way these lands look: in the desert open ground is sand
+ * and dunes, forest a palm grove or a stand of cacti, mountains red mesas and water an oasis
+ * with a green rim; in the jungle the ground is deep wet green, forest a dense canopy, mountains
+ * limestone towers crowned with trees and water a green river. Open sea stays sea.
+ * `shore` marks the sides (1 left, 2 right, 4 up, 8 down) where water meets land.
+ */
+function wildField(ctx: CanvasRenderingContext2D, f: { t: string; desert: boolean; sea: boolean; px: number; py: number; z: number; hsh: number; taken: boolean; shore: number; water: string }, late: WildSprite[]) {
+  const { t, desert, px, py, z, hsh, shore } = f;
+  const L = desert ? SAND : JUNGLE;
+  const fx = Math.floor(px), fy = Math.floor(py), fs = Math.ceil(z) + 1;
+  if (t === 'w') {
+    if (f.sea) {
+      ctx.fillStyle = f.water;
+      ctx.fillRect(fx, fy, fs, fs);
+      return;
+    }
+    // pale shallows along the shore, deep water in the middle running on into the next field of water
+    ctx.fillStyle = shore && z >= 6 ? L.shallow : L.deep;
+    ctx.fillRect(fx, fy, fs, fs);
+    if (shore && z >= 6) {
+      const ins = z * 0.2, ov = z * 0.35;
+      const l = shore & 1 ? ins : -ov, r = shore & 2 ? ins : -ov, u = shore & 4 ? ins : -ov, d = shore & 8 ? ins : -ov;
+      ctx.fillStyle = L.deep;
+      ctx.beginPath();
+      ctx.roundRect(px + l, py + u, z - l - r, z - u - d, z * 0.3);
+      ctx.fill();
+    }
+    if (z >= 12 && (hsh & 7) === 3) {
+      // a glint of sun on the water
+      ctx.strokeStyle = 'rgba(235,255,250,0.55)';
+      ctx.lineWidth = Math.max(1, z * 0.04);
+      ctx.beginPath();
+      ctx.moveTo(px + z * 0.38, py + z * 0.5);
+      ctx.lineTo(px + z * 0.6, py + z * 0.47);
+      ctx.stroke();
+    }
+    return;
+  }
+  // (the dark floor under the canopy only where there is canopy: a village's clearing is open ground)
+  const base = (t === 'f' || t === 'm') && !desert && !f.taken ? JUNGLE.floor : ((hsh >> 7) ^ (hsh >> 13)) & 1 ? L.g : L.g2;
+  ctx.fillStyle = base;
+  ctx.fillRect(fx, fy, fs, fs);
+  // an oasis: a rim of green where the sand meets the water
+  if (desert && shore && z >= 6) {
+    const bw = z * 0.12;
+    for (const s of [1, 2, 4, 8]) {
+      if (!(shore & s)) continue;
+      // a strip of grass along the water, its landward edge scalloped, reeds standing in it
+      ctx.fillStyle = SAND.rim;
+      ctx.fillRect(s === 2 ? px + z - bw : px, s === 8 ? py + z - bw : py, s < 4 ? bw : z, s < 4 ? z : bw);
+      ctx.beginPath();
+      for (let i = 0; i < 4; i++) {
+        const along = 0.12 + i * 0.25, rr = z * (0.07 + ((hsh >> (i + s)) & 1) * 0.035);
+        const cx = s === 1 ? px + bw : s === 2 ? px + z - bw : px + z * along;
+        const cy = s === 4 ? py + bw : s === 8 ? py + z - bw : py + z * along;
+        ctx.moveTo(cx + rr, cy);
+        ctx.arc(cx, cy, rr, 0, TAU);
+      }
+      ctx.fill();
+      if (z >= 16) {
+        ctx.strokeStyle = SAND.rimDark;
+        ctx.lineWidth = Math.max(1, z * 0.03);
+        ctx.beginPath();
+        for (const along of [0.3, 0.7]) {
+          const cx = s === 1 ? px + bw * 0.5 : s === 2 ? px + z - bw * 0.5 : px + z * along;
+          const cy = s === 4 ? py + bw * 0.9 : s === 8 ? py + z - bw * 0.2 : py + z * along;
+          for (const d of [-1, 0, 1]) { ctx.moveTo(cx + d * z * 0.02, cy); ctx.lineTo(cx + d * z * 0.05, cy - z * 0.1); }
+        }
+        ctx.stroke();
+      }
+    }
+    if (z >= 12 && t === '.' && !f.taken && (hsh & 3) === 0) late.push([lonePalmSprite((hsh >> 2) & 3), px + z * 0.05, py - z * 0.3, z * 0.95]);
+  }
+  if (f.taken) return;
+  if (t === 'f') {
+    if (desert && (hsh & 3) === 0) return; // the groves are scattered, like the woods at home
+    if (z >= 12) late.push(desert ? [palmSprite(hsh & 7), px - z * 0.05, py - z * 0.2, z * 1.1] : [jungleSprite(hsh & 7), px - z * 0.14, py - z * 0.3, z * 1.28]);
+    else {
+      ctx.fillStyle = L.grove;
+      ctx.fillRect(fx, fy, fs, fs);
+    }
+    return;
+  }
+  if (t === 'm') {
+    if (desert) mesa(ctx, px, py, z, hsh);
+    else {
+      // limestone towers rising out of the canopy
+      if (z >= 12) late.push([jungleSprite((hsh >> 3) & 7), px - z * 0.14, py - z * 0.2, z * 1.28]);
+      late.push(() => karst(ctx, px, py, z, hsh));
+    }
+    return;
+  }
+  if (z < 12 || shore) return;
+  const v = (hsh >> 3) & 15;
+  if (desert) {
+    if (v < 3) {
+      // dunes: a long sunlit windward slope up to a sharp crest, the steep slip face beyond it in shade
+      for (let i = 0; i < 1 + (v & 1); i++) {
+        const w = z * (0.62 - i * 0.2), x0 = px + z * (0.06 + i * 0.4 + ((hsh >> 9) & 1) * 0.06), y0 = py + z * (0.7 - i * 0.3 + ((hsh >> 11) & 1) * 0.08);
+        const hgt = w * 0.26, xp = x0 + w * 0.64, yp = y0 - hgt;
+        ctx.fillStyle = SAND.light;
+        ctx.beginPath();
+        ctx.moveTo(x0, y0);
+        ctx.quadraticCurveTo(x0 + w * 0.36, y0 - hgt * 0.95, xp, yp);
+        ctx.lineTo(xp - w * 0.06, y0);
+        ctx.fill();
+        ctx.fillStyle = SAND.lee;
+        ctx.beginPath();
+        ctx.moveTo(xp, yp);
+        ctx.quadraticCurveTo(xp + w * 0.22, yp + hgt * 0.2, x0 + w, y0);
+        ctx.lineTo(xp - w * 0.06, y0);
+        ctx.fill();
+        ctx.strokeStyle = SAND.crest;
+        ctx.lineWidth = Math.max(1, z * 0.03);
+        ctx.beginPath();
+        ctx.moveTo(x0 + w * 0.2, y0 - hgt * 0.35);
+        ctx.quadraticCurveTo(x0 + w * 0.42, y0 - hgt * 0.95, xp, yp);
+        ctx.stroke();
+      }
+    } else if (v < 6) {
+      // wind ripples across the sand
+      ctx.lineWidth = Math.max(1, z * 0.03);
+      for (let i = 0; i < 3; i++) {
+        const y0 = py + z * (0.3 + i * 0.2 + ((hsh >> 8) & 3) * 0.02), x0 = px + z * (0.14 + i * 0.08 + ((hsh >> (10 + i)) & 1) * 0.08);
+        ctx.strokeStyle = SAND.ripple;
+        ctx.beginPath();
+        ctx.moveTo(x0, y0);
+        ctx.quadraticCurveTo(x0 + z * 0.22, y0 - z * 0.06, x0 + z * 0.5, y0 + z * 0.01);
+        ctx.stroke();
+      }
+    } else if (v === 7) {
+      // a sun-bleached boulder
+      ctx.fillStyle = SAND.rockDark;
+      ctx.beginPath();
+      ctx.ellipse(px + z * 0.55, py + z * 0.62, z * 0.12, z * 0.07, 0, 0, TAU);
+      ctx.fill();
+      ctx.fillStyle = '#c99a6a';
+      ctx.beginPath();
+      ctx.ellipse(px + z * 0.53, py + z * 0.59, z * 0.1, z * 0.055, 0, 0, TAU);
+      ctx.fill();
+    }
+  } else if (v < 4) {
+    // a fern unfurling
+    const cx = px + z * (0.3 + ((hsh >> 8) & 3) * 0.12), cy = py + z * (0.5 + ((hsh >> 10) & 3) * 0.1);
+    ctx.lineWidth = Math.max(1, z * 0.05);
+    for (let i = 0; i < 6; i++) {
+      const a = Math.PI * (1.02 + i * 0.19);
+      ctx.strokeStyle = i % 2 ? JUNGLE.fernLight : JUNGLE.fern;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.quadraticCurveTo(cx + Math.cos(a) * z * 0.14, cy + Math.sin(a) * z * 0.16, cx + Math.cos(a) * z * 0.22, cy + Math.sin(a) * z * 0.1);
+      ctx.stroke();
+    }
+  } else if (v < 7) {
+    // bright flowers in the grass
+    for (let i = 0; i < 3; i++) {
+      ctx.fillStyle = FLOWERS[(hsh >> (12 + i)) & 3];
+      ctx.beginPath();
+      ctx.arc(px + z * (0.25 + i * 0.22), py + z * (0.35 + ((hsh >> (6 + i * 2)) & 3) * 0.12), Math.max(1, z * 0.045), 0, TAU);
+      ctx.fill();
+    }
+  }
+}
+
+/** Red rock of the desert: a broad mesa, a tall lone butte or two buttes together. */
+function mesa(ctx: CanvasRenderingContext2D, px: number, py: number, z: number, hsh: number) {
+  const k = 0.85 + ((hsh >> 3) & 3) * 0.08, kind = (hsh >> 8) & 3;
+  if (kind === 3) {
+    butte(ctx, px + z * 0.4, px + z * 0.98, py + z * 0.8, py + z * (0.8 - 0.5 * k), z * 0.1, z, false);
+    butte(ctx, px + z * 0.02, px + z * 0.56, py + z * 0.98, py + z * (0.98 - 0.36 * k), z * 0.1, z, true);
+  } else if (kind === 2) butte(ctx, px + z * 0.18, px + z * 0.82, py + z * 0.97, py + z * (0.97 - 0.8 * k), z * 0.1, z, true);
+  else butte(ctx, px + z * 0.03, px + z * 0.97, py + z * 0.96, py + z * (0.96 - 0.52 * k), z * (0.14 + ((hsh >> 5) & 1) * 0.06), z, true);
+}
+
+/** A flat-topped block of banded sandstone, its east face in shade and scree at its foot. */
+function butte(ctx: CanvasRenderingContext2D, bl: number, br: number, base: number, top: number, inset: number, z: number, scree: boolean) {
+  const tl = bl + inset, tr = br - inset;
+  ctx.fillStyle = SAND.rock;
+  ctx.beginPath();
+  ctx.moveTo(bl, base);
+  ctx.lineTo(tl, top);
+  ctx.lineTo(tr, top);
+  ctx.lineTo(br, base);
+  ctx.fill();
+  const w = br - bl;
+  ctx.fillStyle = SAND.rockDark;
+  ctx.beginPath();
+  ctx.moveTo(tr - w * 0.16, top);
+  ctx.lineTo(tr, top);
+  ctx.lineTo(br, base);
+  ctx.lineTo(br - w * 0.32, base);
+  ctx.fill();
+  ctx.strokeStyle = SAND.strata;
+  ctx.lineWidth = Math.max(1, z * 0.035);
+  ctx.beginPath();
+  for (const s of [0.38, 0.68]) {
+    const yy = top + (base - top) * s;
+    ctx.moveTo(tl + (bl - tl) * s, yy);
+    ctx.lineTo(tr + (br - tr) * s, yy);
+  }
+  ctx.stroke();
+  ctx.fillStyle = SAND.rockTop;
+  ctx.beginPath();
+  ctx.moveTo(tl, top);
+  ctx.lineTo(tr, top);
+  ctx.lineTo(tr - z * 0.03, top + z * 0.07);
+  ctx.lineTo(tl + z * 0.03, top + z * 0.07);
+  ctx.fill();
+  if (scree && z >= 12) {
+    ctx.fillStyle = SAND.rockDark;
+    for (const [dx, r] of [[0.08, 0.05], [0.9, 0.06], [0.74, 0.04]]) {
+      ctx.beginPath();
+      ctx.arc(bl + w * dx, base - z * 0.02, z * r, 0, TAU);
+      ctx.fill();
+    }
+  }
+}
+
+/** The jungle's mountains: limestone towers standing out of the canopy, one tall or two together. */
+function karst(ctx: CanvasRenderingContext2D, px: number, py: number, z: number, hsh: number) {
+  const k = 0.8 + ((hsh >> 3) & 3) * 0.1;
+  if (((hsh >> 9) & 3) === 0) {
+    tower(ctx, px + z * 0.68, py + z * 0.8, z * 0.19, z * 0.6 * k, z);
+    tower(ctx, px + z * 0.34, py + z * 0.98, z * 0.23, z * 0.72 * k, z);
+  } else tower(ctx, px + z * (0.44 + ((hsh >> 5) & 3) * 0.04), py + z * 0.97, z * (0.25 + ((hsh >> 7) & 1) * 0.05), z * 0.92 * k, z);
+}
+
+/** One limestone tower: bulging, pale and streaked, a crown of trees on top and vines hanging down its face. */
+function tower(ctx: CanvasRenderingContext2D, cx: number, base: number, hw: number, h: number, z: number) {
+  const top = base - h, mid = top + h * 0.45;
+  ctx.fillStyle = JUNGLE.rock;
+  ctx.beginPath();
+  ctx.moveTo(cx - hw * 1.3, base);
+  ctx.quadraticCurveTo(cx - hw * 1.25, mid, cx - hw * 0.9, top + hw * 0.5);
+  ctx.quadraticCurveTo(cx - hw * 0.6, top - hw * 0.1, cx, top);
+  ctx.quadraticCurveTo(cx + hw * 0.6, top - hw * 0.1, cx + hw * 0.9, top + hw * 0.5);
+  ctx.quadraticCurveTo(cx + hw * 1.25, mid, cx + hw * 1.3, base);
+  ctx.fill();
+  // the shaded east side
+  ctx.fillStyle = JUNGLE.rockDark;
+  ctx.beginPath();
+  ctx.moveTo(cx + hw * 0.35, top + hw * 0.15);
+  ctx.quadraticCurveTo(cx + hw * 0.72, top + hw * 0.1, cx + hw * 0.9, top + hw * 0.5);
+  ctx.quadraticCurveTo(cx + hw * 1.25, mid, cx + hw * 1.3, base);
+  ctx.lineTo(cx + hw * 0.5, base);
+  ctx.quadraticCurveTo(cx + hw * 0.7, mid, cx + hw * 0.35, top + hw * 0.15);
+  ctx.fill();
+  // rain streaks and green ledges on its face
+  ctx.strokeStyle = 'rgba(62,68,52,0.45)';
+  ctx.lineWidth = Math.max(1, z * 0.025);
+  ctx.beginPath();
+  ctx.moveTo(cx - hw * 0.45, top + h * 0.32);
+  ctx.lineTo(cx - hw * 0.55, top + h * 0.72);
+  ctx.moveTo(cx + hw * 0.08, top + h * 0.28);
+  ctx.lineTo(cx + hw * 0.02, top + h * 0.6);
+  ctx.stroke();
+  ctx.fillStyle = JUNGLE.moss;
+  ctx.beginPath();
+  ctx.ellipse(cx - hw * 0.62, mid + h * 0.08, hw * 0.38, hw * 0.16, 0, 0, TAU);
+  ctx.ellipse(cx + hw * 0.25, top + h * 0.72, hw * 0.32, hw * 0.14, 0, 0, TAU);
+  ctx.fill();
+  // vines hanging from the crown
+  ctx.strokeStyle = JUNGLE.moss;
+  ctx.lineWidth = Math.max(1, z * 0.035);
+  ctx.beginPath();
+  for (const [dx, len] of [[-0.62, 0.32], [0.05, 0.22], [0.55, 0.4]]) {
+    ctx.moveTo(cx + hw * dx, top + hw * 0.3);
+    ctx.lineTo(cx + hw * (dx - 0.06), top + hw * 0.3 + h * len);
+  }
+  ctx.stroke();
+  // the crown of trees
+  for (const [dx, dy, r, c] of [[-0.6, 0.4, 0.48, JUNGLE.grove], [0.55, 0.35, 0.5, JUNGLE.grove], [-0.25, 0.05, 0.55, JUNGLE.moss], [0.3, 0.02, 0.52, JUNGLE.moss], [-0.2, -0.12, 0.3, JUNGLE.mossLight], [0.28, -0.08, 0.22, JUNGLE.mossLight]] as [number, number, number, string][]) {
+    ctx.fillStyle = c;
+    ctx.beginPath();
+    ctx.arc(cx + hw * dx, top + hw * dy, hw * r, 0, TAU);
+    ctx.fill();
+  }
+}
 
 /** Bonus rings only appear once you are looking closely (fields drawn at least this many pixels wide). */
 const BONUS_RING_ZOOM = 16;

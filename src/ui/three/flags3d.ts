@@ -37,6 +37,10 @@ const POLE: Partial<Record<Theme, PoleLook>> & { classic: PoleLook } = {
   druid: { pole: 0x6a4a2a, band: 0x5e7d32 },
   goblin: { pole: 0x6e4a2a, band: 0x5f3218 },
   necromancer: { pole: 0x2e2a33, band: 0xe6dfcc },
+  djinn: { pole: 0xefe2c4, band: 0x1b7d80 },
+  dwarf: { pole: 0x3a3432, band: 0xb57a3c },
+  frost: { pole: 0xe9e4da, band: 0x93cdec },
+  saurian: { pole: 0x2f8a68, band: 0xe3ae3a },
 };
 
 interface Cloth { mesh: THREE.Mesh; base: Float32Array; phase: number }

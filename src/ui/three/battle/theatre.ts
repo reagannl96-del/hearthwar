@@ -23,6 +23,8 @@ import type { BattleData, BuildingId, Buildings, Res, UnitId, Units } from '../.
 import type { Theme } from '../kit';
 import { GATE_A, LAYOUT, OUTSIDE, WALL_R, buildingScale, heightAt, wallGuardPosts } from '../scene';
 import { Fx, type Fire } from './fx';
+import { boltThrowers } from '../deepforge';
+import { rimeGlaze } from '../frosthold';
 import { clearOfWorks, freeSpot, route } from './paths';
 import {
   FIG_SCALE, disposeTemplates, ladder, makeCatapult, makeFigure, makeRam, makeVillager, sack, shotFire, standard, withTheme,
@@ -87,6 +89,8 @@ export interface BattleSound {
   splash(): void;
   cheer(): void;
   fanfare(): void;
+  /** a raptor's hunting shriek (the Saurian King's pack) */
+  shriek?(): void;
 }
 
 /** What the theatre needs from the village scene around it. */
@@ -215,9 +219,10 @@ const ORIGIN: Partial<Record<UnitId, BuildingId>> = {
   spear: 'barracks', sword: 'barracks', axe: 'barracks', archer: 'barracks', scout: 'main', militia: 'farm',
   light: 'stable', marcher: 'stable', heavy: 'stable',
   paladin: 'statue', sorcerer: 'statue', druid: 'statue', goblin: 'statue', necromancer: 'statue', orc: 'statue',
+  frost: 'statue', dwarf: 'statue', djinn: 'statue', saurian: 'statue',
 };
 
-const THEME_COLOR: Record<Theme, number> = { classic: 0xb3332a, paladin: 0x2c56b0, sorcerer: 0x6a3fa0, druid: 0x4f7a2e, goblin: 0x6f9a2a, necromancer: 0x2f7a4a, orc: 0xa3261a };
+const THEME_COLOR: Record<Theme, number> = { classic: 0xb3332a, paladin: 0x2c56b0, sorcerer: 0x6a3fa0, druid: 0x4f7a2e, goblin: 0x6f9a2a, necromancer: 0x2f7a4a, orc: 0xa3261a, frost: 0x3f7fc6, dwarf: 0xb8452a, djinn: 0xd8a018, saurian: 0xc8402a };
 const WALL_COLOR = (level: number) => (level >= 10 ? 0xb9b09c : 0x8a5a30);
 const wallTier = (l: number) => (l <= 0 ? 0 : l < 5 ? 1 : l < 10 ? 2 : l < 15 ? 3 : 4);
 const wallHeight = (l: number) => (l <= 0 ? 0 : l < 5 ? 2.9 : l < 10 ? 3.8 : l < 15 ? 3.6 : 4.8);
@@ -353,6 +358,8 @@ export class BattleTheatre {
   private rubble: { m: THREE.Mesh; until: number }[] = [];
   private captions: { s: THREE.Sprite; t0: number; life: number; y0: number }[] = [];
   private thorns: { g: THREE.Group; mat: THREE.Material; t0: number; until: number } | null = null;
+  /** the Frost Queen's rime, glazing the wall where the rams strike */
+  private rime: { g: THREE.Group; mats: THREE.Material[]; t0: number; until: number } | null = null;
   /** the fire burning on each building the catapults hit */
   private fires = new Map<BuildingId, Fire>();
   /** when (game time) an attack last went the enemy's way: the village is in no mood for a party */
@@ -495,6 +502,7 @@ export class BattleTheatre {
     for (const c of this.captions) this.dropCaption(c.s);
     this.captions = [];
     this.dropThorns();
+    this.dropRime();
     this.fx.clear();
     this.fires.clear();
     this.holds = {};
@@ -533,6 +541,31 @@ export class BattleTheatre {
     this.thorns.g.traverse((o) => { if (o instanceof THREE.Mesh) o.geometry.dispose(); });
     this.thorns.mat.dispose();
     this.thorns = null;
+  }
+
+  private dropRime(): void {
+    if (!this.rime) return;
+    this.group.remove(this.rime.g);
+    this.rime.g.traverse((o) => { if (o instanceof THREE.Mesh) o.geometry.dispose(); });
+    for (const m of this.rime.mats) m.dispose();
+    this.rime = null;
+  }
+
+  /** The Frost Queen's rime: a sheet of ice spreads over the wall's outer face where the rams will strike. */
+  private glazeWall(P: THREE.Vector3, u: THREE.Vector3, level: number): void {
+    this.dropRime();
+    const tier = wallTier(level);
+    const { g, mats } = rimeGlaze(9, wallHeight(level) + 0.3);
+    g.position.copy(P).addScaledVector(u, tier >= 3 ? (tier === 3 ? 0.9 : 1.1) : 0.72);
+    g.position.y = 0;
+    g.rotation.y = Math.atan2(u.x, u.z);
+    g.scale.set(0.05, 1, 1);
+    this.group.add(g);
+    this.rime = { g, mats, t0: this.T, until: this.T + 16 };
+    const c = g.position.clone().setY(wallHeight(level) * 0.5);
+    this.fx.flash(c, 7, 0x9fe6ff, 0.7);
+    this.fx.magic(c, 16, 0xdff6ff);
+    this.fx.smoke(c, 0xe8f4fa, 3, 1.0);
   }
 
   private gameNow(): number {
@@ -661,7 +694,7 @@ export class BattleTheatre {
         ? new THREE.Vector3(x, (h + 0.3) * sc, z)
         : new THREE.Vector3(
           x + Math.cos(army.theta) * 1.62 * sc,
-          ((v.theme === 'sorcerer' ? h * 0.82 : v.theme === 'druid' ? h - 0.6 : v.theme === 'orc' ? h + 0.19 : h * 0.9) + 0.11) * sc,
+          ((v.theme === 'sorcerer' ? h * 0.82 : v.theme === 'druid' ? h - 0.6 : v.theme === 'orc' || v.theme === 'dwarf' ? h + 0.19 : h * 0.9) + 0.11) * sc,
           z + Math.sin(army.theta) * 1.62 * sc,
         );
       f.g.position.copy(p);
@@ -1093,7 +1126,7 @@ export class BattleTheatre {
     assign(atts, 'att');
     assign(defs, 'def');
     // the melee lines: pair up the fighters
-    const meleeRole = (a: Actor) => a.role === 'melee' || a.role === 'thrower' || (a.role === 'caster' && a.side === 'def' && a.unit !== 'sorcerer');
+    const meleeRole = (a: Actor) => a.role === 'melee' || a.role === 'thrower' || (a.role === 'caster' && a.side === 'def' && a.unit !== 'sorcerer' && a.unit !== 'frost');
     const attM = atts.filter(meleeRole);
     const defM = defs.filter((a) => meleeRole(a) && !a.post);
     // the lines meet a few steps inside, so the attackers are seen pouring in through the gap
@@ -1168,6 +1201,8 @@ export class BattleTheatre {
         this.fx.debris(hit, h.level !== null ? 9 : 3, WALL_COLOR(was), u.clone().multiplyScalar(-1).add(new THREE.Vector3(0, 0.4, 0)));
         this.fx.dust(hit, h.level !== null ? 7 : 3);
         this.fx.sparks(hit, 4, 0xffd27a);
+        // (on a wall glazed with the Frost Queen's rime the blow mostly shatters ice)
+        if (plan.effects.includes('rime')) { this.fx.debris(hit, 5, 0xdff4ff, u.clone().multiplyScalar(-1)); this.fx.magic(hit, 6, 0xcff4ff); }
         this.sfx('thud', 0.1);
         if (h.level !== null && this.lowerWall(h.level)) {
           if (!battle.breached) { battle.breached = true; this.lay(hit, 6, WALL_COLOR(was), 5); }
@@ -1216,7 +1251,113 @@ export class BattleTheatre {
       }
       this.sfx('horn', 0.3);
     });
+    // the Saurian King's pack: a shriek goes up as his riders close, and they burst forward in a spray of dust and torn leaves
+    if (fx.includes('pack')) {
+      const side = atts.some((a) => a.unit === 'saurian') ? atts : defs.some((a) => a.unit === 'saurian') ? defs : atts;
+      for (const [dt, big] of [[Math.max(0.3, plan.meleeStart - 0.7), true], [plan.meleeStart + 0.25, false]] as [number, boolean][]) {
+        this.at(battle, dt, () => {
+          const king = side.find((a) => a.unit === 'saurian' && !a.fallen);
+          if (king && big) {
+            this.fx.flash(king.pos.clone().setY(king.pos.y + 2.6), 3.4, 0x8affc0, 0.5);
+            this.fx.magic(king.pos.clone().setY(king.pos.y + 2.2), 8, 0x7affb0);
+          }
+          for (const a of side.filter((x) => x.f.mounted && !x.fallen && !x.gone).slice(0, 10)) {
+            const p = a.pos.clone().setY(a.pos.y + 0.3);
+            this.fx.dust(p, big ? 4 : 3, 0x8a7a52);
+            this.fx.debris(p.setY(p.y + 0.6), big ? 4 : 2, Math.random() < 0.5 ? 0x3f8a32 : 0x6aa83a);
+          }
+          if (big) this.sfx('shriek', 0.3);
+        });
+      }
+    }
+    // the Frost Queen's rime: ice glazes the wall before the rams reach it (and it shatters off with their blows)
+    if (fx.includes('rime') && wallNow > 0) this.at(battle, 0.5, () => this.glazeWall(P, u, wallNow));
+    // her frostbite: bursts of frost break over the horsemen as they charge, and a cold flash from her staff
+    if (fx.includes('frostbite')) {
+      const queenAttacks = atts.some((a) => a.unit === 'frost');
+      const riders = (queenAttacks ? defs : atts).filter((a) => a.f.mounted);
+      for (let k = 0; k < 3; k++) this.at(battle, Math.max(0.4, plan.meleeStart - 1.4 + k * 0.7), () => {
+        const q = [...atts, ...defs].find((a) => a.unit === 'frost' && !a.fallen);
+        if (q && k === 0) { this.fx.flash(q.pos.clone().setY(q.pos.y + 2.6), 5, 0x9fe6ff, 0.6); this.fx.magic(q.pos.clone().setY(q.pos.y + 2.4), 12, 0xdff6ff); }
+        for (const a of riders) {
+          if (a.fallen || Math.random() > 0.75) continue;
+          const p = a.pos.clone().setY(a.pos.y + 1.5);
+          this.fx.flash(p, 3.4, 0x7fd0ff, 0.5);
+          this.fx.magic(p, 10, 0x8fd8ff);
+          this.fx.debris(p, 5, 0x7cc4f0);
+          this.fx.smoke(p, 0xdff0fa, 1, 0.6);
+        }
+        if (k === 0) this.sfx('whoosh', 0.25);
+      });
+    }
+    // the Forgelord's bolt-throwers: bolts streak from the wall's towers into the attackers before the lines meet,
+    // those who fall early going down to them, and more thudding into the ground among the rest
+    if (fx.includes('volley')) {
+      const from = boltThrowers(wallNow, theta, WALL_R, GATE_A, 0.12);
+      const aimAt = (a: Actor, t: number) => {
+        const m = a.moves.find((mv) => mv.t1 >= t) ?? a.moves[a.moves.length - 1];
+        const p = m ? m.from.clone().lerp(m.to, Math.max(0, Math.min(1, (t - m.t0) / Math.max(0.01, m.t1 - m.t0)))) : a.pos.clone();
+        return p.setY(p.y + 1.0);
+      };
+      const bolt = (o: THREE.Vector3, to: THREE.Vector3, dur: number) => {
+        // (big and bright enough to read at the village's usual zoom)
+        this.fx.flash(o, 5, 0xffc060, 0.35);
+        this.fx.sparks(o, 8, 0xffd27a);
+        this.fx.spear(o, to, dur);
+        this.fx.bolt(o, to, dur, 0xffa24a, () => { this.fx.flash(to, 4.2, 0xffa24a, 0.4); this.fx.sparks(to, 14, 0xffc060); this.fx.dust(to, 5, 0x6a625a); }, 4.2);
+        this.sfx('twang', 0.12);
+      };
+      if (from.length) {
+        atts.filter((a) => a.fallAt !== null && a.fallAt < T0 + plan.meleeStart && !a.siege).slice(0, 8).forEach((a, i) => {
+          a.killScheduled = true;
+          const dur = 0.5;
+          this.at(battle, Math.max(0.15, a.fallAt! - T0 - dur), () => bolt(from[i % from.length], aimAt(a, a.fallAt!), dur));
+        });
+        for (let i = 0; i < 9; i++) this.at(battle, 0.2 + Math.floor(i / 3) * 0.5 + (i % 3) * 0.08, () => {
+          const alive = atts.filter((a) => !a.fallen && !a.gone);
+          const tgt = alive[Math.floor(Math.random() * alive.length)];
+          if (!tgt) return;
+          const to = aimAt(tgt, this.T + 0.5);
+          to.x += (Math.random() - 0.5) * 3; to.z += (Math.random() - 0.5) * 3; to.y = ground(to.x, to.z) + 0.1;
+          bolt(from[i % from.length], to, 0.5);
+        });
+      }
+    }
     if (fx.includes('ward')) this.at(battle, 0.5, () => { for (const d of defs) this.fx.magic(d.pos.clone().setY(d.pos.y + 1.5), 3, 0x8fd0ff); });
+    // the Djinn's desert wind: sand whirls up round his army and spirals over it, sparks of his lamp's blue among it
+    for (const side of ['att', 'def'] as Side[]) {
+      const list = side === 'att' ? atts : defs;
+      if (!list.some((a) => a.unit === 'djinn')) continue;
+      for (let k = 0; k < 22; k++) this.at(battle, 0.15 + k * 0.1, () => {
+        const live = list.filter((a) => !a.fallen && !a.gone);
+        if (!live.length) return;
+        const c = live.reduce((s, a) => s.add(a.pos), new THREE.Vector3()).multiplyScalar(1 / live.length);
+        // a double helix of sand, winding up round the host
+        for (const half of [0, Math.PI]) {
+          const ang = k * 0.8 + half, rad = 3.4 + (k % 3) * 0.6;
+          const p = c.clone().add(new THREE.Vector3(Math.cos(ang) * rad, 0.4 + k * 0.26, Math.sin(ang) * rad));
+          this.fx.dust(p, 4, k % 2 ? 0xc89a58 : 0xe8cf94);
+        }
+        if (k % 3 === 0) {
+          const dj = list.find((a) => a.unit === 'djinn' && !a.fallen);
+          if (dj) this.fx.magic(dj.pos.clone().setY(dj.pos.y + 1.8), 3, 0x7ab8ff);
+        }
+      });
+      this.at(battle, 0.1, () => this.sfx('whoosh', 0.2));
+    }
+    // the Djinn's tribute: when his side wins, gold showers down over the victors
+    const trib = battle.report.battle.tribute;
+    if (trib) {
+      const side: Side = trib.side === 'attacker' ? 'att' : 'def';
+      for (let k = 0; k < 5; k++) this.at(battle, plan.outcomeAt + 0.2 + k * 0.35, () => {
+        const live = (side === 'att' ? atts : defs).filter((a) => !a.fallen && !a.gone);
+        for (const a of live.slice(0, 16)) if (Math.random() < 0.8) this.fx.gold(a.pos.clone().setY(a.pos.y + 5 + Math.random()), 8);
+        const dj = live.find((a) => a.unit === 'djinn');
+        if (dj && k === 0) { this.fx.flash(dj.pos.clone().setY(dj.pos.y + 2.4), 8, 0xffd35a, 1.0); this.fx.magic(dj.pos.clone().setY(dj.pos.y + 2), 16, 0xffd35a); }
+      });
+      const worth = trib.res.wood + trib.res.clay + trib.res.iron;
+      if (worth > 0) this.at(battle, plan.outcomeAt + 1.2, () => this.say(`${fmtRes(worth)} tribute`, '#ffd35a', doorstep(side === 'att' ? 'main' : 'statue', 3).setY(12), 3.5));
+    }
     for (const side of ['att', 'def'] as Side[]) {
       if (!fx.includes(`dread-${side}`)) continue;
       const enemies = side === 'att' ? defs : atts;
@@ -1707,7 +1848,7 @@ export class BattleTheatre {
   private sfx(kind: keyof BattleSound, gap: number): void {
     if ((this.sfxAt[kind] ?? -9) + gap > this.T) return;
     this.sfxAt[kind] = this.T;
-    this.stage.sound[kind]();
+    this.stage.sound[kind]?.();
   }
 
   private setQuiet(on: boolean): void {
@@ -1939,7 +2080,7 @@ export class BattleTheatre {
     };
     if (a.role === 'caster') {
       a.castT = T;
-      const col = a.unit === 'necromancer' ? 0x5cff9a : a.unit === 'sorcerer' ? 0xb58cff : 0xffd27a;
+      const col = a.unit === 'necromancer' ? 0x5cff9a : a.unit === 'sorcerer' ? 0xb58cff : a.unit === 'frost' ? 0xbfeaff : 0xffd27a;
       this.fx.bolt(from.clone().add(new THREE.Vector3(0, 0.6, 0)), to, dur * 0.7, col, () => { this.fx.magic(to, 6, col); land(); });
       this.sfx('whoosh', 0.25);
     } else if (a.role === 'thrower' || a.role === 'melee') {
@@ -2112,6 +2253,13 @@ export class BattleTheatre {
       const k = T - this.thorns.t0;
       this.thorns.g.position.y = k < 1 ? -3 + k * 3 : T > this.thorns.until - 2 ? -(T - (this.thorns.until - 2)) * 1.5 : 0;
       if (T > this.thorns.until) this.dropThorns();
+    }
+    // rime: the glaze spreads out along the wall, then melts away
+    if (this.rime) {
+      const k = Math.min(1, (T - this.rime.t0) / 1.6);
+      const melt = T > this.rime.until - 2 ? Math.max(0.02, (this.rime.until - T) / 2) : 1;
+      this.rime.g.scale.set(0.05 + 0.95 * (1 - (1 - k) * (1 - k)), melt, 1);
+      if (T > this.rime.until) this.dropRime();
     }
     // captions float up and fade
     this.captions = this.captions.filter((c) => {

@@ -19,6 +19,31 @@ export function FlagBadge({ flag, w = 30, h = 20, title }: { flag: FlagDesign | 
   return <img class="flag-badge" src={flagDataUrl(flag, w, h)} width={w} height={h} alt={title ?? ''} title={title} />;
 }
 
+/**
+ * A ruler's banner hanging from its pole, stirring a little in the wind (still for
+ * those who ask for reduced motion). Rulers who never made one fly the default.
+ * With `onEdit` it becomes a button into the banner editor.
+ */
+export function HangingBanner({ flag, label, onEdit }: { flag: FlagDesign | null | undefined; label: string; onEdit?: () => void }) {
+  const url = flagDataUrl(flag ?? DEFAULT_FLAG, 150, 100);
+  const art = (
+    <span class="hb" style={{ '--hb-mask': `url("${url}")` }} aria-hidden="true">
+      <span class="hb-pole" />
+      <span class="hb-cloth">
+        <img src={url} width={150} height={100} alt="" draggable={false} />
+        <span class="hb-sheen" />
+      </span>
+    </span>
+  );
+  if (!onEdit) return <span class="hb-frame" role="img" aria-label={label}>{art}</span>;
+  return (
+    <button type="button" class="hb-frame is-editable" onClick={onEdit} aria-label={`${label}: open the banner editor`} title="Change your banner">
+      {art}
+      <span class="hb-edit">Edit</span>
+    </button>
+  );
+}
+
 const same = (a: FlagDesign, b: FlagDesign) =>
   a.shape === b.shape && a.pattern === b.pattern && a.charge === b.charge && a.field === b.field && a.accent === b.accent && a.chargeColor === b.chargeColor;
 

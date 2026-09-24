@@ -13,6 +13,10 @@ import * as THREE from 'three';
 import type { Units, UnitId } from '../../engine/types';
 import { BLOOD, C, EMBER, EMBER_E, blob, box, cone, cyl, getTheme, mesh, orcSkull, setTheme, type Theme } from './kit';
 import { troop, type TroopModel } from './props';
+import { oasisTent } from './oasis';
+import { forgeTent } from './deepforge';
+import { frostTent } from './frosthold';
+import { saurianTent } from './templecity';
 import { CAMP_AREA, CAMP_FIRE, heightAt } from './scene';
 
 /** No more tents than this in the whole camp, however many armies come. */
@@ -206,6 +210,26 @@ export function supportTent(th: Theme): THREE.Group {
       g.add(box(0.6, 0.8, 0.06, 0x1e140a, 0, 0, 1.15));
       g.add(blob(0.22, 0xe9b83a, 0.9, 0.1, 1.05, 1, 0.5, 1)); // a little pile of loot at the door
       g.add(lantern(0x9aff3a, 0x4a9a10, -0.8, 1.0, 1.2));
+      break;
+    }
+    case 'djinn': {
+      // a round pavilion in saffron and linen stripes under a teal roof, a gold finial, a rug and a brass lantern at the door
+      g.add(oasisTent());
+      break;
+    }
+    case 'dwarf': {
+      // a squat square pavilion of heavy rune-red canvas on bronze-capped poles, stones on its skirt, a rune-shield over the door
+      g.add(forgeTent());
+      break;
+    }
+    case 'frost': {
+      // a round yurt of white felt and fur under a snowy roof, a crystal at its crown, a lantern of ice at the door
+      g.add(frostTent());
+      break;
+    }
+    case 'saurian': {
+      // a round hut of woven cane under a tall palm thatch, a feathered pennant, a jade lantern at the door
+      g.add(saurianTent());
       break;
     }
     case 'orc': {

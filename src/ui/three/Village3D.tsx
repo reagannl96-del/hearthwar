@@ -5,7 +5,7 @@ import { VillageScene } from '../art/VillageScene';
 import { VillageRenderer, webglAvailable, type MarchInfo, type Quality } from './VillageRenderer';
 import { dayClock } from '../store';
 import type { TheatreInput, TheatreReport } from './battle/theatre';
-import type { Theme } from './kit';
+import type { Season, Theme } from './kit';
 import type { FlagDesign } from '../../engine/data/flags';
 
 interface Props {
@@ -18,6 +18,8 @@ interface Props {
   winter: boolean;
   /** the village lies in the volcanic west */
   volcanic?: boolean;
+  /** the land the village stands in (overrides winter/volcanic when given) */
+  season?: Season;
   night: boolean;
   /** how much detail the device can take */
   quality?: Quality;
@@ -63,7 +65,7 @@ export function Village3D(p: Props) {
       r.current = new VillageRenderer(host.current, {
         onPick: (b) => pick.current(b),
         onHover: (id, x, y) => setTip(id ? { id, x, y } : null),
-        season: p.winter ? 'winter' : p.volcanic ? 'volcanic' : 'fall',
+        season: p.season ?? (p.winter ? 'winter' : p.volcanic ? 'volcanic' : 'fall'),
         night: p.night,
         theme: p.theme,
         quality: p.quality,
@@ -81,7 +83,7 @@ export function Village3D(p: Props) {
       r.current?.dispose();
       r.current = null;
     };
-  }, [p.winter, p.volcanic, p.theme, p.quality]);
+  }, [p.winter, p.volcanic, p.season, p.theme, p.quality]);
 
   useEffect(() => {
     if (!p.battle) return;

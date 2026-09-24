@@ -4,7 +4,7 @@ import { signal } from '@preact/signals';
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { BUILDINGS, BUILDING_ORDER } from '../../engine/data/buildings';
 import { ARMY_ORDER, UNITS, UNIT_ORDER, HEROES } from '../../engine/data/units';
-import { SCAVENGE_TIERS, distance, hasUnits, unitsCarry } from '../../engine/formulas';
+import { SCAVENGE_TIERS, distance, hasUnits, sighted, unitsCarry, watchtowerRange } from '../../engine/formulas';
 import type { BuildingId, UnitId, Units } from '../../engine/types';
 import type { CommandView, VillageView } from '../../engine/view';
 import { Icon } from '../art/icons';
@@ -237,7 +237,7 @@ function NobleTrain({ v }: { v: VillageView }) {
           <div class="unit-inputs compact">
             {offensive.map((u) => (
               <label class="unit-input">
-                <span class="uname"><UnitIcon u={u} size={18} /> {unitName(u)}</span>
+                <span class="uname" title={unitName(u)}><UnitIcon u={u} size={18} /> {unitName(u)}</span>
                 <NumInput id={`train-${u}`} value={clear[u] ?? ''} max={clearMax(u)} onInput={(x) => setClear({ ...clear, [u]: x === '' ? 0 : Math.min(x, clearMax(u)) })} />
               </label>
             ))}
@@ -414,6 +414,44 @@ function SupportRow({ host, from, units, theme, allLabel, done, children }: { ho
 
 // ---------- commands ----------
 
+/**
+ * An incoming attack close enough that its troops should be made out (past the point where
+ * an army comes into plain sight, or inside the watchtower's reach) whose troops still can't
+ * be: something in that army hides it from lookouts and sentries. Read at the moment the view
+ * was taken, so a stale view never mistakes an ordinary attack for a hidden one.
+ */
+export function stalkedAttack(c: CommandView): boolean {
+  if (c.dir !== 'in' || c.kind !== 'attack' || c.kinds || c.detected) return false;
+  const pv = view.value!;
+  const t = pv.now;
+  if (sighted(t, c.depart, c.arrive)) return true;
+  const tower = pv.villages.find((x) => x.id === c.toVid)?.buildings.watchtower ?? 0;
+  if (tower <= 0) return false;
+  const frac = Math.min(1, Math.max(0, (t - c.depart) / Math.max(1, c.arrive - c.depart)));
+  const cx = c.fromX + (c.toX - c.fromX) * frac, cy = c.fromY + (c.toY - c.fromY) * frac;
+  return distance(cx, cy, c.toX, c.toY) <= watchtowerRange(tower);
+}
+
+/** What the defender can make out of an incoming attack: the lookouts' report, the kinds of troops in sight, or nothing. */
+function IncomingIntel({ c }: { c: CommandView }) {
+  const seen = c.kinds && c.kinds.length > 0 && (
+    <span class="inc-kinds" title={`In sight on the road: ${c.kinds.map((u) => unitName(u, true, c.theme)).join(', ')} (never how many)`}>
+      {' · in sight: '}
+      {c.kinds.map((u) => <UnitIcon u={u} size={16} theme={c.theme} />)}
+    </span>
+  );
+  if (c.detected) return <> · lookouts report <b>{unitName(c.detected, true, c.theme)}</b>{seen}</>;
+  if (seen) return seen;
+  if (stalkedAttack(c)) {
+    return (
+      <span class="inc-stalked" title="The army is close, yet neither lookouts nor sentries can tell what is in it. Something in it moves unseen.">
+        {' · '}<Icon name="scout" size={14} /> close, but the troops can't be made out
+      </span>
+    );
+  }
+  return <> · troops unknown</>;
+}
+
 export function CommandRow({ c, compact }: { c: CommandView; compact?: boolean }) {
   const incoming = c.dir === 'in';
   const kindIcon = c.kind === 'attack' ? 'attack' : c.kind === 'support' ? 'support' : c.kind === 'return' ? 'return' : 'trade';
@@ -440,7 +478,7 @@ export function CommandRow({ c, compact }: { c: CommandView; compact?: boolean }
           <div class="muted small">
             {c.units && <UnitList units={c.units} theme={c.theme} />}
             {c.res && <> · carrying <span class="num">{fmt(c.res.wood + c.res.clay + c.res.iron)}</span></>}
-            {incoming && c.kind === 'attack' && (c.detected ? <> · lookouts report <b>{unitName(c.detected, true, c.theme)}</b></> : <> · troops unknown</>)}
+            {incoming && c.kind === 'attack' && <IncomingIntel c={c} />}
           </div>
         )}
       </div>

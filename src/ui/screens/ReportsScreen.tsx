@@ -5,12 +5,35 @@ import type { BattleData, Report, ResKey, SideInfo, UnitId, Units, SharedReport 
 import { Icon } from '../art/icons';
 import { BBEditor } from '../bbcode/Editor';
 import { FORUM_MAX_TEXT } from '../../engine/tribes';
+import { ARCHIVE_CAP } from '../../engine/commands';
 import { Btn, Empty, PlayerLink, Res, Section, VillageLink, UnitIcon, unitName } from '../components/common';
 import { fmt, fmtAgo, fmtClock } from '../format';
 import { act, battleReplay, host, now, rallyTarget, view, warp, usePane } from '../store';
 import { AttackViewer } from './AttackViewer';
 
 type Filter = 'all' | 'attack' | 'defense' | 'support' | 'trade' | 'other';
+/** The inbox, or the archive where kept reports wait (sweeping the inbox never touches it). */
+type Box = 'inbox' | 'archive';
+
+const FILTER_LABEL: Record<Filter, string> = { all: 'All', attack: 'Attacks', defense: 'Defense', support: 'Support', trade: 'Trade', other: 'Other' };
+const inFilter = (r: Report, f: Filter) => f === 'all' || (f === 'other' ? ['info', 'conquest', 'lost'].includes(r.kind) : r.kind === f);
+const inBox = (r: Report, b: Box) => !!r.archived === (b === 'archive');
+
+/** A box with an arrow: into it (archive) or out of it (back to the inbox). */
+function ArchiveGlyph({ out, size = 16 }: { out?: boolean; size?: number }) {
+  return (
+    <svg class="archive-glyph" viewBox="0 0 24 24" width={size} height={size} aria-hidden="true">
+      <g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="4" width="18" height="4.5" rx="1" />
+        <path d="M5 8.5V19a1.5 1.5 0 0 0 1.5 1.5h11A1.5 1.5 0 0 0 19 19V8.5" />
+        <path d={out ? 'M12 18v-6.5m-3 3 3-3 3 3' : 'M12 11v6.5m-3-3 3 3 3-3'} />
+      </g>
+    </svg>
+  );
+}
+
+const archive = (r: Report, keep: boolean) =>
+  act({ type: 'archiveReport', id: r.id, archived: keep }, keep ? 'Report archived.' : 'Report moved back to the inbox.');
 
 export function ReportsScreen({ id }: { id?: number }) {
   const pane = usePane();
@@ -18,34 +41,63 @@ export function ReportsScreen({ id }: { id?: number }) {
   view.value; // re-render on updates
   const reports = h.reports();
   const [filter, setFilter] = useState<Filter>('all');
+  const [box, setBox] = useState<Box>('inbox');
   const open = id !== undefined ? reports.find((r) => r.id === id) : undefined;
   if (open) {
     if (!open.read) queueMicrotask(() => act({ type: 'readReport', id: open.id }));
-    return <ReportView r={open} />;
+    return <ReportView r={open} onBox={setBox} />;
   }
-  const list = reports.filter((r) =>
-    filter === 'all' ? true : filter === 'other' ? ['info', 'conquest', 'lost'].includes(r.kind) : r.kind === filter,
-  );
-  const counts = (f: Filter) => reports.filter((r) => !r.read && (f === 'all' || (f === 'other' ? ['info', 'conquest', 'lost'].includes(r.kind) : r.kind === f))).length;
+  const shelf = reports.filter((r) => inBox(r, box));
+  const list = shelf.filter((r) => inFilter(r, filter));
+  const archived = reports.reduce((n, r) => n + (r.archived ? 1 : 0), 0);
+  const counts = (f: Filter) => shelf.filter((r) => !r.read && inFilter(r, f)).length;
+  const anyRead = reports.some((r) => r.read && !r.archived);
   return (
     <div class="stack">
       <div class="page-head">
-        <h1>Reports</h1>
-        <div class="row gap">
-          <Btn small variant="ghost" onClick={() => act({ type: 'readReport', id: 'all' })}>Mark all read</Btn>
-          <Btn small variant="quiet" onClick={() => act({ type: 'deleteReport', id: 'read' }, 'Read reports deleted.')}>Delete read</Btn>
-        </div>
+        <h1>{box === 'archive' ? 'Archived reports' : 'Reports'}</h1>
+        {box === 'inbox' ? (
+          <div class="row gap wrap">
+            <Btn small variant="ghost" onClick={() => act({ type: 'readReport', id: 'all' })}>Mark all read</Btn>
+            <Btn small variant="ghost" disabled={!anyRead} title="Move every read report into the archive, where it is kept" onClick={() => act({ type: 'archiveReport', id: 'read' }, 'Read reports archived.')}>
+              <ArchiveGlyph size={14} /> Archive read
+            </Btn>
+            <Btn small variant="quiet" disabled={!anyRead} title="Delete every read report in the inbox. Archived reports are left alone." onClick={() => act({ type: 'deleteReport', id: 'read' }, 'Read reports deleted. The archive was left alone.')}>
+              Delete read
+            </Btn>
+          </div>
+        ) : (
+          <Btn small variant="ghost" onClick={() => setBox('inbox')}>‹ Back to the inbox</Btn>
+        )}
       </div>
       <div class="filter-row">
         {(['all', 'attack', 'defense', 'support', 'trade', 'other'] as Filter[]).map((f) => (
           <button type="button" class={`chip ${filter === f ? 'is-on' : ''}`} onClick={() => setFilter(f)}>
-            {f === 'all' ? 'All' : f === 'attack' ? 'Attacks' : f === 'defense' ? 'Defense' : f === 'support' ? 'Support' : f === 'trade' ? 'Trade' : 'Other'}
+            {FILTER_LABEL[f]}
             {counts(f) > 0 && <span class="badge">{counts(f)}</span>}
           </button>
         ))}
+        <button
+          type="button" class={`chip chip-archive ${box === 'archive' ? 'is-on' : ''}`} aria-pressed={box === 'archive'}
+          title={box === 'archive' ? 'Back to the inbox' : 'Reports you archived: kept apart, and never swept away with the inbox'}
+          onClick={() => setBox(box === 'archive' ? 'inbox' : 'archive')}
+        >
+          <ArchiveGlyph size={15} /> Archive <span class="num archive-count">({fmt(archived)})</span>
+        </button>
       </div>
       <Section>
-        {list.length === 0 ? <Empty>No reports yet. Send some troops out!</Empty> : (
+        {box === 'archive' && (
+          <p class="muted small archive-note">
+            Archived reports are kept apart from the inbox: sweeping the inbox ("Delete read") never touches them. The archive holds up to {fmt(ARCHIVE_CAP)}; past that, the oldest go first.
+          </p>
+        )}
+        {list.length === 0 ? (
+          <Empty>
+            {box === 'archive'
+              ? (shelf.length === 0 ? 'Nothing archived yet. Archive a report to keep it here, safe from sweeping.' : 'No archived reports of this kind.')
+              : (shelf.length === 0 ? 'No reports yet. Send some troops out!' : 'No reports of this kind.')}
+          </Empty>
+        ) : (
           <ul class="report-list">
             {list.slice(0, 200).map((r) => (
               <li class={`report-item ${r.read ? '' : 'is-unread'}`}>
@@ -53,9 +105,20 @@ export function ReportsScreen({ id }: { id?: number }) {
                 <button type="button" class="link grow" onClick={() => pane.go({ name: 'reports', id: r.id })}>{r.title}</button>
                 {r.battle?.loot && <Haul loot={r.battle.loot.wood + r.battle.loot.clay + r.battle.loot.iron} capacity={r.battle.capacity} />}
                 <span class="muted small">{fmtAgo(r.t, now.value)}</span>
-                <button type="button" class="icon-btn" aria-label="Delete report" onClick={() => act({ type: 'deleteReport', id: r.id })}>
-                  <Icon name="close" size={14} />
-                </button>
+                <span class="report-acts">
+                  {r.archived ? (
+                    <button type="button" class="icon-btn" aria-label="Move back to the inbox" title="Move back to the inbox" onClick={() => archive(r, false)}>
+                      <ArchiveGlyph out />
+                    </button>
+                  ) : (
+                    <button type="button" class="icon-btn" aria-label="Archive report" title="Archive: keep it apart, safe from sweeping" onClick={() => archive(r, true)}>
+                      <ArchiveGlyph />
+                    </button>
+                  )}
+                  <button type="button" class="icon-btn" aria-label="Delete report" title="Delete" onClick={() => act({ type: 'deleteReport', id: r.id })}>
+                    <Icon name="close" size={14} />
+                  </button>
+                </span>
               </li>
             ))}
           </ul>
@@ -65,15 +128,22 @@ export function ReportsScreen({ id }: { id?: number }) {
   );
 }
 
-function ReportView({ r }: { r: Report }) {
+function ReportView({ r, onBox }: { r: Report; onBox: (b: Box) => void }) {
   const pane = usePane();
-  const reports = host.value!.reports();
+  // newer and older step through the box the report sits in
+  const reports = host.value!.reports().filter((x) => !!x.archived === !!r.archived);
   const [watching, setWatching] = useState(false);
   const idx = reports.findIndex((x) => x.id === r.id);
   return (
     <div class="stack report">
       <div class="crumbs">
-        <button type="button" class="link" onClick={() => pane.go({ name: 'reports' })}>Reports</button>
+        <button type="button" class="link" onClick={() => { onBox('inbox'); pane.go({ name: 'reports' }); }}>Reports</button>
+        {r.archived && (
+          <>
+            <span aria-hidden="true">›</span>
+            <button type="button" class="link" onClick={() => { onBox('archive'); pane.go({ name: 'reports' }); }}>Archive</button>
+          </>
+        )}
         <span aria-hidden="true">›</span>
         <span>{r.title}</span>
       </div>
@@ -82,11 +152,14 @@ function ReportView({ r }: { r: Report }) {
           <span class={`dot dot-${r.color}`} />
           <div class="grow">
             <h1 class="rep-title">{r.title}</h1>
-            <div class="rep-time">{fmtClock(r.t, now.value, warp.value)}</div>
+            <div class="rep-time">{fmtClock(r.t, now.value, warp.value)}{r.archived && <span class="pill rep-archived"><ArchiveGlyph size={12} /> Archived</span>}</div>
           </div>
-          <div class="row gap">
+          <div class="row gap wrap rep-head-acts">
             <Btn small variant="ghost" disabled={idx <= 0} onClick={() => pane.go({ name: 'reports', id: reports[idx - 1].id })}>‹ Newer</Btn>
             <Btn small variant="ghost" disabled={idx >= reports.length - 1} onClick={() => pane.go({ name: 'reports', id: reports[idx + 1].id })}>Older ›</Btn>
+            {r.archived
+              ? <Btn small variant="ghost" title="Move it back to the inbox" onClick={() => archive(r, false)}><ArchiveGlyph out size={14} /> Move to inbox</Btn>
+              : <Btn small variant="ghost" title="Keep it in the archive, safe from sweeping" onClick={() => archive(r, true)}><ArchiveGlyph size={14} /> Archive</Btn>}
             <Btn small variant="quiet" onClick={() => { act({ type: 'deleteReport', id: r.id }); pane.go({ name: 'reports' }); }}>Delete</Btn>
           </div>
         </header>
@@ -260,16 +333,46 @@ function LuckMeter({ luck }: { luck: number }) {
   );
 }
 
-/** Hero abilities as the report tells them. */
-const EFFECTS: Record<string, { hero: string; text: string }> = {
+const percent = (x: number) => Math.round(x * 100);
+
+/** The share of the attackers a Forgelord's bolt-throwers cut down, from how high the wall stood before the battle (0 when unknown). */
+const volleyShare = (wall?: number) => (wall ? Math.min(HERO_POWERS.volleyMax, HERO_POWERS.volley * wall) : 0);
+
+/** Hero abilities as the report tells them (the volley reads its numbers off the wall). */
+export const EFFECTS: Record<string, { hero: string; text: string | ((wall?: number) => string) }> = {
   barrier: { hero: 'sorcerer', text: 'Arcane barrier: every defender fought 10% harder' },
   ward: { hero: 'star', text: 'A warding item strengthened the defense' },
   thornwall: { hero: 'druid', text: 'Thornwall: the wall counted 4 levels higher' },
   sneak: { hero: 'goblin', text: 'Sneak in: goblins slipped over 4 wall levels' },
   'dread-att': { hero: 'necromancer', text: 'Dread: the defending infantry faltered' },
   'dread-def': { hero: 'necromancer', text: 'Dread: the attacking infantry faltered' },
-  warcry: { hero: 'orc', text: `Warcry: the Orc King's rams and rock-hurlers struck ${Math.round(HERO_POWERS.warcry * 100)}% harder, and his warband fought ${Math.round(HERO_POWERS.bloodlust * 100)}% harder` },
+  warcry: { hero: 'orc', text: `Warcry: the Orc King's rams and rock-hurlers struck ${percent(HERO_POWERS.warcry)}% harder, and his warband fought ${percent(HERO_POWERS.bloodlust)}% harder` },
+  frostbite: { hero: 'frost', text: `Frostbite: cavalry facing the Frost Queen fought ${percent(HERO_POWERS.frostbite)}% weaker` },
+  rime: { hero: 'frost', text: `Rime walls: frost on the walls blunted the rams and catapults (${percent(HERO_POWERS.rime)}% less damage)` },
+  volley: {
+    hero: 'dwarf',
+    text: (wall) => {
+      const share = volleyShare(wall);
+      return share > 0
+        ? `Bolt-throwers: the wall shot first and cut down about ${percent(share)}% of the attacking troops before the armies met`
+        : 'Bolt-throwers: the wall shot first and cut down part of the attacking troops before the armies met';
+    },
+  },
+  pack: { hero: 'saurian', text: `Pack hunt: cavalry riding beside the Saurian King fought ${percent(HERO_POWERS.pack)}% harder` },
 };
+
+/** The hero abilities that shaped a battle, one line each (an ability that worked for both sides is told once). */
+export function EffectFactors({ effects, wall }: { effects?: string[]; wall?: number }) {
+  return (
+    <>
+      {[...new Set(effects ?? [])].map((e) => {
+        const fx = EFFECTS[e];
+        if (!fx) return null;
+        return <div class="factor"><Icon name={fx.hero} size={16} /><span>{typeof fx.text === 'function' ? fx.text(wall) : fx.text}</span></div>;
+      })}
+    </>
+  );
+}
 
 function Battle({ b, kind, shared }: { b: BattleData; kind: Report['kind']; shared?: boolean }) {
   const pane = usePane();
@@ -298,7 +401,7 @@ function Battle({ b, kind, shared }: { b: BattleData; kind: Report['kind']; shar
         {b.militia && <div class="factor"><Icon name="militia" size={16} /><span>Militia fought</span></div>}
         {b.risen && <div class="factor"><Icon name="necromancer" size={16} /><span>{b.risen.n} of the fallen rose again for the {b.risen.side}</span></div>}
         {b.healed && <div class="factor"><Icon name="paladin" size={16} /><span>Lay on Hands: {b.healed.n} of the {b.healed.side}'s fallen got back up</span></div>}
-        {(b.effects ?? []).map((e) => EFFECTS[e] && <div class="factor"><Icon name={EFFECTS[e].hero} size={16} /><span>{EFFECTS[e].text}</span></div>)}
+        <EffectFactors effects={b.effects} wall={b.wall?.before} />
         {b.paladinItem && ITEM_BY_ID[b.paladinItem] && <div class="factor"><Icon name={itemHero(ITEM_BY_ID[b.paladinItem])} size={16} /><span>{ITEM_BY_ID[b.paladinItem].name}</span></div>}
       </div>
 
@@ -368,7 +471,7 @@ function Battle({ b, kind, shared }: { b: BattleData; kind: Report['kind']; shar
         </div>
       )}
 
-      {(b.loot || b.building || b.loyalty) && (
+      {(b.loot || b.building || b.loyalty || b.tribute) && (
         <div class="rep-block">
           <h2 class="rep-sub">Aftermath</h2>
           <dl class="rep-facts">
@@ -381,6 +484,19 @@ function Battle({ b, kind, shared }: { b: BattleData; kind: Report['kind']; shar
                     <span class="haul-bar"><span style={{ width: `${Math.min(100, (lootSum / Math.max(1, b.capacity ?? lootSum)) * 100)}%` }} /></span>
                     <span class="muted small num">{fmt(lootSum)} / {fmt(b.capacity ?? 0)}</span>
                     <Haul loot={lootSum} capacity={b.capacity} bare />
+                  </span>
+                </dd>
+              </>
+            )}
+            {b.tribute && (
+              <>
+                <dt>Tribute</dt>
+                <dd class="rep-tribute">
+                  <span class="cost"><Icon name="djinn" size={18} title="Djinn" />{(['wood', 'clay', 'iron'] as ResKey[]).map((k) => <Res k={k} n={b.tribute!.res[k]} />)}</span>
+                  <span class="muted small">
+                    {b.tribute.side === 'attacker'
+                      ? `The attacking Djinn claimed tribute worth ${percent(HERO_POWERS.tribute)}% of the defenders who fell. It rides home with the army on top of the haul, and takes no room in the saddlebags.`
+                      : `The defending Djinn claimed tribute worth ${percent(HERO_POWERS.tribute)}% of the attackers who fell. It went straight into the stores of his village.`}
                   </span>
                 </dd>
               </>

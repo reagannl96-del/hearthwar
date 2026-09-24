@@ -5,9 +5,10 @@ import { useState } from 'preact/hooks';
 import { fmt, fmtAgo } from '../format';
 import { now } from '../store';
 
-const W = 360, H = 120, PL = 44, PR = 12, PT = 12, PB = 22;
+const PL = 44, PR = 12, PT = 12, PB = 22;
 
-export function Sparkline({ points }: { points: [number, number][] }) {
+/** `w`×`h` is the drawing's own size: a wider one keeps the labels small when the chart is shown wide. */
+export function Sparkline({ points, w: W = 360, h: H = 120 }: { points: [number, number][]; w?: number; h?: number }) {
   const [hover, setHover] = useState<number | null>(null);
   const t0 = points[0][0], t1 = points[points.length - 1][0];
   const maxV = Math.max(1, ...points.map((p) => p[1]));

@@ -3,12 +3,86 @@
 // left, and the winners of earlier rounds.
 
 import { Icon } from '../art/icons';
-import { Countdown, Empty, Section } from '../components/common';
+import { Countdown, Empty, RegionChip, Section, regionTitle } from '../components/common';
 import { fmt } from '../format';
 import { host, now, view, usePane } from '../store';
+import { HEROES, HERO_INFO, UNITS } from '../../engine/data/units';
+import { regionAt, type Region } from '../../engine/regions';
+import type { UnitId } from '../../engine/types';
 
 const DAY = 86_400_000;
 const pct = (x: number) => `${Math.round(x * 1000) / 10}%`;
+
+/** The realm's five lands: the heartland in the middle, and the four wilds around it with the hero each keeps. */
+const LANDS: { r: Region; where: string; text: string; hero?: string }[] = [
+  { r: 'heartland', where: 'in the middle', text: 'Green meadow and forest. Its heroes answer any village with a statue, wherever it stands.' },
+  {
+    r: 'winter', where: 'to the north', text: 'Snowfields and frozen lakes.',
+    hero: 'Frost bites every horse and rider that faces her, and rime on the walls she guards blunts every ram and stone.',
+  },
+  {
+    r: 'volcanic', where: 'to the west', text: 'Ash plains, lava lakes and smoking peaks.',
+    hero: 'Bolt-throwers on his walls shoot before the armies meet, and his mines run rich with iron.',
+  },
+  {
+    r: 'desert', where: 'to the east', text: 'Dunes, dry wadis and rare oases.',
+    hero: 'The desert wind speeds the armies he leads, and every victory pays him tribute.',
+  },
+  {
+    r: 'jungle', where: 'to the south', text: 'Steaming green, rivers and ruined temples.',
+    hero: 'His riders hunt as a pack, and no lookout can make out an attack he leads until it lands.',
+  },
+];
+
+/** The lands of the realm, and the heroes of the wilds who answer only villages in their own. */
+function RealmLands() {
+  const pv = view.value!;
+  const heroes = pv.config.paladin;
+  const mine: Partial<Record<Region, number>> = {};
+  for (const v of pv.villages) {
+    const r = regionAt(v.x, v.y, pv.config.size);
+    mine[r] = (mine[r] ?? 0) + 1;
+  }
+  const heroOf = (r: Region): UnitId | undefined => HEROES.find((u) => HERO_INFO[u]?.region === r);
+  const heartland = HEROES.filter((u) => !HERO_INFO[u]?.region);
+  return (
+    <Section title="The lands of the realm" class="realm-lands-panel">
+      <p class="muted small">
+        {heroes
+          ? 'The realm has five lands, and where a village stands decides which heroes will answer its statue. The heroes of the heartland answer any village. Each of the four wilds around it keeps a hero of its own, who answers only villages in that land and gives the village the look and the troops of its people.'
+          : 'The realm has five lands: the heartland in the middle, and four wilds around it.'}
+      </p>
+      <ul class="realm-lands">
+        {LANDS.map(({ r, where, text, hero: said }) => {
+          const hero = heroOf(r);
+          const n = mine[r] ?? 0;
+          return (
+            <li class={`realm-land region-${r}`}>
+              <div class="realm-land-head">
+                <RegionChip r={r}>{regionTitle(r)}</RegionChip>
+                <span class="muted small">{where}</span>
+                {n > 0 && <span class="realm-land-mine small">{fmt(n)} {n === 1 ? 'village' : 'villages'} of yours</span>}
+              </div>
+              <p class="small">{text}</p>
+              {heroes && r === 'heartland' && (
+                <p class="realm-land-hero small">
+                  <span class="realm-land-icons">{heartland.map((u) => <Icon name={u} size={20} title={UNITS[u].name} />)}</span>
+                  <span>{heartland.slice(0, -1).map((u) => UNITS[u].name).join(', ')} and {UNITS[heartland[heartland.length - 1]].name}.</span>
+                </p>
+              )}
+              {heroes && hero && (
+                <p class="realm-land-hero small">
+                  <span class="realm-land-icons"><Icon name={hero} size={20} /></span>
+                  <span><b>{UNITS[hero].name}</b>, who answers only villages here. {said}</span>
+                </p>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </Section>
+  );
+}
 
 export function RealmScreen() {
   const pane = usePane();
@@ -128,6 +202,8 @@ export function RealmScreen() {
           </table>
         </div>
       </Section>
+
+      <RealmLands />
 
       <Section title="How the other rulers play">
         <p class="muted small">The realm's computer rulers play by the same rules as you and keep a person's hours: they sleep, they are online in sessions, and they never act faster than someone at the keyboard could. What they do is fixed, so you can plan against it:</p>

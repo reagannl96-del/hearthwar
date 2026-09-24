@@ -1,7 +1,7 @@
 // Village economy: lazy resource accrual, recruitment delivery, population & capacity.
 
 import { BUILDINGS, BUILDING_ORDER } from './data/buildings';
-import { UNITS } from './data/units';
+import { HERO_POWERS, UNITS } from './data/units';
 import {
   HOUR, bonusMultiplier, buildingPop, farmCap, hideCap, mineRate, res, storageCap, unitsPop, villagePoints,
 } from './formulas';
@@ -68,7 +68,8 @@ export function productionRates(w: World, v: Village, t = w.now): Res {
   return {
     wood: mineRate(v.buildings.timber, s) * bonusMultiplier(v.bonus, 'wood') * militia,
     clay: mineRate(v.buildings.claypit, s) * bonusMultiplier(v.bonus, 'clay') * militia,
-    iron: mineRate(v.buildings.ironmine, s) * bonusMultiplier(v.bonus, 'iron') * militia,
+    // a village sworn to the Forgelord digs deeper for iron
+    iron: mineRate(v.buildings.ironmine, s) * bonusMultiplier(v.bonus, 'iron') * militia * (v.heroKind === 'dwarf' ? 1 + HERO_POWERS.deepMines : 1),
   };
 }
 

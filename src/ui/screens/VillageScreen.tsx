@@ -9,6 +9,7 @@ import { fmt } from '../format';
 import { DAY_MS, act, battleReplay, host, isNightAt, liveRes, now, paused, prefs, sceneQuality, view, warp, usePane } from '../store';
 import type { TheatreInput } from '../three/battle/theatre';
 import { isVolcanic, isWinter } from '../../engine/world';
+import { seasonAt } from '../three/land';
 import { CommandRow } from './RallyScreen';
 
 const BONUS_TEXT: Record<string, string> = {
@@ -77,6 +78,7 @@ export function VillageScreen() {
             festive={festive}
             banner={pv.me.flag ?? DEFAULT_FLAG}
             volcanic={isVolcanic(v.x, v.y, pv.config.size)}
+            season={seasonAt(v.x, v.y, pv.config.size)}
             quality={sceneQuality(prefs.value)}
             night={night}
             units={v.units}

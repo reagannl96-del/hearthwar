@@ -3,6 +3,10 @@
 
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+// (the Oasis's houses and towers; oasis.ts touches nothing of this module at load time, so the cycle is safe)
+import { oasisHouse, oasisTower } from './oasis';
+// (the Frost Queen's houses and towers; frosthold.ts likewise reads nothing of this module at load time)
+import { frostHouse, frostTower } from './frosthold';
 
 export const C = {
   grass: 0x8f9447,
@@ -62,7 +66,7 @@ export const C = {
 
 const cache = new Map<string, THREE.MeshLambertMaterial>();
 
-export type Season = 'fall' | 'winter' | 'volcanic';
+export type Season = 'fall' | 'winter' | 'volcanic' | 'desert' | 'jungle';
 let season: Season = 'fall';
 export function setSeason(s: Season) {
   season = s;
@@ -90,8 +94,27 @@ const VOLCANIC: Record<number, number> = {
   0x97a24e: 0x55504c, 0x7f8d43: 0x46423f, 0x8b984a: 0x4e4945,
 };
 
+/** In the eastern desert the ground is sand, water is an oasis, rock is red mesa and the trees are dusty palms and olives. */
+const DESERT: Record<number, number> = {
+  [C.grass]: 0xd9b979, [C.grassLight]: 0xe6c98c, [C.grassDark]: 0xc6a266, [C.grassRust]: 0xcc9a5c,
+  [C.dirt]: 0xbf9460, [C.dirtDark]: 0xa67c4c, [C.water]: 0x35a9b3, [C.rock]: 0xbb7650, [C.rockDark]: 0x8e5236,
+  [C.leafOrange]: 0x8c9c4c, [C.leafRed]: 0x7a8c44, [C.leafYellow]: 0xaaa65a, [C.leafGold]: 0x9c924a, [C.leafGreen]: 0x6c8a3c,
+  [C.pine]: 0x5c6c3c, [C.pineDark]: 0x4a5a32, [C.clay]: 0xc27c4c, [C.clayDark]: 0xa4643c, [C.hay]: 0xdcc27e,
+  [C.wheat]: 0xd8be70, [C.wheatDark]: 0xbca058, [C.pumpkin]: 0xd89a3a,
+  0x97a24e: 0xd4b474, 0x7f8d43: 0xc09e62, 0x8b984a: 0xcaa86a,
+};
+
+/** In the southern jungle everything is deep, wet green: dark earth, green rivers, mossy rock. */
+const JUNGLE: Record<number, number> = {
+  [C.grass]: 0x347a30, [C.grassLight]: 0x418a36, [C.grassDark]: 0x275e27, [C.grassRust]: 0x4d7a2e,
+  [C.dirt]: 0x7a5c3a, [C.dirtDark]: 0x5e4629, [C.water]: 0x2c8c7a, [C.rock]: 0x6c7462, [C.rockDark]: 0x4e5646,
+  [C.leafOrange]: 0x2f7c34, [C.leafRed]: 0x3a8c3c, [C.leafYellow]: 0x5ca242, [C.leafGold]: 0x4a9239, [C.leafGreen]: 0x2e6e2e,
+  [C.pine]: 0x255c2b, [C.pineDark]: 0x1c4a22, [C.hay]: 0x9aa050, [C.wheat]: 0x8aa044, [C.wheatDark]: 0x6c8a34,
+  0x97a24e: 0x469a3e, 0x7f8d43: 0x357a32, 0x8b984a: 0x3e8a38,
+};
+
 /** Each statue hero gives the village its own look. */
-export type Theme = 'classic' | 'paladin' | 'sorcerer' | 'druid' | 'goblin' | 'necromancer' | 'orc';
+export type Theme = 'classic' | 'paladin' | 'sorcerer' | 'druid' | 'goblin' | 'necromancer' | 'orc' | 'frost' | 'dwarf' | 'djinn' | 'saurian';
 let theme: Theme = 'classic';
 export function setTheme(t: Theme) {
   // a look the 3D village doesn't know yet (a hero whose village is still being raised) is drawn plain
@@ -165,12 +188,49 @@ const THEMES: Record<Theme, Record<number, number>> = {
     [C.leafOrange]: 0xa85a28, [C.leafRed]: 0x8a3322, [C.leafYellow]: 0xae8e38, [C.leafGold]: 0x9a7430, [C.leafGreen]: 0x5e6a32,
     0x97a24e: 0x77743f, 0x7f8d43: 0x605d35, 0x8b984a: 0x6c693a,
   },
+  // (starter palettes for the heroes of the wilds; each is refined with its village)
+  // the Frost Queen's court: ice-blue roofs, white stone, pale birch, silver-blue banners
+  frost: {
+    [C.tile]: 0x6f9cc8, [C.tileDark]: 0x4f7aa6, [C.tileWarm]: 0x86b2da, [C.thatch]: 0x8fb4d4, [C.thatchDark]: 0x6a8fb2,
+    [C.plaster]: 0xf1f5fa, [C.plasterWarm]: 0xe2eaf2, [C.timber]: 0x6a7584, [C.timberLight]: 0xb8c2cc,
+    [C.stone]: 0xd2dbe6, [C.stoneDark]: 0x94a4ba, [C.stoneLight]: 0xebf0f6, [C.red]: 0x4f8fd0, [C.slate]: 0x3c5a80, [C.door]: 0x2c3a52,
+    // silver where others gild; birch and pale wood; a snowfield glinting blue where the wind has polished it
+    [C.gold]: 0xc9d3de, [C.wood]: 0xcdbf9f, [C.woodDark]: 0x8e8068, [C.logEnd]: 0xe6d2a4, [C.trunk]: 0x6a5a4a, [C.brick]: 0x9a5a48,
+    [C.grass]: 0xe6edf3, [C.grassLight]: 0xf0f5f8, [C.grassDark]: 0xd2dde6, [C.grassRust]: 0xd9e2ea, [C.dirt]: 0xc9c6bc, [C.dirtDark]: 0xaaa79c, [C.water]: 0x9fc6de,
+    0x97a24e: 0xeef3f7, 0x7f8d43: 0xd6e0e8, 0x8b984a: 0xe4ebf0,
+  },
+  // the Forgelord's hold: warm granite on black basalt, bronze and copper roofs, stone-slab roofs on the
+  // humbler sheds, dark oak, and rune-red banners (the ash and lava of the west come from the season)
+  dwarf: {
+    [C.tile]: 0xb0763a, [C.tileDark]: 0x7e5228, [C.tileWarm]: 0xc08448, [C.thatch]: 0x5e5650, [C.thatchDark]: 0x46403c,
+    [C.plaster]: 0x8c8279, [C.plasterWarm]: 0x7e746b, [C.timber]: 0x46321f, [C.timberLight]: 0x6a4c32,
+    [C.stone]: 0x8c8279, [C.stoneDark]: 0x4e4642, [C.stoneLight]: 0xa89c8e, [C.red]: 0xa8382a, [C.slate]: 0x3e3836, [C.door]: 0x7e5228,
+    [C.wood]: 0x7a5636, [C.woodDark]: 0x4a3422,
+  },
+  // the Djinn's oasis city: sandstone and whitewash, turquoise tile, cedar and palm wood, palm-frond thatch,
+  // crimson cloth (the city's own colours live in oasis.ts; these dress what is shared)
+  djinn: {
+    [C.tile]: 0x2aa6a0, [C.tileDark]: 0x1c7a7c, [C.tileWarm]: 0xd9a44a, [C.thatch]: 0xc9a86a, [C.thatchDark]: 0xa88a52,
+    [C.plaster]: 0xf4ead6, [C.plasterWarm]: 0xe6d0a4, [C.timber]: 0x6e4628, [C.timberLight]: 0x9a6a40,
+    [C.stone]: 0xe0c290, [C.stoneDark]: 0xbe9a62, [C.stoneLight]: 0xf0dcb4, [C.red]: 0xb8303a, [C.slate]: 0x1f8a86, [C.door]: 0x4e2e16,
+    [C.wood]: 0x8c6b45, [C.woodDark]: 0x5a3a20,
+  },
+  // the Saurian King's temple-city: mossy grey-green stone, jade, feathered reds, palm thatch
+  // (its buildings, walls and people are drawn in templecity.ts in their own colours; these are what the shared pieces take:
+  // the stone wall, the gatehouse, torches, scaffolds, the banner poles' foot)
+  saurian: {
+    [C.tile]: 0x3f7a4a, [C.tileDark]: 0x2e5c36, [C.tileWarm]: 0x4f8f5a, [C.thatch]: 0xb89e56, [C.thatchDark]: 0x8c7542,
+    [C.plaster]: 0xb8b494, [C.plasterWarm]: 0xa8a482, [C.timber]: 0x5e4730, [C.timberLight]: 0x7a6040, [C.woodDark]: 0x3e2e1e,
+    [C.stone]: 0x9d9f88, [C.stoneDark]: 0x777b67, [C.stoneLight]: 0xbcbba2, [C.red]: 0xb2452c, [C.slate]: 0x3a5a44, [C.door]: 0x2e2416,
+  },
 };
 
 /** The colour a palette entry really takes: snow first in winter, then the village's theme. */
 function look(c: number): number {
   if (season === 'winter' && WINTER[c] !== undefined) return WINTER[c];
   if (season === 'volcanic' && VOLCANIC[c] !== undefined) return VOLCANIC[c];
+  if (season === 'desert' && DESERT[c] !== undefined) return DESERT[c];
+  if (season === 'jungle' && JUNGLE[c] !== undefined) return JUNGLE[c];
   return THEMES[theme][c] ?? c;
 }
 
@@ -261,6 +321,9 @@ export function house(o: {
   if (theme === 'goblin') return goblinHouse(o);
   if (theme === 'necromancer') return necroHouse(o);
   if (theme === 'orc') return orcHouse(o);
+  if (theme === 'dwarf') return dwarfHouse(o);
+  if (theme === 'djinn') return oasisHouse(o);
+  if (theme === 'frost') return frostHouse(o);
   return baseHouse(o);
 }
 
@@ -355,6 +418,9 @@ export function roundTower(r: number, h: number, o: TowerOpts = {}): THREE.Group
   if (theme === 'goblin') return goblinTower(r, h, o);
   if (theme === 'necromancer') return necroTower(r, h, o);
   if (theme === 'orc') return orcTower(r, h, o);
+  if (theme === 'dwarf') return dwarfTower(r, h, o);
+  if (theme === 'djinn') return oasisTower(r, h, o);
+  if (theme === 'frost') return frostTower(r, h, o);
   return baseTower(r, h, o);
 }
 
@@ -1050,6 +1116,12 @@ export function leafPal(tone: LeafTone): LeafPal {
   if (season === 'winter') {
     return tone === 'deep' ? { top: SNOW, mid: 0x2c5230, under: 0x1f3d24 } : { top: SNOW, mid: 0x3a6a36, under: 0x2c5230 };
   }
+  if (season === 'desert') {
+    return tone === 'deep' ? { top: 0x8a9a4c, mid: 0x6a7c3a, under: 0x4c5a2c } : { top: 0xa6b25e, mid: 0x7e8e44, under: 0x5c6a32 };
+  }
+  if (season === 'jungle') {
+    return tone === 'sun' ? { top: 0x6cc24e, mid: 0x3c9a3c, under: 0x24662a } : { top: 0x4aa846, mid: 0x2c7c32, under: 0x1a5022 };
+  }
   if (season === 'volcanic') {
     return tone === 'sun' ? { top: 0x7c8650, mid: 0x5d6a3e, under: 0x414b2e } : { top: 0x5d6a3e, mid: 0x4a5634, under: 0x343d26 };
   }
@@ -1531,6 +1603,210 @@ function orcTower(r: number, h: number, o: TowerOpts): THREE.Group {
     f.add(blob(bw * 0.2, BONE_W, 0, -bh * 0.42, 0.06, 1, 1, 0.3));
     f.position.set(0, h - 0.15, r * 1.02);
     g.add(f);
+  }
+  return g;
+}
+
+// ---------- the Deepforge (dwarf): a hold of carved granite on black basalt, bronze roofs and rune-fire ----------
+
+/** The Forgelord's own colours (none is a palette key, so no season or theme repaints them). */
+export const DW_GRANITE = 0x8c8279, DW_GRANITE_LT = 0xa89c8e, DW_BASALT = 0x3a3432, DW_BASALT_MD = 0x544b46,
+  DW_BRONZE = 0xb57a3c, DW_BRONZE_DK = 0x7e5228, DW_GOLD = 0xe2ae3e, DW_RUNE = 0xffa24a, DW_RUNE_E = 0xc8560e,
+  DW_LAVA = 0xff7a26, DW_LAVA_E = 0xe0480a, DW_OAK = 0x5c4230, DW_SLAB = 0x5e5650;
+
+/** A block that narrows (or widens) toward its top: wb x db at its foot, wt x dt at its head, standing on y = 0. */
+export function frustum(wb: number, db: number, wt: number, dt: number, h: number, color: number, x = 0, y = 0, z = 0): THREE.Mesh {
+  const geo = new THREE.BoxGeometry(wb, h, db);
+  const p = geo.attributes.position as THREE.BufferAttribute;
+  for (let i = 0; i < p.count; i++) if (p.getY(i) > 0) p.setXYZ(i, p.getX(i) * (wt / wb), p.getY(i), p.getZ(i) * (dt / db));
+  geo.translate(0, h / 2, 0);
+  geo.computeVertexNormals();
+  const m = mesh(geo, color);
+  m.position.set(x, y, z);
+  return m;
+}
+
+/** A rune cut into the stone and glowing with forge-fire: a stave and its branches in the XY plane (facing +Z); `k` picks the rune. */
+export function forgeRune(s: number, k: number): THREE.Group {
+  const g = new THREE.Group();
+  const m = detailMat(DW_RUNE, { emissive: DW_RUNE_E });
+  const bar = (len: number, x: number, y: number, a: number) => {
+    const b = new THREE.Mesh(new THREE.BoxGeometry(0.075 * s, len * s, 0.05), m);
+    b.position.set(x * s, y * s, 0);
+    b.rotation.z = a;
+    g.add(b);
+  };
+  bar(1, 0, 0, 0);
+  switch (((k % 5) + 5) % 5) {
+    case 0: bar(0.46, 0.15, 0.3, -0.85); bar(0.46, 0.15, 0.04, -0.85); break;
+    case 1: bar(0.5, 0.16, 0.18, 0.95); bar(0.5, 0.16, -0.18, -0.95); break;
+    case 2: bar(0.66, 0, 0.05, 0.9); bar(0.66, 0, 0.05, -0.9); break;
+    case 3: bar(0.4, 0.14, 0.3, 0.8); bar(0.4, 0.14, 0.1, -0.8); break;
+    default: bar(1, 0.4, 0, 0); bar(0.56, 0.2, 0.18, -1.05); break;
+  }
+  return g;
+}
+
+/** A straight rake of stone coping from (x0, y0) to (x1, y1), at depth z. */
+export function coping(x0: number, y0: number, x1: number, y1: number, z: number, color: number, t = 0.34, d = 0.5): THREE.Mesh {
+  const m = mesh(new THREE.BoxGeometry(Math.hypot(x1 - x0, y1 - y0), t, d), color);
+  m.position.set((x0 + x1) / 2, (y0 + y1) / 2, z);
+  m.rotation.z = Math.atan2(y1 - y0, x1 - x0);
+  return m;
+}
+
+/**
+ * Dwarf house: squat walls of granite blocks on a basalt plinth, battered out at the foot, the corners laid
+ * in long and short quoins; a low roof of bronze plates with standing seams (plain stone slabs on the humbler
+ * sheds) under heavy stone copings, a bronze rune-disc in the gable, small deep-set windows, and a door of
+ * bronze-bound oak sunk under a massive lintel with a rune glowing in it.
+ */
+function dwarfHouse(o: HouseOpts): THREE.Group {
+  const g = new THREE.Group();
+  const { w, d, h } = o;
+  const roofH = o.roofH * 0.62;
+  const top = h + roofH;
+  const humble = o.roof === C.thatch || o.roof === C.thatchDark;
+  const wall = o.wall ?? (o.stone ? DW_GRANITE_LT : DW_GRANITE);
+  const trim = o.stone ? DW_BASALT_MD : DW_GRANITE_LT;
+  g.add(box(w + 0.36, 0.5, d + 0.36, DW_BASALT));
+  g.add(frustum(w + 0.26, d + 0.26, w + 0.02, d + 0.02, 0.9, DW_BASALT_MD, 0, 0.5, 0));
+  g.add(extrude([[-w / 2, 0], [w / 2, 0], [w / 2, h], [0, top], [-w / 2, h]], d, wall));
+  // long-and-short quoins up the corners
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+    for (let y = 1.4, k = 0; y < h - 0.45; y += 0.62, k++) {
+      const long = (k + (sx * sz > 0 ? 1 : 0)) % 2 === 0;
+      g.add(box(long ? 0.72 : 0.44, 0.54, long ? 0.44 : 0.72, trim, sx * (w / 2 - (long ? 0.31 : 0.17)), y, sz * (d / 2 - (long ? 0.17 : 0.31))));
+    }
+  }
+  // the cornice under the eaves
+  g.add(box(w + 0.22, 0.24, d + 0.22, trim, 0, h - 0.24, 0));
+  // the roof: bronze plates with standing seams, or stone slabs in courses
+  const roofC = humble ? DW_SLAB : o.roof === C.slate ? DW_BASALT_MD : DW_BRONZE;
+  const seam = humble ? DW_BASALT_MD : o.roof === C.slate ? DW_BASALT : DW_BRONZE_DK;
+  const half = w / 2 + 0.42, theta = Math.atan2(roofH, w / 2), len = half / Math.cos(theta) + 0.12;
+  for (const side of [-1, 1]) {
+    const s = new THREE.Group();
+    s.add(box(len, 0.26, d + 0.5, roofC));
+    if (humble) for (let i = 1; i < 3; i++) s.add(box(0.12, 0.1, d + 0.52, seam, -len / 2 + (i * len) / 3, 0.22, 0));
+    else {
+      const n = Math.max(3, Math.round(d / 0.95));
+      for (let i = 0; i <= n; i++) s.add(box(len, 0.1, 0.09, seam, 0, 0.24, -d / 2 - 0.2 + (i * (d + 0.4)) / n));
+    }
+    s.rotation.z = -side * theta;
+    s.position.set(side * (half / 2), top - (half / 2) * Math.tan(theta), 0);
+    g.add(s);
+  }
+  g.add(mesh(new THREE.CylinderGeometry(0.2, 0.2, d + 0.66, 6).rotateX(Math.PI / 2), seam).translateY(top + 0.22));
+  // heavy stone copings up both gables, kneelers at their feet and a capstone at the apex
+  for (const z of [d / 2 + 0.06, -d / 2 - 0.06]) {
+    for (const side of [-1, 1]) {
+      g.add(coping(side * (w / 2 + 0.28), h + 0.12, side * 0.1, top + 0.3, z, trim));
+      g.add(box(0.56, 0.5, 0.6, trim, side * (w / 2 + 0.1), h - 0.3, z));
+    }
+    g.add(frustum(0.6, 0.6, 0.3, 0.3, 0.45, trim, 0, top + 0.28, z));
+  }
+  // a bronze rune-disc in the front gable (a rune cut in the stone on the humbler ones)
+  // (tagged, so a building that hangs its sign on the gable can take it down)
+  if (w > 3.4) {
+    const gy = h + roofH * 0.42, rr = Math.min(0.52, roofH * 0.3);
+    const disc = new THREE.Group();
+    disc.userData.gableDisc = true;
+    if (!humble) {
+      disc.add(mesh(new THREE.CylinderGeometry(rr, rr, 0.1, 10).rotateX(Math.PI / 2), DW_BRONZE).translateY(gy).translateZ(d / 2 + 0.05));
+      disc.add(mesh(new THREE.TorusGeometry(rr, 0.05, 4, 10), DW_GOLD).translateY(gy).translateZ(d / 2 + 0.1));
+    }
+    const rn = forgeRune(rr * 1.1, Math.round(w * 3 + d));
+    rn.position.set(0, gy, d / 2 + (humble ? 0.03 : 0.12));
+    disc.add(rn);
+    g.add(disc);
+  }
+  if (o.door !== false) {
+    const dw = Math.min(1.25, w * 0.24), dh = Math.min(2.0, h * 0.64), dz = d / 2;
+    g.add(box(dw, dh, 0.14, DW_OAK, 0, 0, dz));
+    for (const y of [dh * 0.28, dh * 0.72]) g.add(box(dw + 0.02, 0.1, 0.06, DW_BRONZE, 0, y, dz + 0.08));
+    g.add(box(0.05, dh, 0.06, DW_BASALT, 0, 0, dz + 0.08));
+    for (const s of [-1, 1]) g.add(box(0.3, dh + 0.05, 0.4, trim, s * (dw / 2 + 0.15), 0, dz + 0.06));
+    g.add(frustum(dw + 0.62, 0.44, dw + 1.02, 0.44, 0.52, trim, 0, dh + 0.04, dz + 0.08));
+    const rn = forgeRune(0.3, Math.round(w * 7));
+    rn.position.set(0, dh + 0.3, dz + 0.32);
+    g.add(rn);
+  }
+  const nw = o.windows ?? Math.max(0, Math.floor(w / 2.4));
+  for (let i = 0; i < nw; i++) {
+    const x = -w / 2 + ((i + 1) * w) / (nw + 1);
+    if (Math.abs(x) < 1.1 && o.door !== false) continue;
+    const win = box(0.46, 0.6, 0.12, C.window, x, h * 0.46, d / 2 + 0.02);
+    win.userData.window = true;
+    g.add(win);
+    g.add(box(0.78, 0.16, 0.24, trim, x, h * 0.46 + 0.6, d / 2 + 0.05), box(0.66, 0.1, 0.22, trim, x, h * 0.46 - 0.1, d / 2 + 0.05));
+  }
+  if (o.chimney) {
+    const cx = w * 0.24, cz = -d * 0.18;
+    g.add(box(0.9, roofH + 1.7, 0.9, DW_BASALT_MD, cx, h, cz));
+    g.add(box(1.14, 0.24, 1.14, DW_BRONZE_DK, cx, h + roofH + 1.55, cz));
+  }
+  return g;
+}
+
+/**
+ * Dwarf tower: eight-sided and battered out at the foot on a basalt plinth, a string course and a ring of
+ * glowing runes round it, a parapet jutting on corbels at the top; a low eight-sided roof of bronze plates
+ * with a gold finial, or (open) chunky merlons. Its banner hangs long down its face from a gold rod.
+ */
+function dwarfTower(r: number, h: number, o: TowerOpts): THREE.Group {
+  const g = new THREE.Group();
+  const color = o.color ?? DW_GRANITE;
+  const oct = (m: THREE.Mesh) => { m.rotation.y = Math.PI / 8; return m; };
+  g.add(oct(cyl(r * 0.94, r * 1.14, h, color, 8)));
+  g.add(oct(cyl(r * 1.24, r * 1.3, 0.7, DW_BASALT, 8)));
+  g.add(oct(cyl(r * 1.06, r * 1.07, 0.22, DW_BASALT_MD, 8, 0, h * 0.48)));
+  const rAt = (y: number) => (r * 1.14 - r * 0.2 * (y / h)) * Math.cos(Math.PI / 8);
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+    const rn = forgeRune(0.42, i);
+    rn.position.set(Math.cos(a) * (rAt(h * 0.68) + 0.03), h * 0.68, Math.sin(a) * (rAt(h * 0.68) + 0.03));
+    rn.rotation.y = Math.PI / 2 - a;
+    g.add(rn);
+  }
+  for (const a of [Math.PI / 2 + 0.79, Math.PI / 2 - 2.36]) {
+    const s = box(0.24, 0.72, 0.12, C.window, Math.cos(a) * rAt(h * 0.3), h * 0.3, Math.sin(a) * rAt(h * 0.3));
+    s.rotation.y = Math.PI / 2 - a;
+    s.userData.window = true;
+    g.add(s);
+  }
+  // corbels under the parapet
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    const c = frustum(0.34, 0.2, 0.34, 0.56, 0.5, DW_GRANITE_LT, Math.cos(a) * rAt(h - 0.6), h - 0.62, Math.sin(a) * rAt(h - 0.6));
+    c.rotation.y = Math.PI / 2 - a;
+    g.add(c);
+  }
+  g.add(oct(cyl(r * 1.24, r * 1.16, 0.95, DW_GRANITE_LT, 8, 0, h - 0.2)));
+  if (o.roof === null) {
+    if (o.merlons !== false) for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2 + Math.PI / 8;
+      const m = box(r * 0.5, 0.62, 0.42, DW_GRANITE_LT, Math.cos(a) * r * 1.02, h + 0.75, Math.sin(a) * r * 1.02);
+      m.rotation.y = Math.PI / 2 - a;
+      g.add(m);
+    }
+  } else {
+    const rh = r * 1.25;
+    g.add(oct(cone(r * 1.34, rh, o.roof ?? C.tile, 8, 0, h + 0.75)));
+    g.add(oct(cyl(r * 1.3, r * 1.3, 0.14, DW_BRONZE_DK, 8, 0, h + 0.7)));
+    g.add(cyl(0.18, 0.2, 0.4, DW_BRONZE_DK, 6, 0, h + 0.7 + rh - 0.2));
+    g.add(blob(0.2, DW_GOLD, 0, h + 0.95 + rh, 0));
+    g.add(cone(0.08, 0.55, DW_GOLD, 5, 0, h + 1.05 + rh, 0));
+  }
+  if (o.banner !== undefined) {
+    const bh = h * 0.36, bw = r * 0.8, fz = rAt(h - 1.2) + 0.1;
+    g.add(box(bw + 0.34, 0.1, 0.1, DW_GOLD, 0, h - 1.15, fz));
+    g.add(box(bw, bh, 0.05, o.banner, 0, h - 1.15 - bh, fz));
+    for (const x of [-bw / 3, bw / 3]) g.add(cone(bw / 6, 0.4, o.banner, 3, x, h - 1.15 - bh, fz).rotateZ(Math.PI));
+    g.add(box(bw + 0.02, 0.07, 0.06, DW_GOLD, 0, h - 1.15 - bh * 0.18, fz + 0.02));
+    const rn = forgeRune(bw * 0.55, 4);
+    rn.position.set(0, h - 1.15 - bh * 0.55, fz + 0.05);
+    g.add(rn);
   }
   return g;
 }

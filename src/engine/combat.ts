@@ -46,7 +46,7 @@ export interface CombatResult {
   effects?: HeroEffect[];
 }
 
-export type HeroEffect = 'barrier' | 'thornwall' | 'sneak' | 'dread-att' | 'dread-def' | 'ward' | 'warcry';
+export type HeroEffect = 'barrier' | 'thornwall' | 'sneak' | 'dread-att' | 'dread-def' | 'ward' | 'warcry' | 'frostbite' | 'rime' | 'volley' | 'pack';
 
 const CLS_INDEX: Record<UnitClass, 0 | 1 | 2> = { inf: 0, cav: 1, arc: 2 };
 
@@ -131,6 +131,23 @@ export function resolveBattle(input: CombatInput): CombatResult {
   }
 
   // --- main battle ---
+  const effects: HeroEffect[] = [];
+  // a defending Forgelord's bolt-throwers loose from the wall before the armies meet
+  // (heroes and noblemen are not their mark)
+  if (defHeroes.includes('dwarf') && input.wall > 0) {
+    const share = Math.min(HERO_POWERS.volleyMax, HERO_POWERS.volley * input.wall);
+    let fell = 0;
+    for (const k in main) {
+      const u = k as UnitId;
+      if (HEROES.includes(u) || u === 'noble') continue;
+      const n = Math.floor((main[u] ?? 0) * share);
+      if (n <= 0) continue;
+      main[u] = (main[u] ?? 0) - n;
+      attLost[u] = (attLost[u] ?? 0) + n;
+      fell += n;
+    }
+    if (fell > 0) effects.push('volley');
+  }
   const mod = (1 + input.luck) * input.morale;
   const A = [0, 0, 0];
   for (const k in main) {
@@ -155,14 +172,19 @@ export function resolveBattle(input: CombatInput): CombatResult {
   // the Orc King's bloodlust: the whole warband he leads charges harder
   if (attHeroes.includes('orc')) attHeroMult += HERO_POWERS.bloodlust;
   for (let i = 0; i < 3; i++) A[i] *= attHeroMult;
-  const effects: HeroEffect[] = [];
   if (attHeroes.includes('orc')) effects.push('warcry');
+  // a Saurian King's riders hunt as a pack; a Frost Queen's frost bites the horses charging her
+  if (attHeroes.includes('saurian') && A[1] > 0) { A[1] *= 1 + HERO_POWERS.pack; effects.push('pack'); }
+  if (defHeroes.includes('frost') && A[1] > 0) { A[1] *= 1 - HERO_POWERS.frostbite; effects.push('frostbite'); }
   // a defending necromancer fills the attacking infantry with dread
   if (defHeroes.includes('necromancer') && A[0] > 0) { A[0] *= 1 - HERO_POWERS.dread; effects.push('dread-def'); }
   const Atot = A[0] + A[1] + A[2];
 
   // the Orc King's warcry: the rams and rock-hurlers he leads strike much harder
-  const siegeMult = attHeroes.includes('orc') ? 1 + HERO_POWERS.warcry : 1;
+  // (and rime on the walls a Frost Queen guards blunts every ram and stone)
+  const rime = defHeroes.includes('frost') ? 1 - HERO_POWERS.rime : 1;
+  const siegeMult = (attHeroes.includes('orc') ? 1 + HERO_POWERS.warcry : 1) * rime;
+  if (rime < 1 && ((main.ram ?? 0) > 0 || (main.catapult ?? 0) > 0)) effects.push('rime');
   const ramMult = attItem?.special === 'ramx2' ? 1 + ITEM_POWERS.siege : 1;
   const ramsSent = main.ram ?? 0;
   const ramPowerSent = ramsSent * ramMult * siegeMult * techMultiplier(attTech.ram);
@@ -170,6 +192,11 @@ export function resolveBattle(input: CombatInput): CombatResult {
   // an attacking goblin chief's army slips over part of the wall
   if (attHeroes.includes('goblin') && battleWall > 0) { battleWall = Math.max(0, battleWall - HERO_POWERS.sneak); effects.push('sneak'); }
 
+  // cavalry among the defenders: a pack of the Saurian King's, or frostbitten by an attacking Frost Queen
+  const cavDef = (defHeroes.includes('saurian') ? 1 + HERO_POWERS.pack : 1) * (attHeroes.includes('frost') ? 1 - HERO_POWERS.frostbite : 1);
+  if (cavDef !== 1 && defStacks.some((st) => Object.keys(st.units).some((k) => UNITS[k as UnitId].cls === 'cav' && (st.units[k as UnitId] ?? 0) > 0 && !HEROES.includes(k as UnitId)))) {
+    effects.push(cavDef > 1 ? 'pack' : 'frostbite');
+  }
   let D = 0;
   if (Atot > 0) {
     const w0 = A[0] / Atot, w1 = A[1] / Atot, w2 = A[2] / Atot;
@@ -180,7 +207,7 @@ export function resolveBattle(input: CombatInput): CombatResult {
         if (n <= 0) continue;
         const d = UNITS[u].def;
         const it = itemFor(defItems, u);
-        const m = techMultiplier(st.tech[u]) * (1 + (it?.def ?? 0));
+        const m = techMultiplier(st.tech[u]) * (1 + (it?.def ?? 0)) * (UNITS[u].cls === 'cav' ? cavDef : 1);
         D += n * (d[0] * w0 + d[1] * w1 + d[2] * w2) * m;
       }
     }

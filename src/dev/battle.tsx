@@ -24,6 +24,7 @@ const ARMIES: Record<string, Units> = {
   'Necromancer host': { axe: 2000, necromancer: 1, light: 300, catapult: 80 },
   'Sorcerer warband': { sorcerer: 1, axe: 1500, marcher: 500, catapult: 50 },
   'Orc horde (hero)': { orc: 1, axe: 2500, sword: 600, light: 800, heavy: 200, scout: 20, ram: 150, catapult: 60 },
+  'Frost Queen host (hero)': { frost: 1, axe: 1500, sword: 400, light: 800, marcher: 200, heavy: 300, scout: 20, ram: 100, catapult: 40 },
 };
 const DEFENCES: Record<string, Units> = {
   'Full defence': { spear: 3000, sword: 2500, archer: 800, heavy: 150 },
@@ -33,10 +34,11 @@ const DEFENCES: Record<string, Units> = {
   'Sorcerer and archers': { sorcerer: 1, spear: 900, archer: 700 },
   'Druid grove': { druid: 1, spear: 1500, sword: 900, archer: 200 },
   'Orc warband': { orc: 1, spear: 1500, sword: 900, archer: 400, marcher: 150 },
+  'Frost court (rime, frostbite)': { frost: 1, spear: 1500, sword: 900, archer: 600, heavy: 100 },
   'Paladin and cavalry': { paladin: 1, heavy: 500, spear: 1000, sword: 500 },
   'Scouts at home': { scout: 60, spear: 300 },
 };
-const THEMES: Theme[] = ['classic', 'paladin', 'goblin', 'sorcerer', 'druid', 'necromancer', 'orc'];
+const THEMES: Theme[] = ['classic', 'paladin', 'goblin', 'sorcerer', 'druid', 'necromancer', 'orc', 'frost'];
 const TARGETS: BuildingId[] = ['main', 'warehouse', 'barracks', 'farm', 'smithy', 'market', 'stable', 'wall'];
 
 function village(wall: number, tower: number, hiding: number): Buildings {

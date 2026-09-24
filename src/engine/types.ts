@@ -12,7 +12,7 @@ export type BuildingId =
 
 export type UnitId =
   | 'spear' | 'sword' | 'axe' | 'archer' | 'scout' | 'light' | 'marcher'
-  | 'heavy' | 'ram' | 'catapult' | 'paladin' | 'sorcerer' | 'druid' | 'goblin' | 'necromancer' | 'orc' | 'noble' | 'militia' | 'trader';
+  | 'heavy' | 'ram' | 'catapult' | 'paladin' | 'sorcerer' | 'druid' | 'goblin' | 'necromancer' | 'orc' | 'frost' | 'dwarf' | 'djinn' | 'saurian' | 'noble' | 'militia' | 'trader';
 
 export type Units = { [K in UnitId]?: number };
 export type Buildings = Record<BuildingId, number>;
@@ -154,7 +154,7 @@ export type ReportColor = 'green' | 'yellow' | 'red' | 'blue' | 'grey';
 
 export interface SideInfo {
   /** the village's look, so reports can name its troops (goblin, sorcerer, druid or classic) */
-  theme?: 'classic' | 'paladin' | 'sorcerer' | 'druid' | 'goblin' | 'necromancer' | 'orc';
+  theme?: 'classic' | 'paladin' | 'sorcerer' | 'druid' | 'goblin' | 'necromancer' | 'orc' | 'frost' | 'dwarf' | 'djinn' | 'saurian';
   playerId: number | null;
   playerName: string;
   vid: number;
@@ -196,6 +196,8 @@ export interface BattleData {
   risen?: { side: 'attacker' | 'defender'; n: number };
   /** a paladin laid hands on his side's fallen: how many rose healed */
   healed?: { side: 'attacker' | 'defender'; n: number };
+  /** a djinn claimed tribute for his side's victory: resources worth a share of the enemy's fallen */
+  tribute?: { side: 'attacker' | 'defender'; res: Res };
   /** hero abilities that shaped the battle (barrier, thornwall, sneak, dread, snare, ward) */
   effects?: string[];
   nightOwl?: boolean;
@@ -208,6 +210,8 @@ export interface Report {
   title: string;
   color: ReportColor;
   read: boolean;
+  /** kept in the archive: never swept away by "delete read"/"delete all" or by the inbox limit */
+  archived?: boolean;
   battle?: BattleData;
   text?: string;
   vid?: number;                   // related village for filtering

@@ -3,8 +3,9 @@
 
 import { BUILDINGS } from './data/buildings';
 import { unitNameAt } from './data/themes';
-import { HEROES, ITEM_BY_ID, UNITS, isHero, itemHero } from './data/units';
-import { cancelCommand, sendResources, sendTrain, sendTroops, withdrawSupport } from './commands';
+import { HEROES, HERO_INFO, ITEM_BY_ID, UNITS, isHero, itemHero } from './data/units';
+import { REGION_NAMES, regionAt } from './regions';
+import { cancelCommand, sendResources, sendTrain, sendTroops, trimReports, withdrawSupport } from './commands';
 import { commandsFrom, commandsOf } from './cmdindex';
 import { pushEvent } from './events';
 import {
@@ -54,6 +55,8 @@ export type Action =
   | { type: 'claimQuest'; quest: string; vid?: number }
   | { type: 'readReport'; id: number | 'all' }
   | { type: 'deleteReport'; id: number | 'all' | 'read' }
+  /** keep a report (or every read one) in the archive, or take it back out */
+  | { type: 'archiveReport'; id: number | 'read'; archived?: boolean }
   | { type: 'note'; vid: number; text: string }
   | { type: 'restart'; village: string }
   | { type: 'tribeCreate'; name: string; tag: string }
@@ -200,6 +203,8 @@ export function recruitCheck(w: World, v: Village, u: UnitId, count: number): { 
   for (const k of RES_KEYS) if (d.cost[k] > 0) max = Math.min(max, Math.floor(v.res[k] / d.cost[k]));
   max = Math.min(max, Math.floor(popFree(v) / Math.max(1, d.pop)));
   if (isHero(u)) {
+    const home = HERO_INFO[u]?.region;
+    if (home && regionAt(v.x, v.y, w.config.size) !== home) return { ok: false, reason: `The ${UNITS[u].name} answers only villages in ${REGION_NAMES[home]}.`, max: 0 };
     if (v.heroKind && v.heroKind !== u) return { ok: false, reason: `This village's statue is sworn to the ${UNITS[v.heroKind].name}. It can only ever raise that hero.`, max: 0 };
     const hero = villageHero(w, v);
     if (hero) return { ok: false, reason: `This village already has a hero (${UNITS[hero].name}). Each village keeps one.`, max: 0 };
@@ -465,7 +470,7 @@ function exchange(w: World, pid: number, vid: number, give: keyof Res, get: keyo
   return { ok: true, data: q.receive };
 }
 
-const AFTER_ROUND = new Set<Action['type']>(['readReport', 'deleteReport', 'note', 'forumThread', 'forumReply', 'forumDelete', 'forumPin', 'forumRead', 'rename']);
+const AFTER_ROUND = new Set<Action['type']>(['readReport', 'deleteReport', 'archiveReport', 'note', 'forumThread', 'forumReply', 'forumDelete', 'forumPin', 'forumRead', 'rename']);
 
 export function applyAction(w: World, pid: number, a: Action): ActionResult {
   const p = w.players[pid];
@@ -530,7 +535,22 @@ export function applyAction(w: World, pid: number, a: Action): ActionResult {
       return { ok: true };
     }
     case 'deleteReport': {
-      p.reports = p.reports.filter((r) => !(a.id === 'all' || (a.id === 'read' && r.read) || r.id === a.id));
+      // sweeping the inbox ("all", "read") leaves the archive alone; one report goes wherever it is
+      p.reports = p.reports.filter((r) => !((a.id === 'all' && !r.archived) || (a.id === 'read' && r.read && !r.archived) || r.id === a.id));
+      return { ok: true };
+    }
+    case 'archiveReport': {
+      const keep = a.archived !== false;
+      let n = 0;
+      for (const r of p.reports) {
+        if (a.id === 'read' ? r.read && !r.archived && keep : r.id === a.id) {
+          r.archived = keep || undefined;
+          if (keep) r.read = true;
+          n++;
+        }
+      }
+      if (n === 0 && a.id !== 'read') return fail('That report is gone.');
+      trimReports(p);
       return { ok: true };
     }
     case 'tribeCreate': return createTribe(w, pid, a.name, a.tag);

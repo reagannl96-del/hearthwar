@@ -4,8 +4,9 @@
 // patch of grass to a castle with towers everywhere (src/ui/art/villages, baked from
 // the sheets in art-src/villages by src/dev/bake.ts). Everyone else's villages wear
 // the plain red-roofed set; your own wear the set of the hero at their statue.
-// Barbarian villages are the plain set, weathered; the snowy north and the volcanic
-// west repaint the grass as snow or ash.
+// Barbarian villages are the plain set, weathered; the snowy north, the volcanic
+// west, the eastern desert and the southern jungle repaint the grass as snow, ash,
+// sand or deep jungle green.
 
 import generic from './art/villages/generic.webp';
 import paladin from './art/villages/paladin.webp';
@@ -51,7 +52,7 @@ function sheet(look: VillageLook): HTMLImageElement | null {
   return img.complete && img.naturalWidth > 0 ? img : null;
 }
 
-type Ground = 'grass' | 'snow' | 'ash';
+export type Ground = 'grass' | 'snow' | 'ash' | 'sand' | 'jungle';
 const cache = new Map<string, HTMLCanvasElement>();
 
 /**
@@ -104,7 +105,7 @@ export function spriteBox(sprite: HTMLCanvasElement | null): { w: number; h: num
 
 /**
  * Weather and neglect, pixel by pixel: grass and leaves (anything clearly green,
- * but not a bright magical glow) turn to snow or ash; a barbarian village loses
+ * but not a bright magical glow) turn to snow, ash, sand or jungle green; a barbarian village loses
  * most of its colour and darkens, like a place nobody looks after.
  */
 function repaint(ctx: CanvasRenderingContext2D, barb: boolean, ground: Ground) {
@@ -123,6 +124,12 @@ function repaint(ctx: CanvasRenderingContext2D, barb: boolean, ground: Ground) {
         if (ground === 'snow') {
           const s = Math.min(255, lum * 1.15 + 70);
           tr = s - 8; tg = s - 2; tb = s + 6;
+        } else if (ground === 'sand') {
+          // warm sand, keeping the painted light and shade
+          tr = Math.min(255, lum * 1.5 + 44); tg = Math.min(255, lum * 1.24 + 36); tb = lum * 0.78 + 22;
+        } else if (ground === 'jungle') {
+          // a deeper, wetter green
+          tr = lum * 0.42; tg = Math.min(255, lum * 1.08 + 10); tb = lum * 0.42 + 4;
         } else {
           const s = lum * 0.5 + 18;
           tr = s + 10; tg = s + 2; tb = s - 4;
@@ -212,4 +219,267 @@ export function forestSprite(variant: number, winter = false): HTMLCanvasElement
   }
   treeCache.set(key, c);
   return c;
+}
+
+// ---------- the wilds of the east and the south ----------
+
+const TAU = Math.PI * 2;
+const wildCache = new Map<string, HTMLCanvasElement>();
+
+function seeded(seed: number): () => number {
+  let s = seed % 233280;
+  return () => ((s = (s * 9301 + 49297) % 233280) / 233280);
+}
+
+function sprite64(key: string, paint: (ctx: CanvasRenderingContext2D) => void): HTMLCanvasElement {
+  const hit = wildCache.get(key);
+  if (hit) return hit;
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  paint(c.getContext('2d')!);
+  wildCache.set(key, c);
+  return c;
+}
+
+function groundShadow(ctx: CanvasRenderingContext2D, x: number, y: number, rx: number, ry: number, a = 0.28) {
+  ctx.fillStyle = `rgba(70,40,10,${a})`;
+  ctx.beginPath();
+  ctx.ellipse(x, y, rx, ry, 0, 0, TAU);
+  ctx.fill();
+}
+
+/** A date palm standing at (x, y): a leaning, ringed trunk, a crown of arching fronds and a bunch of dates. */
+function drawPalm(ctx: CanvasRenderingContext2D, x: number, y: number, k: number, lean: number, rnd: () => number) {
+  groundShadow(ctx, x + 6 * k, y + 1, 10 * k, 3 * k);
+  const tx = x + lean * k, ty = y - 21 * k;
+  const mx = x + lean * 0.15 * k, my = y - 11 * k;
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = '#7b5836';
+  ctx.lineWidth = 2.8 * k;
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.quadraticCurveTo(mx, my, tx, ty);
+  ctx.stroke();
+  // the rings of old leaf bases
+  ctx.strokeStyle = 'rgba(58,34,14,0.6)';
+  ctx.lineWidth = 0.9 * k;
+  for (let i = 1; i < 6; i++) {
+    const t = i / 6, u = 1 - t;
+    const px = u * u * x + 2 * u * t * mx + t * t * tx, py = u * u * y + 2 * u * t * my + t * t * ty;
+    ctx.beginPath();
+    ctx.moveTo(px - 1.3 * k, py + 0.4 * k);
+    ctx.lineTo(px + 1.3 * k, py - 0.2 * k);
+    ctx.stroke();
+  }
+  // fronds: the far ones in shade first, the near ones sunlit on top
+  const fr: number[] = [];
+  for (let i = 0; i < 7; i++) fr.push((i / 7) * TAU + rnd() * 0.5);
+  fr.sort((a, b) => Math.sin(a) - Math.sin(b));
+  for (const a of fr) {
+    const back = Math.sin(a) < -0.1;
+    const len = (10 + rnd() * 3.5) * k;
+    const ex = tx + Math.cos(a) * len, ey = ty + Math.sin(a) * len * 0.42 + 5.5 * k;
+    const cx = tx + Math.cos(a) * len * 0.55, cy = ty + Math.sin(a) * len * 0.25 - 4 * k;
+    ctx.fillStyle = back ? '#3d6a2b' : Math.cos(a) < 0 ? '#5f9138' : '#4f7f31';
+    ctx.beginPath();
+    ctx.moveTo(tx, ty);
+    ctx.quadraticCurveTo(cx, cy - 2 * k, ex, ey);
+    ctx.quadraticCurveTo(cx, cy + 1.6 * k, tx, ty + 0.6 * k);
+    ctx.fill();
+    if (!back) {
+      ctx.strokeStyle = 'rgba(214,232,150,0.5)';
+      ctx.lineWidth = 0.6 * k;
+      ctx.beginPath();
+      ctx.moveTo(tx, ty);
+      ctx.quadraticCurveTo(cx, cy - 1 * k, ex, ey);
+      ctx.stroke();
+    }
+  }
+  // dates hanging under the crown
+  ctx.fillStyle = '#b8642a';
+  for (const [dx, dy] of [[-1.6, 1.8], [1.2, 2.2], [0, 2.9]]) {
+    ctx.beginPath();
+    ctx.arc(tx + dx * k, ty + dy * k, 1.05 * k, 0, TAU);
+    ctx.fill();
+  }
+}
+
+/** A saguaro: a ribbed green column with two arms raised. */
+function drawCactus(ctx: CanvasRenderingContext2D, x: number, y: number, k: number, flip: number) {
+  groundShadow(ctx, x + 4 * k, y + 1, 6.5 * k, 2.4 * k);
+  const body = '#5d8c3e', shade = '#44703a', light = '#8cb85e';
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = body;
+  ctx.lineWidth = 3 * k;
+  ctx.beginPath();
+  ctx.moveTo(x + 1 * k * flip, y - 7 * k);
+  ctx.lineTo(x + 5 * k * flip, y - 7 * k);
+  ctx.lineTo(x + 5 * k * flip, y - 12.5 * k);
+  ctx.moveTo(x - 1 * k * flip, y - 10.5 * k);
+  ctx.lineTo(x - 4.2 * k * flip, y - 10.5 * k);
+  ctx.lineTo(x - 4.2 * k * flip, y - 14.5 * k);
+  ctx.stroke();
+  ctx.fillStyle = body;
+  ctx.beginPath();
+  ctx.roundRect(x - 2.3 * k, y - 18 * k, 4.6 * k, 18 * k, 2.3 * k);
+  ctx.fill();
+  // shade on the side away from the sun, a sunlit rib on the other
+  ctx.fillStyle = shade;
+  ctx.beginPath();
+  ctx.roundRect(x + 0.5 * k, y - 17.4 * k, 1.8 * k, 17.4 * k, [0, 2 * k, 0, 0]);
+  ctx.fill();
+  ctx.strokeStyle = light;
+  ctx.lineWidth = 0.8 * k;
+  ctx.beginPath();
+  ctx.moveTo(x - 1.1 * k, y - 16.5 * k);
+  ctx.lineTo(x - 1.1 * k, y - 1 * k);
+  ctx.stroke();
+  // a flower on top
+  ctx.fillStyle = '#f2d8e0';
+  ctx.beginPath();
+  ctx.arc(x, y - 18.2 * k, 0.9 * k, 0, TAU);
+  ctx.fill();
+}
+
+/** A dry, wind-bitten bush of the dunes. */
+function drawShrub(ctx: CanvasRenderingContext2D, x: number, y: number, k: number) {
+  groundShadow(ctx, x + 2 * k, y + 0.5, 5 * k, 1.8 * k, 0.22);
+  ctx.strokeStyle = '#6b5335';
+  ctx.lineWidth = 0.8 * k;
+  ctx.beginPath();
+  for (const d of [-3, 0, 3]) { ctx.moveTo(x, y); ctx.lineTo(x + d * k, y - 4 * k); }
+  ctx.stroke();
+  for (const [dx, dy, r, col] of [[-2.2, -3.4, 2.4, '#857f45'], [2, -3.8, 2.3, '#8f8a4c'], [0, -5, 2.6, '#a39c5c']] as [number, number, number, string][]) {
+    ctx.fillStyle = col;
+    ctx.beginPath();
+    ctx.arc(x + dx * k, y + dy * k, r * k, 0, TAU);
+    ctx.fill();
+  }
+}
+
+/**
+ * The desert's groves ('forest' fields there): date palms in twos and threes, a stand of
+ * saguaros, or a lone palm among dry bushes.
+ */
+export function palmSprite(variant: number): HTMLCanvasElement {
+  const v = ((variant % 8) + 8) % 8;
+  return sprite64(`palm|${v}`, (ctx) => {
+    const rnd = seeded(v * 7919 + 1301);
+    const items: [number, number, number, 'palm' | 'cactus' | 'shrub'][] = [];
+    if (v < 5) {
+      const n = v < 3 ? 3 : 2;
+      for (let i = 0; i < n; i++) items.push([20 + i * (24 / (n - 1)) + (rnd() - 0.5) * 4, 36 + rnd() * 22, 1.1 + rnd() * 0.3, 'palm']);
+      if (v === 4) items.push([12 + rnd() * 40, 54 + rnd() * 6, 0.9, 'shrub']);
+    } else if (v < 7) {
+      items.push([18 + rnd() * 10, 40 + rnd() * 14, 1.1 + rnd() * 0.3, 'cactus'], [38 + rnd() * 12, 46 + rnd() * 12, 0.9 + rnd() * 0.3, 'cactus'], [28 + rnd() * 20, 57, 1, 'shrub']);
+    } else {
+      items.push([30, 44, 1.4, 'palm'], [14, 57, 1, 'shrub'], [50, 55, 0.9, 'cactus']);
+    }
+    items.sort((a, b) => a[1] - b[1]);
+    for (const [x, y, k, kind] of items) {
+      if (kind === 'palm') drawPalm(ctx, x, y, k, (rnd() - 0.5) * 12, rnd);
+      else if (kind === 'cactus') drawCactus(ctx, x, y, k, rnd() < 0.5 ? 1 : -1);
+      else drawShrub(ctx, x, y, k);
+    }
+  });
+}
+
+/** One palm, for the green rim of an oasis. */
+export function lonePalmSprite(variant: number): HTMLCanvasElement {
+  const v = ((variant % 4) + 4) % 4;
+  return sprite64(`lonepalm|${v}`, (ctx) => {
+    const rnd = seeded(v * 4561 + 77);
+    drawPalm(ctx, 30 + rnd() * 8, 58, 1.25, (rnd() - 0.5) * 16, rnd);
+  });
+}
+
+const JUNGLE_LEAF = ['#2e6b2a', '#377a2f', '#2a6328', '#418a35', '#316f2c'];
+const JUNGLE_FLOWER = ['#f05a7a', '#ffc83a', '#e8483a', '#f7f0e6', '#c85ad0'];
+
+/** A jungle crown: a lumpy dome of overlapping leaf masses, shaded below and sunlit on top. */
+function drawCrown(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, col: string, rnd: () => number) {
+  // the trunk, a dark shadow on the canopy below it, then the leaves
+  ctx.fillStyle = '#4a3522';
+  ctx.fillRect(x - r * 0.12, y, r * 0.24, r * 0.7);
+  ctx.fillStyle = 'rgba(8,30,10,0.4)';
+  ctx.beginPath();
+  ctx.ellipse(x + r * 0.25, y + r * 0.45, r * 1.05, r * 0.6, 0, 0, TAU);
+  ctx.fill();
+  ctx.fillStyle = col;
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * TAU + rnd();
+    ctx.beginPath();
+    ctx.arc(x + Math.cos(a) * r * 0.5, y + Math.sin(a) * r * 0.32, r * (0.55 + rnd() * 0.15), 0, TAU);
+    ctx.fill();
+  }
+  ctx.beginPath();
+  ctx.arc(x, y - r * 0.2, r * 0.65, 0, TAU);
+  ctx.fill();
+  // the sunlit top
+  ctx.fillStyle = 'rgba(150,215,95,0.4)';
+  ctx.beginPath();
+  ctx.arc(x - r * 0.25, y - r * 0.42, r * 0.38, 0, TAU);
+  ctx.arc(x + r * 0.2, y - r * 0.55, r * 0.26, 0, TAU);
+  ctx.fill();
+}
+
+/**
+ * The jungle ('forest' fields there): a dense, many-storeyed canopy of broad crowns, now and
+ * then a giant rising above the rest, banana fans at the edge, vines and bright flowers.
+ */
+export function jungleSprite(variant: number): HTMLCanvasElement {
+  const v = ((variant % 8) + 8) % 8;
+  return sprite64(`jungle|${v}`, (ctx) => {
+    const rnd = seeded(v * 6373 + 211);
+    // the dark understorey, so the crowns read as one mass
+    ctx.fillStyle = 'rgba(24,64,26,0.9)';
+    ctx.beginPath();
+    ctx.roundRect(3, 12, 58, 50, 14);
+    ctx.fill();
+    // crowns of every size, scattered in three loose storeys (a giant now and then above them all)
+    const crowns: [number, number, number][] = [];
+    for (let row = 0; row < 3; row++) {
+      const shift = (rnd() - 0.5) * 12;
+      for (let col = 0; col < 3; col++) {
+        if (rnd() < 0.18) continue;
+        const r = 7.5 + rnd() * 4.5;
+        // (kept inside the sprite, so no crown is cut off square at its edge)
+        crowns.push([Math.max(r * 1.1, Math.min(64 - r * 1.3, 12 + col * 20 + shift + (rnd() - 0.5) * 8)), Math.max(r * 1.2, 24 + row * 14 + (rnd() - 0.5) * 7), r]);
+      }
+    }
+    if (v % 3 === 0) crowns.push([22 + rnd() * 20, 20 + rnd() * 4, 13]);
+    crowns.sort((a, b) => a[1] - b[1]);
+    for (const [x, y, r] of crowns) drawCrown(ctx, x, y, r, JUNGLE_LEAF[Math.floor(rnd() * JUNGLE_LEAF.length)], rnd);
+    // vines hanging off the crowns
+    ctx.strokeStyle = 'rgba(24,70,26,0.85)';
+    ctx.lineWidth = 0.9;
+    for (let i = 0; i < 3; i++) {
+      const [x, y, r] = crowns[Math.floor(rnd() * crowns.length)];
+      const vx = x + (rnd() - 0.5) * r;
+      ctx.beginPath();
+      ctx.moveTo(vx, y + r * 0.2);
+      ctx.quadraticCurveTo(vx + 2, y + r * 0.6, vx - 1, y + r * 0.9);
+      ctx.stroke();
+    }
+    // a banana plant's fan of broad leaves at the front
+    if (v % 2 === 1) {
+      const bx = 8 + rnd() * 48, by = 58;
+      for (let i = 0; i < 5; i++) {
+        const a = Math.PI * (1.1 + (i / 4) * 0.8);
+        ctx.fillStyle = i % 2 ? '#5cae3e' : '#4a9a36';
+        ctx.beginPath();
+        ctx.ellipse(bx + Math.cos(a) * 5, by - 4 + Math.sin(a) * 5, 6, 2, a, 0, TAU);
+        ctx.fill();
+      }
+    }
+    // bright flowers among the leaves
+    for (let i = 0; i < 2 + (v % 3); i++) {
+      const [x, y, r] = crowns[Math.floor(rnd() * crowns.length)];
+      ctx.fillStyle = JUNGLE_FLOWER[Math.floor(rnd() * JUNGLE_FLOWER.length)];
+      ctx.beginPath();
+      ctx.arc(x + (rnd() - 0.5) * r * 1.2, y - r * (0.1 + rnd() * 0.5), 1.4, 0, TAU);
+      ctx.fill();
+    }
+  });
 }

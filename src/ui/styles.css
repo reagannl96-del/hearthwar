@@ -764,8 +764,11 @@ tr.is-current td { font-weight: 800; background: #f4d9ae !important; }
 
 /* units */
 .unit-inputs { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px 16px; }
-.unit-inputs.compact { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
-.unit-input { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.unit-inputs.compact { grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); }
+.unit-input { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+/* a long themed troop name gives way (…) before it runs into the next column */
+.unit-input > .uname { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.unit-input > .num-input { flex-shrink: 0; }
 .unit-table th, .unit-table td { text-align: right; padding: 5px 7px; }
 .unit-table thead th { text-align: center; }
 .unit-table tbody th { text-align: left; font-weight: 700; color: var(--ink-2); white-space: nowrap; background: transparent; }
@@ -1863,3 +1866,314 @@ button.realm-row:hover { background: var(--surface-2); border-color: var(--line)
 /* map: which movement lines to draw */
 .map-lines { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; }
 .map-lines select { font-size: 0.85rem; padding: 2px 6px; }
+
+/* ---------- a ruler's profile ---------- */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+/* a button shown greyed out with the reason in its tooltip (it still takes a tap, to say why) */
+.btn[aria-disabled='true'], .btn[aria-disabled='true']:hover:not(:disabled) { opacity: 0.5; cursor: not-allowed; filter: grayscale(0.35); }
+.btn[aria-disabled='true']:active { transform: none; }
+.rel-own { background: rgba(50, 110, 220, 0.14); border-color: #3a6fc0; color: #1f4f96; }
+.rel-self { background: linear-gradient(#f3d27a, #d9a441); border-color: #a8741a; color: #3a2410; }
+
+.profile { container: profile / inline-size; }
+.profile-head {
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--grain), radial-gradient(90% 120% at 0% 0%, rgba(255, 250, 235, 0.95), rgba(255, 250, 235, 0) 60%), linear-gradient(var(--parch-hi), var(--parch-2));
+}
+.ph-top { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: 'banner id rank' 'banner meta rank'; gap: 9px 18px; align-content: center; }
+.ph-top > .hb-frame { grid-area: banner; align-self: center; }
+.ph-id { grid-area: id; display: grid; gap: 6px; min-width: 0; align-self: end; }
+.ph-name-row { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; }
+.ph-name { font-size: 2.4rem; overflow-wrap: anywhere; }
+.ph-name-row .pill { margin-left: 0; font-size: 0.78rem; padding: 1px 10px; }
+.ph-tribe { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 6px; font-size: 1.02rem; }
+.ph-tribe .pill { margin-left: 0; }
+.ph-meta { grid-area: meta; align-self: start; list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 5px 6px; font-size: 0.84rem; color: var(--ink-2); }
+.ph-meta li { display: inline-flex; align-items: center; gap: 4px; padding: 1px 9px; border-radius: 10px; background: rgba(120, 80, 30, 0.08); border: 1px solid rgba(143, 111, 60, 0.28); }
+.ph-meta .ph-protect { color: var(--support-c); border-color: rgba(47, 93, 153, 0.35); background: rgba(47, 93, 153, 0.08); }
+.ph-meta .countdown { min-width: 0; }
+.dialog-actions { margin-top: 14px; }
+/* tribe pages: the header's action bar, and a banner beside each member's name */
+.tribe-profile-head { gap: 12px; }
+.member-name { display: inline-flex; align-items: center; gap: 7px; }
+.member-name .flag-badge { flex: none; }
+.pg-empty { display: grid; justify-items: center; gap: 6px; padding: 12px; text-align: center; color: var(--muted); }
+.pg-empty .icon { opacity: 0.45; }
+.ph-rank {
+  grid-area: rank; align-self: center; display: grid; justify-items: center; align-content: center; padding: 8px 14px; min-width: 104px;
+  border: 1px solid var(--brass-dark); border-radius: 8px; cursor: pointer; color: inherit; font: inherit;
+  background: linear-gradient(180deg, rgba(255, 231, 163, 0.6), rgba(217, 164, 65, 0.24));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55), 0 1px 3px rgba(60, 36, 10, 0.2);
+}
+.ph-rank:hover { border-color: var(--accent); }
+.ph-rank-num { font: 800 2.3rem/1 var(--font-display); color: #6a4a10; }
+.ph-rank-of { font-size: 0.78rem; font-weight: 700; color: #5a4020; white-space: nowrap; }
+
+.ph-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0; border: 1px solid var(--line); border-radius: 6px; background: rgba(255, 250, 235, 0.6); }
+.ph-stat { padding: 8px 14px; min-width: 0; display: grid; align-content: start; gap: 1px; }
+.ph-stat + .ph-stat { border-left: 1px solid var(--line); }
+.ph-stat dt { font-size: 0.7rem; font-weight: 800; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); }
+.ph-stat dd { margin: 0; display: grid; min-width: 0; }
+.ph-stat b { font-size: 1.6rem; line-height: 1.1; color: var(--ink); }
+.ph-stat-sub { font-size: 0.8rem; color: var(--muted); }
+.ph-stat-sub.is-up { color: var(--ok); font-weight: 700; }
+.ph-stat-sub.is-down { color: var(--danger); font-weight: 700; }
+
+.ph-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-top: 11px; border-top: 1px dashed var(--line-strong); }
+.ph-state { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.ph-state .pill { margin-left: 0; font-size: 0.8rem; padding: 1px 9px; }
+.ph-copy { display: inline-flex; gap: 6px; align-items: center; }
+.ph-copy .copy-btn { height: 28px; }
+.ph-stance { display: inline-flex; align-items: center; gap: 6px; font-size: 0.85rem; font-weight: 800; padding: 2px 3px 2px 10px; border-radius: 4px; border: 1px solid var(--line-strong); background: var(--parch-hi); }
+.ph-stance select { padding: 2px 6px; font-size: 0.85rem; font-weight: 700; }
+.ph-rights { display: grid; gap: 6px; }
+.ph-count { display: inline-block; margin-left: 6px; padding: 0 7px; border-radius: 10px; background: rgba(60, 40, 10, 0.14); font-size: 0.74rem; font-weight: 800; letter-spacing: 0; color: var(--ink-2); vertical-align: 1px; font-variant-numeric: tabular-nums; }
+.ph-delta { font-size: 0.8rem; font-weight: 800; padding: 0 8px; border-radius: 10px; border: 1px solid transparent; }
+.ph-delta.is-up { color: var(--ok); background: var(--ok-soft); border-color: rgba(76, 117, 36, 0.35); }
+.ph-delta.is-down { color: var(--danger); background: var(--danger-soft); border-color: rgba(155, 42, 28, 0.35); }
+
+/* a small drop-down menu under a button */
+.pop { position: relative; display: inline-block; }
+.pop-caret { font-size: 0.7em; opacity: 0.7; }
+.pop-body {
+  position: absolute; top: calc(100% + 6px); z-index: 25; width: max-content; max-width: min(300px, calc(100vw - 32px));
+  display: grid; gap: 8px; padding: 10px 12px; border: 1px solid #8f6f3c; border-radius: 6px;
+  background: var(--grain), linear-gradient(var(--parch-hi), var(--parch));
+  box-shadow: 0 10px 24px rgba(20, 10, 2, 0.35);
+}
+.pop-body.is-left { left: 0; }
+.pop-body.is-right { right: 0; }
+.mark-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(40, 20, 5, 0.55); flex: none; }
+.mark-dot.is-empty { background: conic-gradient(#e5484d, #ff8a1f, #f2d64b, #3fd16b, #19d3d3, #3b8cff, #b86bff, #e5484d); }
+
+/* the banner on its pole, stirring in the wind */
+.hb-frame { position: relative; display: inline-grid; place-items: center; flex: none; padding: 2px; border: 0; background: radial-gradient(closest-side, rgba(255, 250, 235, 0.85), rgba(255, 250, 235, 0)); color: inherit; font: inherit; }
+.hb-frame.is-editable { cursor: pointer; border-radius: 8px; }
+.hb-frame.is-editable:hover .hb-cloth img { filter: brightness(1.06); }
+.hb { position: relative; display: block; width: 176px; height: 140px; }
+.hb-pole {
+  position: absolute; left: 9px; top: 9px; bottom: 2px; width: 8px; border-radius: 4px;
+  background: linear-gradient(90deg, #4a2f1b, #8b5a2b 45%, #5a3a1f);
+  box-shadow: 1px 0 2px rgba(0, 0, 0, 0.3);
+}
+.hb-pole::before {
+  content: ''; position: absolute; left: 50%; top: -8px; width: 15px; height: 15px; transform: translateX(-50%); border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #fff2b8, #e0a526 45%, #8a6a2a);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+.hb-cloth {
+  position: absolute; left: 16px; top: 13px; width: 150px; height: 100px; transform-origin: 0 50%;
+  filter: drop-shadow(2px 4px 4px rgba(40, 22, 6, 0.35));
+  animation: hb-sway 7s ease-in-out infinite;
+}
+.hb-cloth img { display: block; width: 100%; height: 100%; user-select: none; }
+.hb-sheen {
+  position: absolute; inset: 0; pointer-events: none;
+  -webkit-mask: var(--hb-mask) 0 0 / 100% 100% no-repeat; mask: var(--hb-mask) 0 0 / 100% 100% no-repeat;
+  background: linear-gradient(100deg, rgba(255, 255, 255, 0) 30%, rgba(255, 255, 255, 0.2) 40%, rgba(0, 0, 0, 0.1) 50%, rgba(255, 255, 255, 0.12) 60%, rgba(255, 255, 255, 0) 70%);
+  background-size: 300% 100%;
+  animation: hb-ripple 5.5s linear infinite;
+}
+.hb-edit {
+  position: absolute; right: 2px; bottom: 2px; padding: 1px 9px; border-radius: 10px; font-size: 0.74rem; font-weight: 800;
+  background: var(--parch-hi); border: 1px solid var(--line-strong); color: var(--link); opacity: 0; transition: opacity 0.15s;
+}
+.hb-frame.is-editable:hover .hb-edit, .hb-frame.is-editable:focus-visible .hb-edit { opacity: 1; }
+@media (hover: none) { .hb-edit { opacity: 1; } }
+@keyframes hb-sway {
+  0%, 100% { transform: perspective(520px) rotateY(0deg) skewY(0deg); }
+  50% { transform: perspective(520px) rotateY(-11deg) skewY(-1.2deg); }
+}
+@keyframes hb-ripple { from { background-position: 100% 0; } to { background-position: 0% 0; } }
+
+/* the sections under the header: three columns wide, two on a tablet, one on a phone */
+.profile-grid { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); grid-template-areas: 'growth' 'fights' 'vills' 'daily' 'ach'; align-items: stretch; }
+.pg-growth { grid-area: growth; }
+.pg-fights { grid-area: fights; }
+.pg-vills { grid-area: vills; }
+.pg-daily { grid-area: daily; }
+.pg-ach { grid-area: ach; }
+.pg-chart { flex: 1; display: grid; align-content: center; min-width: 0; }
+.pg-fights .fight-grid { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; }
+.profile .fight-card { padding: 9px 12px; }
+.profile .fight-card .bar, .profile .ach-list .bar { width: 100%; max-width: 240px; height: 5px; margin-top: 4px; border-radius: 3px; background: rgba(90, 60, 25, 0.15); overflow: hidden; }
+.profile .bar > span { display: block; height: 100%; background: linear-gradient(90deg, #d9a441, #a8741a); }
+.fight-top { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
+.fight-rank { font-weight: 800; font-size: 0.78rem; color: #6a4a10; background: rgba(217, 164, 65, 0.25); border: 1px solid rgba(168, 116, 26, 0.5); border-radius: 10px; padding: 0 7px; }
+.pg-ach .ach-list { grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px 20px; }
+.ach-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 6px; }
+@container profile (min-width: 700px) {
+  .profile-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: 'growth growth' 'fights fights' 'vills vills' 'daily ach'; }
+}
+@container profile (min-width: 1040px) {
+  .profile-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-areas: 'growth growth fights' 'vills vills vills' 'daily ach ach'; }
+}
+
+/* their villages */
+.seg-sm button { padding: 2px 9px; font-size: 0.8rem; }
+/* one grid for the whole list (each row a subgrid of it), so the columns line up under their headings */
+.pv-list { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto auto; column-gap: 14px; }
+.pv-row { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: center; row-gap: 4px; padding: 5px 6px; border-bottom: 1px solid var(--line); }
+.pv-acts .pv-attack { color: var(--danger); }
+.pv-row:not(.pv-head):nth-child(odd) { background: rgba(255, 250, 235, 0.45); }
+.pv-row:not(.pv-head):hover { background: rgba(217, 164, 65, 0.12); }
+.pv-head { font-size: 0.7rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); padding-block: 0 5px; border-bottom-color: var(--line-strong); }
+.pv-name { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.pv-name .vlink { min-width: 0; }
+.pv-hero { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: rgba(120, 80, 30, 0.12); border: 1px solid rgba(143, 111, 60, 0.3); flex: none; }
+.pv-pts { font-weight: 700; white-space: nowrap; }
+.pv-dist { white-space: nowrap; font-size: 0.88rem; }
+.pv-unit { display: none; }
+.pv-acts { display: flex; gap: 6px; justify-content: flex-end; align-items: center; }
+.pv-acts .btn { gap: 5px; }
+.pv-map { padding-inline: 6px; }
+.pv-more { justify-self: start; margin-top: 2px; }
+
+@container profile (max-width: 560px) {
+  .ph-top { grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto 1fr auto; grid-template-areas: 'banner id' 'rank id' 'meta meta'; column-gap: 12px; row-gap: 8px; }
+  .ph-id { align-self: center; }
+  .ph-rank { align-self: start; min-width: 0; width: 100%; padding: 5px 8px; }
+  .ph-rank-num { font-size: 1.7rem; }
+  .ph-name { font-size: 1.8rem; }
+  .hb { width: 118px; height: 94px; }
+  .hb-pole { left: 7px; top: 8px; width: 6px; }
+  .hb-cloth { left: 12px; top: 11px; width: 99px; height: 66px; }
+  .ph-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ph-stat { padding: 7px 10px; }
+  .ph-stat + .ph-stat { border-left: 0; }
+  .ph-stat:nth-child(even) { border-left: 1px solid var(--line); }
+  .ph-stat:nth-child(n + 3) { border-top: 1px solid var(--line); }
+  .ph-stat b { font-size: 1.35rem; }
+  .ph-actions { gap: 6px; }
+  .pv-head { display: none; }
+  .pv-list { grid-template-columns: minmax(0, 1fr); }
+  .pv-row { grid-template-columns: auto auto minmax(0, 1fr) auto; grid-template-areas: 'name name name name' 'pts dist quad acts'; column-gap: 10px; row-gap: 3px; padding: 7px 4px; }
+  .pv-name { grid-area: name; }
+  .pv-pts { grid-area: pts; text-align: left; }
+  .pv-dist { grid-area: dist; text-align: left; }
+  .pv-quad { grid-area: quad; }
+  .pv-acts { grid-area: acts; }
+  .pv-unit { display: inline; }
+  .pv-lbl { display: none; }
+}
+.alert-count { font-weight: 800; color: var(--bad, #a8321e); margin-left: 4px; }
+
+/* ---------- unread tribe forum: a glowing speech bubble on the Tribe tab and the Forum tab ---------- */
+.new-posts { display: inline-flex; align-items: center; gap: 3px; margin-left: 6px; color: #8fc4ff; font-size: 0.78rem; font-weight: 800; line-height: 1; filter: drop-shadow(0 0 4px rgba(90, 160, 255, 0.95)); animation: new-posts-pulse 1.8s ease-in-out infinite; }
+.new-posts .num { color: #fff; background: #2f6fd8; border-radius: 999px; padding: 1px 6px; box-shadow: 0 0 6px rgba(80, 150, 255, 0.9); }
+.tab .new-posts { color: #3f7fe8; }
+.tab.has-unread:not(.is-active) { box-shadow: inset 0 -3px 0 #3f7fe8, 0 0 10px rgba(80, 150, 255, 0.45); }
+.nav-item .new-posts { position: absolute; top: -9px; right: -7px; margin: 0; color: #e4f0ff; }
+@keyframes new-posts-pulse { 50% { filter: drop-shadow(0 0 9px rgba(110, 180, 255, 1)); transform: translateY(-1px); } }
+@media (prefers-reduced-motion: reduce) { .new-posts { animation: none; } }
+
+/* ---------- heroes of the wilds: land chips, the statue's grouped roster, hidden attacks, tribute, the realm's lands ---------- */
+/* each land of the realm has its colour */
+.region-heartland { --region: #5d8a2c; }
+.region-winter { --region: #3f8ec4; }
+.region-volcanic { --region: #c2521f; }
+.region-desert { --region: #c99a2e; }
+.region-jungle { --region: #2c8048; }
+.region-chip {
+  display: inline-flex; align-items: center; gap: 5px; padding: 1px 9px 1px 6px;
+  border: 1px solid var(--region); border-radius: 999px;
+  background: var(--parch-hi); background: color-mix(in srgb, var(--region) 16%, var(--parch-hi));
+  color: var(--ink); font-size: 0.74rem; font-weight: 800; line-height: 1.45; white-space: nowrap;
+}
+.region-chip > i { width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--region); box-shadow: 0 0 0 1px rgba(40, 22, 4, 0.25); }
+
+/* the heroes of the wilds on their statue cards */
+.hero-frost { --hero: #2f7fb3; }
+.hero-dwarf { --hero: #b4501a; }
+.hero-djinn { --hero: #a87a10; }
+.hero-saurian { --hero: #127a66; }
+
+/* the statue's roster: heroes of the heartland, then of the wilds. On a wide page the two groups sit side by
+   side on one shared grid (3 + 2 columns), so the ten heroes read as two rows of five with their rows aligned. */
+.hero-roster { container: heroes / inline-size; margin-top: 6px; }
+.hero-groups { display: grid; gap: 22px; }
+.hero-group { display: grid; gap: 12px; align-content: start; min-width: 0; }
+.hero-group-head { display: flex; flex-direction: column; gap: 3px; padding-bottom: 5px; border-bottom: 1px solid var(--line); }
+.hero-group-head h4 { margin: 0; font: 600 1.3rem/1.1 var(--font-display); letter-spacing: 0.01em; color: var(--ink); }
+.hero-group-head .muted { line-height: 1.5; }
+.hero-roster .hero-grid { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+@container heroes (min-width: 520px) {
+  .hero-roster .hero-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@supports (grid-template-columns: subgrid) {
+  @container heroes (min-width: 1060px) {
+    .hero-groups { grid-template-columns: repeat(5, minmax(0, 1fr)); grid-template-rows: auto auto auto; gap: 14px; }
+    .hero-group { grid-column: span 3; grid-row: span 3; grid-template-columns: subgrid; grid-template-rows: subgrid; gap: 14px; }
+    .hero-group.is-wild { grid-column: span 2; position: relative; }
+    .hero-group.is-wild::before { content: ''; position: absolute; top: 0; bottom: 0; left: -8px; border-left: 1px dashed var(--line-strong); }
+    .hero-group-head { grid-column: 1 / -1; }
+    .hero-roster .hero-grid { display: contents; }
+  }
+}
+.hero-card { position: relative; }
+/* a hero of the wilds wears its land as a tab on the card's top edge */
+.hero-card .hero-region { position: absolute; top: -2px; right: 10px; transform: translateY(-50%); box-shadow: 0 1px 3px rgba(40, 22, 4, 0.22); }
+.hero-card .hero-region.is-here { background: var(--region); color: #fff; text-shadow: 0 1px 0 rgba(0, 0, 0, 0.35); }
+.hero-card .hero-region.is-here > i { background: #fff; }
+.hero-card.is-native { box-shadow: 0 0 0 1px var(--hero), 0 3px 12px rgba(40, 22, 4, 0.16); }
+.hero-card.is-mine.is-native { box-shadow: 0 0 0 2px var(--hero), 0 4px 14px rgba(0, 0, 0, 0.18); }
+.hero-card.is-afar .hero-portrait { filter: grayscale(0.45); }
+.hero-card.is-afar .reason { color: var(--ink-2); font-weight: 700; }
+.hero-where { margin: 0; line-height: 1.45; }
+.hero-where .link { font-weight: 700; }
+.hero-where .coords { font-weight: 400; }
+.hero-army { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; padding-top: 6px; border-top: 1px dashed var(--line); }
+.hero-army-label { margin-right: 2px; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+
+/* incoming attacks: the kinds of troops in sight, or an army that can't be made out */
+.inc-kinds { display: inline-flex; align-items: center; gap: 3px; vertical-align: -3px; }
+.inc-stalked { font-style: italic; color: var(--ink-2); }
+.inc-stalked svg { vertical-align: -2px; opacity: 0.75; }
+
+/* a djinn's tribute in the battle report, and the simulator's hero abilities */
+.rep-facts dd.rep-tribute { flex-direction: column; align-items: flex-start; gap: 3px; }
+.sim-effects { margin-top: 8px; }
+
+/* the realm page: its five lands */
+.realm-lands-panel { container: lands / inline-size; }
+.realm-lands { list-style: none; margin: 10px 0 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+/* the heartland across the top, the four wilds beneath it: two by two, or in one row when there is room */
+@container lands (min-width: 540px) {
+  .realm-lands { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .realm-land.region-heartland { grid-column: 1 / -1; }
+}
+@container lands (min-width: 1000px) {
+  .realm-lands { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+.realm-land { display: grid; gap: 5px; align-content: start; padding: 9px 12px 11px; border: 1px solid var(--line); border-left: 4px solid var(--region); border-radius: 4px; background: var(--parch-hi); }
+.realm-land p { margin: 0; }
+.realm-land-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.realm-land-mine { margin-left: auto; font-weight: 700; color: var(--ink-2); }
+.realm-land-hero { display: flex; align-items: flex-start; gap: 8px; }
+.realm-land.region-heartland .realm-land-hero { flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.realm-land-icons { display: inline-flex; flex-wrap: wrap; gap: 3px; flex: none; }
+
+/* ---------- report archive: the Archive chip set apart from the filters, archive buttons on each report ---------- */
+.filter-row .chip-archive { margin-left: auto; border-style: dashed; background: var(--parch-hi); }
+.filter-row .chip-archive.is-on { border-style: solid; background: #f4d9ae; }
+.chip-archive .archive-count { font-weight: 600; opacity: 0.75; }
+.archive-glyph { flex: none; vertical-align: -2px; }
+.archive-note { margin: 0 0 8px; }
+.report-acts { display: inline-flex; align-items: center; gap: 2px; flex: none; }
+.rep-archived { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; vertical-align: 1px; }
+.rep-head-acts .btn { gap: 5px; }
+@media (pointer: coarse) {
+  .report-acts .icon-btn { min-width: 40px; height: 40px; }
+}
+
+/* ---------- tribe member rights: one icon column per right, labelled up top ---------- */
+.tribe-members th.right-head { text-align: center; padding: 4px 6px; line-height: 1.05; vertical-align: bottom; cursor: help; }
+.tribe-members th.right-head .right-icon { display: block; margin: 0 auto 2px; }
+.tribe-members .right-label { display: block; font-size: 0.66rem; letter-spacing: 0.04em; text-transform: uppercase; opacity: 0.85; white-space: nowrap; }
+.tribe-members td.right-cell { text-align: center; padding: 4px 6px; }
+.right-icon { vertical-align: middle; }
+.right-icon.is-off { opacity: 0.16; filter: grayscale(1); }
+.right-icon.is-on { filter: drop-shadow(0 1px 0 rgba(255, 245, 210, 0.7)); }
+.founder-tag { margin-left: 6px; font-size: 0.7rem; padding: 1px 7px; }
+.rights-edit .check { display: inline-flex; align-items: center; gap: 5px; }

@@ -8,6 +8,11 @@ import { rock, tree, pumpkin, hayBale, barrel, crate, crystalSpire, greatTree, s
 import { blob, mesh } from './kit';
 import { distToPaths } from './paths';
 import { addWarcamp, orcGate, orcPalisade, orcWallDress, torchPost, warShrine } from './warcamp';
+import { addWilds, wildGround, wildRelief } from './wilds';
+import { addOasis, oasisLandmark, oasisProp, oasisStreetLamp, oasisWall } from './oasis';
+import { addDeepforge, forgeLamp, forgeLandmark, forgeWall } from './deepforge';
+import { addFrosthold, frostGate, frostLamp, frostLandmark, frostProp, frostRampart, frostWallDress } from './frosthold';
+import { addTempleJungle, saurianGate, saurianLamp, saurianPalisade, saurianProp, saurianWallDress, saurianWallTower, templeLandmark } from './templecity';
 
 export const WALL_R = 44;
 export const GATE_A = Math.PI / 2; // gate faces +Z (towards the viewer)
@@ -102,6 +107,8 @@ export function heightAt(x: number, z: number): number {
   if (md2 < 26) h += (1 - md2 / 26) ** 2 * 11;
   const md3 = Math.hypot(x + 14, z + 80);
   if (md3 < 22) h += (1 - md3 / 22) ** 2 * 9;
+  // the desert's dunes (nothing anywhere else)
+  h += wildRelief(x, z, r - WALL_R, Math.abs(x - streamX(z)));
   // a level plateau under the outer workplaces, big enough for their largest size, easing into the hills
   for (const [id, flat, ease] of [['timber', 17, 8], ['claypit', 16, 8], ['farm', 24, 10], ['ironmine', 16, 7]] as [BuildingId, number, number][]) {
     const [bx, bz] = LAYOUT[id];
@@ -167,6 +174,8 @@ export function buildTerrain(seed = 7): THREE.Mesh {
       if (crack < 0.018) c = C.water;
       else if (crack < 0.05) c = C.rockDark;
     }
+    // the desert's dunes and oasis green, the jungle's mud and moss
+    c = wildGround(c, cx, cz, cy, rr - WALL_R, sd, onRoad(cx, cz));
     if (getSeason() === 'fall' && !onRoad(cx, cz) && sd >= 4.2 && cy <= 3) {
       const patch = noise(cx * 1.4 - 7, cz * 1.4 + 3, 8);
       if (getTheme() === 'sorcerer' && patch > 0.72) c = rr > WALL_R ? 0x8a7aa8 : 0x7f86a8; // lavender heather
@@ -174,6 +183,12 @@ export function buildTerrain(seed = 7): THREE.Mesh {
       else if (getTheme() === 'druid' && patch < 0.24) c = 0x86a84a; // sunlit clover
       else if (getTheme() === 'orc' && patch > 0.74) c = rr > WALL_R ? 0x3e3630 : 0x4a4034; // scorched, trampled earth
     }
+    // the Frost Queen's snowfields glint blue where the wind has polished them to ice
+    if (getTheme() === 'frost' && getSeason() === 'winter' && !onRoad(cx, cz) && sd >= 4.2 && cy <= 3) {
+      if (noise(cx * 1.3 + 17, cz * 1.3 - 9, 7) > 0.77) c = rr > WALL_R ? 0xc8def0 : 0xd4e5f2;
+    }
+    // the Forgelord's hold is paved: great flagstones of dressed granite down its streets and across its square
+    if (getTheme() === 'dwarf' && rr < WALL_R - 1 && (onRoad(cx, cz) || Math.hypot(cx, cz - 8) < 10)) c = (Math.floor(cx / 3.81) + Math.floor(cz / 3.81)) % 2 ? 0x6e665e : 0x625a53;
     col.set(getTheme() !== 'classic' && (c === 0x8a7aa8 || c === 0x7f86a8 || c === 0x3f6d2a || c === 0x86a84a || c === 0x3e3630 || c === 0x4a4034) ? c : seasonal(c));
     const v = 0.97 + r() * 0.05;
     for (let k = 0; k < 3; k++) {
@@ -253,27 +268,39 @@ export function sceneryPlan(seed = 11): SceneryItem[] {
 export function buildScenery(seed = 11): THREE.Group {
   const g = new THREE.Group();
   const r = rng(seed + 1000);
+  let oasisSpots = 0;
   for (const it of sceneryPlan(seed)) {
     const inside = Math.hypot(it.x, it.z) < WALL_R;
     const y = inside ? 0 : heightAt(it.x, it.z);
     const theme = getTheme();
     // the tournament ground (paladin) and the stone circle (sorcerer) outside the gate are kept clear
     if (theme !== 'classic' && Math.hypot(it.x - 21, it.z - 57.5) < 13) continue;
+    if (inside && theme === 'djinn' && (it.kind === 'oak' || it.kind === 'birch')) {
+      // the Oasis sets fountains, winged lions, tiled wells and lamp pillars in its open spots
+      const lm = oasisLandmark(r, oasisSpots++);
+      lm.position.set(it.x, 0, it.z);
+      lm.rotation.y = Math.atan2(-it.x, -it.z);
+      g.add(lm);
+      continue;
+    }
     if (inside && theme !== 'classic' && (it.kind === 'oak' || it.kind === 'birch')) {
-      const lm = theme === 'paladin' ? sunShrine(r) : theme === 'sorcerer' ? crystalSpire() : theme === 'druid' ? greatTree(r) : theme === 'necromancer' ? necroObelisk(r) : theme === 'orc' ? warShrine(r) : skullTotem();
+      const lm = theme === 'paladin' ? sunShrine(r) : theme === 'sorcerer' ? crystalSpire() : theme === 'druid' ? greatTree(r) : theme === 'necromancer' ? necroObelisk(r) : theme === 'orc' ? warShrine(r) : theme === 'dwarf' ? forgeLandmark(r) : theme === 'frost' ? frostLandmark(r) : theme === 'saurian' ? templeLandmark(r) : skullTotem();
       if (theme === 'goblin') lm.scale.setScalar(1.5);
       lm.position.set(it.x, 0, it.z);
       lm.rotation.y = r() * Math.PI * 2;
       g.add(lm);
     } else if (it.kind === 'oak' || it.kind === 'pine' || it.kind === 'birch') {
-      const t = tree(it.kind, r, it.scale, Math.hypot(it.x, it.z) < 72 ? 1 : 0);
+      const t = tree(it.kind, r, it.scale, Math.hypot(it.x, it.z) < 72 ? 1 : 0, { x: it.x, z: it.z, water: Math.abs(it.x - streamX(it.z)) });
       t.position.set(it.x, inside ? 0 : y - 0.1, it.z);
       g.add(t);
     } else if (it.kind === 'rock') {
       const rk = rock(r, it.scale);
       rk.position.set(it.x, y, it.z);
       g.add(rk);
-    } else if (it.kind === 'pumpkin') g.add(pumpkin(it.x, it.z, it.scale));
+    } else if (theme === 'djinn' && (it.kind === 'pumpkin' || it.kind === 'hay' || it.kind === 'barrel' || it.kind === 'crate')) g.add(oasisProp(it.kind, it.x, it.z, it.scale));
+    else if (theme === 'frost' && (it.kind === 'pumpkin' || it.kind === 'hay' || it.kind === 'barrel' || it.kind === 'crate')) g.add(frostProp(it.kind, it.x, it.z, it.scale));
+    else if (theme === 'saurian' && (it.kind === 'pumpkin' || it.kind === 'hay' || it.kind === 'barrel' || it.kind === 'crate')) g.add(saurianProp(it.kind, it.x, it.z, it.scale));
+    else if (it.kind === 'pumpkin') g.add(pumpkin(it.x, it.z, it.scale));
     else if (it.kind === 'hay') g.add(hayBale(it.x, it.z, it.scale));
     else if (it.kind === 'barrel') g.add(barrel(it.x, it.z));
     else g.add(crate(it.x, it.z));
@@ -285,7 +312,12 @@ export function buildScenery(seed = 11): THREE.Group {
   if (getTheme() === 'druid') { addGlade(g, r); addSpring(g, r); }
   if (getTheme() === 'necromancer') addGraveyard(g, r);
   if (getTheme() === 'orc') addWarcamp(g, r, { at: heightAt, free: freeForTree, motes, wallR: WALL_R });
+  if (getTheme() === 'djinn') addOasis(g, r, { at: heightAt, free: freeForTree, motes, wallR: WALL_R });
+  if (getTheme() === 'dwarf') addDeepforge(g, r, { at: heightAt, free: freeForTree, wallR: WALL_R });
+  if (getTheme() === 'frost') addFrosthold(g, r, { at: heightAt, free: freeForTree, motes, wallR: WALL_R });
+  if (getTheme() === 'saurian') addTempleJungle(g, r, { at: heightAt, free: freeForTree, wallR: WALL_R });
   if (getSeason() === 'volcanic') addVolcanic(g, r);
+  addWilds(g, r, { at: heightAt, free: freeForTree, streamX, wallR: WALL_R });
   return bake(g);
 }
 
@@ -898,6 +930,38 @@ function addLamps(g: THREE.Group): void {
       g.add(tp);
       continue;
     }
+    if (getTheme() === 'djinn') {
+      // the Oasis hangs pierced brass lanterns from curled arms, the lantern swung toward the street
+      const lp = oasisStreetLamp();
+      lp.position.set(x, 0, z);
+      lp.rotation.y = Math.atan2(x, z) + Math.PI / 2;
+      g.add(lp);
+      continue;
+    }
+    if (getTheme() === 'dwarf') {
+      // the hold hangs bronze lanterns from squat stone posts, the lantern swung toward the street
+      const lp = forgeLamp();
+      lp.position.set(x, 0, z);
+      lp.rotation.y = Math.atan2(x, z) + Math.PI / 2;
+      g.add(lp);
+      continue;
+    }
+    if (getTheme() === 'frost') {
+      // the court lights its streets with lanterns of ice on silver posts, hung out over the way
+      const lp = frostLamp();
+      lp.position.set(x, 0, z);
+      lp.rotation.y = Math.atan2(x, z) + Math.PI / 2;
+      g.add(lp);
+      continue;
+    }
+    if (getTheme() === 'saurian') {
+      // the temple-city lights its streets with fire in stone bowls on stepped pillars, jade set in their faces
+      const lp = saurianLamp();
+      lp.position.set(x, 0, z);
+      lp.rotation.y = Math.atan2(-x, -z);
+      g.add(lp);
+      continue;
+    }
     const l = new THREE.Group();
     l.add(cyl(0.22, 0.28, 0.3, C.stoneDark, 6));
     l.add(cyl(0.06, 0.08, 2.6, C.iron, 5, 0, 0.3));
@@ -1126,11 +1190,25 @@ function wallBanner(h: number, z: number): THREE.Group {
 export function buildWall(level: number, color: number): THREE.Group {
   const g = new THREE.Group();
   if (level <= 0) return g;
+  // the Oasis builds its own walls at every size: mud brick, then sandstone ramparts with tiled bastions
+  if (getTheme() === 'djinn') return oasisWall(level, color, { R: WALL_R, gateA: GATE_A, gateHalf: GATE_HALF }, bake);
+  // the Forgelord's hold builds its own walls at every size: fitted blocks, then bastions and bronze-bound towers with bolt-throwers
+  if (getTheme() === 'dwarf') return forgeWall(level, color, WALL_R, GATE_A, GATE_HALF);
   const tier = level < 5 ? 1 : level < 10 ? 2 : level < 15 ? 3 : 4;
   const R = WALL_R;
   const start = GATE_A + GATE_HALF, end = GATE_A + Math.PI * 2 - GATE_HALF;
   if (tier <= 2 && getTheme() === 'orc') {
     orcPalisade(g, tier, R, start, end, GATE_A, GATE_HALF);
+    return bake(g, { building: 'wall' });
+  }
+  if (tier <= 2 && getTheme() === 'frost') {
+    // the court's first walls are ramparts of packed snow blocks, then towers of snow and ice
+    frostRampart(g, tier, R, start, end, GATE_A, GATE_HALF);
+    return bake(g, { building: 'wall' });
+  }
+  if (tier <= 2 && getTheme() === 'saurian') {
+    // the temple-city's first walls are log fences on stone footings, serpent heads over the gate
+    saurianPalisade(g, tier, R, start, end, GATE_A, GATE_HALF);
     return bake(g, { building: 'wall' });
   }
   if (tier <= 2) {
@@ -1240,6 +1318,8 @@ export function buildWall(level: number, color: number): THREE.Group {
       if (i % 5 === 3) { const l = mesh(new THREE.IcosahedronGeometry(0.22, 0), 0x9aff3a, { emissive: 0x4a9a10 }); l.position.set(0, h + 0.8, 0); seg.add(l); }
     }
     if (getTheme() === 'orc') orcWallDress(seg, len, h, thick, i, merlons);
+    if (getTheme() === 'frost') frostWallDress(seg, len, h, thick, i, merlons);
+    if (getTheme() === 'saurian') saurianWallDress(seg, len, h, thick, i, merlons);
     if (getTheme() === 'goblin') {
       // sharpened stakes bristling outward from the battlements (local -z faces out of the village)
       for (let k = 0; k < merlons; k++) {
@@ -1257,15 +1337,18 @@ export function buildWall(level: number, color: number): THREE.Group {
   for (let i = 0; i < towers; i++) {
     const a = start + ((end - start) * i) / (towers - 1);
     const tr = tier === 3 ? 2.3 : 2.7, th = tier === 3 ? 6 : 8;
-    const tw = roundTower(tr, th, { roof: tier === 4 ? C.tile : null });
+    const tw = getTheme() === 'saurian' ? saurianWallTower(tr, th, tier === 4) : roundTower(tr, th, { roof: tier === 4 ? C.tile : null });
     tw.position.set(Math.cos(a) * R, 0, Math.sin(a) * R);
+    if (getTheme() === 'saurian') tw.rotation.y = -a; // square towers turn a face to the village
     g.add(tw);
     // a torch on each side of the tower, facing into the village
     for (const s of [-0.5, 0.5]) {
       const ta = a + Math.PI + s;
       const tx = Math.cos(a) * R + Math.cos(ta) * (tr + 0.15), tz = Math.sin(a) * R + Math.sin(ta) * (tr + 0.15);
       g.add(box(0.12, 0.7, 0.12, C.woodDark, tx, th * 0.62, tz));
-      const flame = mesh(new THREE.ConeGeometry(0.22, 0.6, 6).translate(0, 0.3, 0), 0xffb45a, { emissive: 0xff7a1a });
+      // (the Frost Queen's towers burn cold blue fire)
+      const cold = getTheme() === 'frost';
+      const flame = mesh(new THREE.ConeGeometry(0.22, 0.6, 6).translate(0, 0.3, 0), cold ? 0xbff2ff : 0xffb45a, { emissive: cold ? 0x2c9ee0 : 0xff7a1a });
       flame.position.set(tx, th * 0.62 + 0.7, tz);
       flame.userData.dynamic = true;
       flame.userData.fire = true;
@@ -1282,7 +1365,11 @@ export function buildWall(level: number, color: number): THREE.Group {
   g.add(gate);
   // the Horde hangs a beast's skull over its gate (it takes the crest's place)
   if (getTheme() === 'orc') orcGate(g, R, h, thick);
-  if (level >= 20 && getTheme() !== 'orc') {
+  // the court raises an arch of ice crystals over its gate, the snowflake at its point (crowned at the greatest wall)
+  if (getTheme() === 'frost') frostGate(g, R, h, thick, level);
+  // the temple-city sets great serpent heads either side of its gate and a stepped crest over it (a golden sun-disc at the greatest wall)
+  if (getTheme() === 'saurian') saurianGate(g, R, h, thick, level);
+  if (level >= 20 && getTheme() !== 'orc' && getTheme() !== 'frost' && getTheme() !== 'saurian') {
     // (the ruler's own banners fly either side of the gate: see flags3d.ts)
     // the crest over the gate: a great golden shield
     const crest = new THREE.Group();

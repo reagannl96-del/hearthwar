@@ -46,3 +46,32 @@ export function sanitizeFlag(raw: unknown): FlagDesign {
     chargeColor: idx(r.chargeColor, FLAG_COLORS.length, DEFAULT_FLAG.chargeColor),
   };
 }
+
+/** Colours that read well together: a light and a dark never clash (index into FLAG_COLORS). */
+const LIGHT = new Set([3, 4, 8, 10, 12]);
+
+/**
+ * A banner of their own for a ruler who never designed one (the AI rulers): always the
+ * same for the same seed, with a field and pattern colour that contrast, and an emblem
+ * that stands out on the field.
+ */
+export function flagFor(seed: number): FlagDesign {
+  let x = (seed * 2654435761) >>> 0;
+  const next = (n: number) => {
+    x = (Math.imul(x ^ (x >>> 15), 2246822519) + 0x9e3779b9) >>> 0;
+    return x % n;
+  };
+  const shape = next(FLAG_SHAPES.length);
+  const pattern = next(FLAG_PATTERNS.length);
+  const charge = 1 + next(FLAG_CHARGES.length - 1);
+  const field = next(FLAG_COLORS.length);
+  const pickContrast = (against: number) => {
+    const want = !LIGHT.has(against);
+    const pool = FLAG_COLORS.map((_, i) => i).filter((i) => i !== against && LIGHT.has(i) === want);
+    return pool[next(pool.length)];
+  };
+  const accent = pickContrast(field);
+  // the emblem sits on the field (plain or partly patterned): it contrasts with the field
+  const chargeColor = pickContrast(field);
+  return { shape, pattern, charge, field, accent, chargeColor };
+}

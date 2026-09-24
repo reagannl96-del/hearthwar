@@ -122,6 +122,13 @@ export const battleSfx = {
   whoosh() {
     hiss(0, 0.5, 0.05, 'bandpass', 500, 2400, 2);
   },
+  /** A raptor's hunting shriek: a rising screech that breaks and falls away, a rasp of breath under it. */
+  shriek() {
+    tone(620, 0, 0.18, 'sawtooth', 0.022, 1500);
+    tone(1500, 0.16, 0.32, 'sawtooth', 0.02, 480);
+    tone(900, 0.02, 0.4, 'square', 0.006, 1900);
+    hiss(0, 0.45, 0.02, 'bandpass', 2600, 1400, 3);
+  },
   splash() {
     hiss(0, 0.45, 0.05, 'highpass', 1800, 900);
   },

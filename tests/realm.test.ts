@@ -5,7 +5,7 @@ import { UNITS } from '../src/engine/data/units';
 import { applyAction } from '../src/engine/actions';
 import { advance } from '../src/engine/game';
 import { pushEvent } from '../src/engine/events';
-import { buildable, createWorld, defaultConfig, inRealm, isVolcanic, migrateWorld, realmGrowth, terrainAt } from '../src/engine/world';
+import { buildable, createWorld, defaultConfig, inRealm, isDesert, isJungle, isVolcanic, migrateWorld, realmGrowth, terrainAt } from '../src/engine/world';
 
 describe('the realm keeps growing', () => {
   it('new AI rulers arrive over time, with room to breathe, and stop when the map is full', () => {
@@ -79,11 +79,11 @@ describe('the round realm', () => {
       expect(inRealm(v.x, v.y, 180)).toBe(true);
       expect(buildable(terrainAt(w, v.x, v.y))).toBe(true);
     }
-    // the old landscape is still there in the middle (apart from the new volcanic west and the shore)
+    // the old landscape is still there in the middle (apart from the wilds, which have their own land, and the shore)
     let same = 0, n = 0;
     for (let y = 0; y < 60; y++) for (let x = 0; x < 60; x++) {
       const was = oldTerrain[y * 60 + x];
-      if (!'.fm'.includes(was) || isVolcanic(x, y, 60) || isVolcanic(x + 60, y + 60, 180)) continue;
+      if (!'.fm'.includes(was) || isVolcanic(x, y, 60) || isDesert(x, y, 60) || isJungle(x, y, 60) || isVolcanic(x + 60, y + 60, 180) || isDesert(x + 60, y + 60, 180) || isJungle(x + 60, y + 60, 180)) continue;
       n++;
       if (w.terrain[(y + 60) * 180 + x + 60] === was || Object.values(w.villages).some((v) => v.x === x + 60 && v.y === y + 60)) same++;
     }

@@ -8,6 +8,10 @@
 import * as THREE from 'three';
 import type { BuildingId } from '../../engine/types';
 import { BLOOD, BONE_W, C, EMBER, EMBER_E, IRON_BK, blob, box, cone, cyl, getTheme, hornPair, leafCluster, mesh, orcSkull, swarm, type Theme } from './kit';
+import { oasisCrown, oasisStandard } from './oasis';
+import { forgeCrown, forgeGoldGoat, forgeStandard } from './deepforge';
+import { saurianCrown, saurianStandard, saurianTrophy } from './templecity';
+import { frostMasteryCrown, frostMasteryStandard } from './frosthold';
 
 const GOLD = 0xe9b83a, GOLD_E = 0x6a4a10;
 
@@ -22,6 +26,10 @@ const LOOK: Record<Theme, { main: number; glow: number; glowE: number; accent: n
   goblin: { main: GOLD, glow: 0x9aff3a, glowE: 0x4a9a10, accent: 0x6f9a2a },
   necromancer: { main: 0xe6dfcc, glow: 0x5cff9a, glowE: 0x1f9a4a, accent: 0x2f7a4a },
   orc: { main: BONE_W, glow: EMBER, glowE: EMBER_E, accent: BLOOD },
+  frost: { main: 0xdff0fc, glow: 0xd8f7ff, glowE: 0x3cb2e8, accent: 0x5b9bd8 },
+  dwarf: { main: GOLD, glow: 0xffa04a, glowE: 0xa04a10, accent: 0xb8452a },
+  djinn: { main: GOLD, glow: 0x7af0e8, glowE: 0x1a8a8a, accent: 0x2a9a9a },
+  saurian: { main: 0x5ab48a, glow: 0x7affb0, glowE: 0x1a8a4a, accent: 0xc8402a },
 };
 
 const glowMesh = (geo: THREE.BufferGeometry, c: number, e: number) => mesh(geo, c, { emissive: e });
@@ -59,6 +67,26 @@ function standard(th: Theme, h: number): THREE.Group {
       const rag = box(0.8, 0.55, 0.05, L.accent, 0.45, h - 0.7, 0);
       rag.userData.flag = true;
       g.add(rag);
+      break;
+    }
+    case 'djinn': {
+      // a brass lamp-post flying a teal pennant, its lantern lit at night
+      g.add(oasisStandard(h));
+      break;
+    }
+    case 'dwarf': {
+      // an oak pole on a stone foot, a gold bar, a rune-red banner with a rune on it
+      g.add(forgeStandard(h, L.accent));
+      break;
+    }
+    case 'saurian': {
+      // a pole crowned with a gilded serpent's head, a jade orb under it and a red streamer
+      g.add(saurianStandard(h));
+      break;
+    }
+    case 'frost': {
+      // a silver pole, a crystal of ice glowing on its top, a frost pennant under a band of fur
+      g.add(frostMasteryStandard(h));
       break;
     }
     case 'orc': {
@@ -152,6 +180,26 @@ function crown(th: Theme, s: number): THREE.Group {
       g.add(cyl(0.05, 0.05, 0.7 * s, C.timber, 4));
       break;
     }
+    case 'djinn': {
+      // a little golden lamp turning in the air, a wisp of blue smoke over it and gold motes about it
+      g.add(oasisCrown(s));
+      break;
+    }
+    case 'dwarf': {
+      // a golden anvil on a block of basalt, sparks circling it
+      g.add(forgeCrown(s));
+      break;
+    }
+    case 'saurian': {
+      // a sun-disc of glowing gold turning on a stepped stand, jade and gold motes about it
+      g.add(saurianCrown(s));
+      break;
+    }
+    case 'frost': {
+      // a little crown of ice, turning slowly
+      g.add(frostMasteryCrown(s));
+      break;
+    }
     case 'orc': {
       // a great horned skull, embers for eyes, and sparks drifting up about it
       const sk = orcSkull(0.6 * s, true);
@@ -199,7 +247,7 @@ function apron(th: Theme, b: Box2): THREE.Group {
   const L = LOOK[th];
   const w = b.w + 0.2, d = b.d + 0.2;
   const cx = (b.x0 + b.x1) / 2, cz = (b.z0 + b.z1) / 2;
-  const edge = th === 'druid' ? 0x6f9a3a : th === 'goblin' ? 0x7a5a2a : th === 'necromancer' ? 0x3a3440 : th === 'orc' ? 0x33241a : C.stoneLight;
+  const edge = th === 'druid' ? 0x6f9a3a : th === 'goblin' ? 0x7a5a2a : th === 'necromancer' ? 0x3a3440 : th === 'orc' ? 0x33241a : th === 'dwarf' ? 0x3a3432 : th === 'saurian' ? 0x777b67 : th === 'frost' ? 0x8a97a8 : C.stoneLight;
   for (const [x, z, ww, dd] of [[cx, b.z1, w, 0.18], [cx, b.z0, w, 0.18], [b.x0, cz, 0.18, d], [b.x1, cz, 0.18, d]] as [number, number, number, number][]) {
     g.add(box(ww, 0.08, dd, edge, x, 0.02, z));
     g.add(box(Math.max(0.06, ww - 0.1), 0.03, Math.max(0.06, dd - 0.1), L.main, x, 0.1, z));
@@ -212,6 +260,9 @@ function trade(id: BuildingId, th: Theme, b: Box2): THREE.Object3D | null {
   const L = LOOK[th];
   const g = new THREE.Group();
   const fx = (b.x0 + b.x1) / 2, fz = b.z1 - 0.9; // at the front
+  // (the temple-city sets a golden raptor at its stable)
+  const own = th === 'saurian' ? saurianTrophy(id) : null;
+  if (own) { own.position.set(b.x0 + 1.0, 0, fz); return own; }
   switch (id) {
     case 'smithy': {
       g.add(box(0.9, 0.7, 0.7, C.stoneDark));
@@ -221,6 +272,8 @@ function trade(id: BuildingId, th: Theme, b: Box2): THREE.Object3D | null {
       return g;
     }
     case 'stable': {
+      // (the Forgelord's stable keeps a golden war-ram)
+      if (th === 'dwarf') { g.add(forgeGoldGoat()); g.position.set(b.x0 + 1.0, 0, fz); return g; }
       // a gilded horse on a plinth
       g.add(box(1.2, 0.5, 0.6, C.stoneLight));
       g.add(box(0.9, 0.45, 0.32, GOLD, 0, 0.9, 0));
@@ -273,7 +326,7 @@ function trade(id: BuildingId, th: Theme, b: Box2): THREE.Object3D | null {
     case 'watchtower': {
       // a beacon burning on the very top
       g.add(cyl(0.4, 0.3, 0.3, C.iron, 7));
-      const own = th === 'necromancer' || th === 'goblin' || th === 'sorcerer' || th === 'druid' || th === 'orc';
+      const own = th === 'necromancer' || th === 'goblin' || th === 'sorcerer' || th === 'druid' || th === 'orc' || th === 'djinn' || th === 'dwarf' || th === 'saurian' || th === 'frost';
       const f = glowMesh(new THREE.ConeGeometry(0.35, 1.0, 6).translate(0, 0.5, 0), own ? L.glow : 0xffa53a, own ? L.glowE : 0xd0501a);
       f.position.y = 0.25;
       f.userData.dynamic = true;

@@ -11,6 +11,7 @@
 import * as THREE from 'three';
 import { bake, blob, box, cone, cyl, disposeTree, getTheme, mesh, rng } from './kit';
 import { person } from './props';
+import { FROST_BULBS, FROST_STAR } from './frosthold';
 
 /** How far out the gathering reaches from the tree's foot (adults stand at RING_ADULT). */
 const TREE_SCALE = 1.1;
@@ -148,7 +149,8 @@ function fir(r: () => number, starMat: THREE.MeshLambertMaterial): THREE.Group {
 /** The strings of lights: beads spiralling down the tree, sharing a material per colour and twinkle phase. */
 function lights(bulbs: Bulb[]): THREE.Group {
   const g = new THREE.Group();
-  const mats: THREE.MeshLambertMaterial[][] = BULBS.map((c, ci) =>
+  // (in the Frost Queen's court the lights are ice-blue, white and silver)
+  const mats: THREE.MeshLambertMaterial[][] = (getTheme() === 'frost' ? FROST_BULBS : BULBS).map((c, ci) =>
     Array.from({ length: PHASES }, (_, p) => {
       const m = new THREE.MeshLambertMaterial({ color: c, emissive: c, emissiveIntensity: 0.6, flatShading: true });
       bulbs.push({ m, ph: p * 2.1 + ci * 0.9, speed: 1.6 + ((ci * 3 + p) % 4) * 0.45 });
@@ -185,7 +187,9 @@ export function buildFestival(): THREE.Group {
   const state: FestState = {
     dancers: [],
     bulbs: [],
-    star: new THREE.MeshLambertMaterial({ color: GOLD, emissive: 0xffb42a, emissiveIntensity: 0.5, flatShading: true }),
+    star: getTheme() === 'frost'
+      ? new THREE.MeshLambertMaterial({ color: FROST_STAR.color, emissive: FROST_STAR.emissive, emissiveIntensity: 0.5, flatShading: true })
+      : new THREE.MeshLambertMaterial({ color: GOLD, emissive: 0xffb42a, emissiveIntensity: 0.5, flatShading: true }),
   };
   const root = new THREE.Group();
   // a ring of trodden snow round the tree

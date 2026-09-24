@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import type { BuildingId } from '../../engine/types';
 import { buildModel, visualTier } from './buildings';
-import { disposeTree, getSeason, getTheme } from './kit';
+import { C, disposeTree, getSeason, getTheme, seasonal } from './kit';
 import { buildWall } from './scene';
 
 let renderer: THREE.WebGLRenderer | null = null;
@@ -32,7 +32,8 @@ export function buildingThumb(id: BuildingId, level: number): string | null {
   const r = getRenderer();
   if (!r) return null;
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(getSeason() === 'winter' ? 0xdfe7ee : 0xe8cf9f);
+  const season = getSeason();
+  scene.background = new THREE.Color(season === 'winter' ? 0xdfe7ee : season === 'desert' ? 0xf2dcaa : season === 'jungle' ? 0xcfe2c4 : 0xe8cf9f);
   scene.add(new THREE.HemisphereLight(0xfff0d8, 0x5b4a2e, 1.4));
   const sun = new THREE.DirectionalLight(0xffd29a, 2.4);
   sun.position.set(-30, 50, 30);
@@ -40,7 +41,7 @@ export function buildingThumb(id: BuildingId, level: number): string | null {
   sun.shadow.mapSize.set(1024, 1024);
   Object.assign(sun.shadow.camera, { left: -30, right: 30, top: 30, bottom: -30 });
   scene.add(sun);
-  const ground = new THREE.Mesh(new THREE.CircleGeometry(40, 24), new THREE.MeshLambertMaterial({ color: getSeason() === 'winter' ? 0xe8eef2 : 0x8f9447 }));
+  const ground = new THREE.Mesh(new THREE.CircleGeometry(40, 24), new THREE.MeshLambertMaterial({ color: season === 'winter' ? 0xe8eef2 : season === 'desert' || season === 'jungle' ? seasonal(C.grass) : 0x8f9447 }));
   ground.rotation.x = -Math.PI / 2;
   ground.receiveShadow = true;
   scene.add(ground);

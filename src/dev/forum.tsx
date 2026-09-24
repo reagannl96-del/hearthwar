@@ -13,10 +13,12 @@ import '../ui/styles.css';
 import { render } from 'preact';
 import { applyAction, type Action } from '../engine/actions';
 import type { ActionResult, World } from '../engine/types';
-import { createWorld, defaultConfig, spawnPlayer } from '../engine/world';
+import { createWorld, defaultConfig, inRealm, isDesert, isJungle, spawnPlayer } from '../engine/world';
+import { fractalNoise } from '../engine/rng';
+import { setupHeroes } from './heroSandbox';
 import { HostBase } from '../host/base';
 import { App } from '../ui/App';
-import { host, now, vid, view } from '../ui/store';
+import { go, host, now, vid, view } from '../ui/store';
 
 class SandboxHost extends HostBase {
   constructor(w: World, pid: number) { super(w, pid); this.multiplayer = true; }
@@ -31,7 +33,21 @@ class SandboxHost extends HostBase {
   async save(): Promise<void> { /* never saved */ }
 }
 
-const w = createWorld({ worldName: 'Sandbox', playerName: '', villageName: '', multiplayer: true, seed: 7, config: { ...defaultConfig(), aiCount: 8, size: 80 } });
+// ?size=180 makes the realm bigger (?seed=16 another one); ?legacy lays the old terrain (from before the desert and the
+// jungle had their own) over those wilds, as a realm created back then still has it; ?map=x|y opens the map there
+const q = new URLSearchParams(location.search);
+const w = createWorld({ worldName: 'Sandbox', playerName: '', villageName: '', multiplayer: true, seed: Number(q.get('seed')) || 7, config: { ...defaultConfig(), aiCount: 8, size: Number(q.get('size')) || 80 } });
+if (q.has('legacy')) {
+  const n = w.config.size, taken = new Set(Object.values(w.villages).map((v) => v.y * n + v.x));
+  const t = w.terrain.split('');
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+    const i = y * n + x;
+    if (!inRealm(x, y, n) || taken.has(i) || !(isDesert(x, y, n) || isJungle(x, y, n))) continue;
+    const e = fractalNoise(x, y, w.seed, 22), m = fractalNoise(x, y, w.seed + 101, 14);
+    t[i] = e < 0.26 ? 'w' : e > 0.76 ? 'm' : m > 0.6 ? 'f' : '.';
+  }
+  w.terrain = t.join('');
+}
 const me = spawnPlayer(w, 'Alda', 'Alda\'s Hold')!;
 const bram = spawnPlayer(w, 'Bram', 'Bramble')!;
 const cora = spawnPlayer(w, 'Cora', 'Cora\'s Keep')!;
@@ -52,6 +68,8 @@ const t1 = as(bram.id, {
 }).data as number;
 as(me.id, { type: 'forumReply', thread: t1, text: `[quote=Bram]Nukes land 06:00[/quote]\nI'll be there. [size=small]small print[/size] [s]old idea[/s] [i]italic[/i]\nAlso read [thread=${t1}]this very thread[/thread].` });
 as(bram.id, { type: 'forumThread', title: 'Welcome, new members', text: 'Read the [b]rules[/b] first. Farm barbarians near your home and post your coordinates here.' });
+// ?heroes: villages in every wild land, battles fought by the heroes of the wilds, and a hidden attack on the road
+if (q.has('heroes')) setupHeroes(w, me.id, cora.id);
 
 const h = new SandboxHost(w, me.id);
 host.value = h;
@@ -61,3 +79,5 @@ vid.value = view.value.villages[0].id;
 h.subscribe(() => { view.value = h.view(); });
 
 render(<App />, document.getElementById('app')!);
+const at = q.get('map')?.split('|').map(Number);
+if (at && at.length === 2 && at.every(Number.isFinite)) go({ name: 'map', at: [at[0], at[1]] });

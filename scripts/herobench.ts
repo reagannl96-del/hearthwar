@@ -44,6 +44,8 @@ function swing(hero: UnitId | null, side: 'att' | 'def', att: Units, def: Units,
     const foot = (['spear', 'sword', 'axe', 'archer'] as UnitId[]).reduce((n, k) => n + (fallen[k] ?? 0), 0);
     s += Math.floor(foot * HERO_POWERS.raise) * worth({ spear: 1 });
   }
+  // the djinn's tribute: a share of the fallen enemy, in resources
+  if (hero === 'djinn' && won) s += worth(side === 'att' ? r.defLost[0] ?? {} : r.attLost) * HERO_POWERS.tribute;
   if (hero === 'paladin' && ((side === 'att' && (r.attSurvivors.paladin ?? 0) > 0) || (side === 'def' && r.winner === 'defender'))) {
     const own = side === 'att' ? r.attLost : r.defLost[0] ?? {};
     s += worth(own) * HERO_POWERS.layOnHands;

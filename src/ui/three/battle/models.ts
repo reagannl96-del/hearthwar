@@ -10,6 +10,10 @@ import * as THREE from 'three';
 import type { UnitId } from '../../../engine/types';
 import { C, bake, blob, box, cone, cyl, getTheme, hornPair, mat, mesh, orcSkull, setTheme, type Theme } from '../kit';
 import { militiaman, person, troop, type TroopModel } from '../props';
+import { oasisEngineDress, oasisRamDress, sunShot } from '../oasis';
+import { forgeRamBit, forgeRamFrame } from '../deepforge';
+import { frostRamDress, frostRamHead, iceShot } from '../frosthold';
+import { boneheadRam, slingerArm, slingerFrame, sunstone } from '../templecity';
 
 export interface Figure {
   /** placed in the world (position, facing) */
@@ -28,7 +32,7 @@ export const FIG_SCALE = 1.3;
 
 const TROOP: Partial<Record<UnitId, TroopModel>> = {
   spear: 'spear', sword: 'sword', axe: 'axe', archer: 'archer', scout: 'scout', noble: 'noble', light: 'light', marcher: 'marcher',
-  heavy: 'heavy', paladin: 'paladin', sorcerer: 'sorcerer', druid: 'druid', goblin: 'goblin', necromancer: 'necromancer', orc: 'orc',
+  heavy: 'heavy', paladin: 'paladin', sorcerer: 'sorcerer', druid: 'druid', goblin: 'goblin', necromancer: 'necromancer', orc: 'orc', djinn: 'djinn', dwarf: 'dwarf', frost: 'frost', saurian: 'saurian',
 };
 
 const templates = new Map<string, { root: THREE.Group; mounted: boolean; flyer: boolean }>();
@@ -78,8 +82,9 @@ function template(unit: UnitId, theme: Theme): { root: THREE.Group; mounted: boo
     else {
       const kind = TROOP[unit] ?? 'axe';
       raw = troop(kind);
-      mounted = kind === 'light' || kind === 'marcher' || kind === 'heavy' || kind === 'paladin';
-      flyer = kind === 'scout' && theme !== 'classic' && theme !== 'goblin' && theme !== 'orc';
+      mounted = kind === 'light' || kind === 'marcher' || kind === 'heavy' || kind === 'paladin' || kind === 'saurian';
+      // (the temple-city's scouts are chameleons: they creep, they do not fly)
+      flyer = kind === 'scout' && theme !== 'classic' && theme !== 'goblin' && theme !== 'orc' && theme !== 'dwarf' && theme !== 'saurian';
     }
     if (!flyer) pivotWeapon(raw, mounted ? new THREE.Vector3(0.34, 1.7, 0) : new THREE.Vector3(0.3, 1.0, 0));
     const root = bake(raw);
@@ -192,6 +197,10 @@ function siegeLook(theme: Theme) {
     case 'druid': return { wood: 0x7a5a38, dark: 0x4e3820, roof: 0x4f7a2e, head: 0xd6cdb0, accent: 0x8fbc50 };
     case 'necromancer': return { wood: 0x3a3230, dark: 0x221c1b, roof: 0x2e2a33, head: 0xe6dfcc, accent: 0x5cff9a };
     case 'orc': return { wood: 0x5e4430, dark: 0x33241a, roof: 0x7a5a3a, head: 0xe3d8bf, accent: 0xa3261a };
+    case 'dwarf': return { wood: 0x5c4230, dark: 0x3a2a1e, roof: 0xb57a3c, head: 0xb57a3c, accent: 0xa8382a };
+    case 'djinn': return { wood: 0x8c6b45, dark: 0x4a2c16, roof: 0x1b7d80, head: 0xcf9e46, accent: 0xe8a22a };
+    case 'frost': return { wood: 0xcdbf9f, dark: 0x6a7584, roof: 0xe9e4da, head: 0x93cdec, accent: 0x5b9bd8 };
+    case 'saurian': return { wood: 0xc4b068, dark: 0x3e2e1e, roof: 0xb89e56, head: 0x24212c, accent: 0xb2452c };
     default: return { wood: 0xa0703c, dark: 0x6e4a2a, roof: 0xd4a441, head: 0x6d7782, accent: 0xb3332a };
   }
 }
@@ -216,6 +225,20 @@ function wheel(r: number, x: number, y: number, z: number): THREE.Group {
  */
 export function makeRam(theme: Theme): Ram {
   return withTheme(theme, () => {
+    if (theme === 'saurian') {
+      // the temple-city's bonehead: the beast itself lunges and butts the gate, its handlers behind it
+      const { g, log } = boneheadRam();
+      const crew: Figure[] = [];
+      for (const x of [-0.7, 0.7]) {
+        const c = makeVillager(theme, x < 0 ? 0 : 2);
+        c.g.scale.setScalar(1);
+        c.g.position.set(x, 0, -1.9);
+        c.body.rotation.x = 0.2;
+        g.add(c.g);
+        crew.push(c);
+      }
+      return { g, log, crew, wheels: [] };
+    }
     const k = siegeLook(theme);
     const frame = new THREE.Group();
     frame.add(box(1.5, 0.22, 3.2, k.dark, 0, 0.5, 0));
@@ -232,6 +255,11 @@ export function makeRam(theme: Theme): Ram {
       frame.add(orcSkull(0.4).translateY(2.55).translateZ(1.8));
       for (let i = 0; i < 5; i++) frame.add(cone(0.08, 0.5, 0x33241a, 4, -0.6 + i * 0.3, 2.62, -1.2 + i * 0.1));
     }
+    if (theme === 'djinn') oasisRamDress(frame, null);
+    // (the Forgelord's steam drill: a bronze boiler and its stack riding on the frame)
+    if (theme === 'dwarf') frame.add(forgeRamFrame());
+    // (the Frost Queen's ice ram: a fur roof bristling with crystals, icicles from its eaves)
+    if (theme === 'frost') frostRamDress(frame);
     const baked = bake(frame);
     const g = new THREE.Group();
     g.add(baked);
@@ -259,6 +287,10 @@ export function makeRam(theme: Theme): Ram {
       glow.position.set(0, 0, 2.4);
       log.add(glow);
     }
+    // (the Oasis's brass ram: its canopy and lion's head)
+    if (theme === 'djinn') { oasisRamDress(null, log); head.visible = false; }
+    if (theme === 'dwarf') { log.add(forgeRamBit()); head.visible = false; }
+    if (theme === 'frost') { const ih = frostRamHead(); ih.position.set(0, 0, 1.75); log.add(ih); head.visible = false; }
     for (const z of [-0.8, 0.8]) log.add(box(0.03, 1.1, 0.03, 0xc9b48b, 0, 0.1, z));
     g.add(log);
     const crew: Figure[] = [];
@@ -274,7 +306,7 @@ export function makeRam(theme: Theme): Ram {
   });
 }
 
-export type Shot = 'fire' | 'barrel' | 'orb' | 'boulder' | 'skull' | 'holy' | 'rock';
+export type Shot = 'fire' | 'barrel' | 'orb' | 'boulder' | 'skull' | 'holy' | 'rock' | 'sun' | 'ice' | 'sunstone';
 
 export interface Catapult { g: THREE.Group; arm: THREE.Group; ammo: THREE.Object3D; shot: Shot; crew: Figure[]; wheels: THREE.Object3D[] }
 
@@ -284,6 +316,26 @@ export interface Catapult { g: THREE.Group; arm: THREE.Group; ammo: THREE.Object
  */
 export function makeCatapult(theme: Theme): Catapult {
   return withTheme(theme, () => {
+    if (theme === 'saurian') {
+      // the temple slinger: an A-frame of lashed bamboo on log runners, its arm flinging a sunstone
+      const g = new THREE.Group();
+      g.add(bake(slingerFrame()));
+      const arm = new THREE.Group();
+      arm.position.set(0, 1.25, 0.3);
+      const sa = slingerArm();
+      arm.add(sa.arm);
+      arm.rotation.x = -1.0;
+      g.add(arm);
+      const crew: Figure[] = [];
+      for (const x of [-1.2, 1.2]) {
+        const c = makeVillager(theme, x < 0 ? 1 : 3);
+        c.g.scale.setScalar(1);
+        c.g.position.set(x, 0, -0.9);
+        crew.push(c);
+        g.add(c.g);
+      }
+      return { g, arm, ammo: sa.ammo, shot: 'sunstone' as Shot, crew, wheels: [] };
+    }
     const k = siegeLook(theme);
     const frame = new THREE.Group();
     frame.add(box(1.5, 0.3, 3.0, k.wood, 0, 0.4, 0));
@@ -296,6 +348,7 @@ export function makeCatapult(theme: Theme): Catapult {
     frame.add(box(1.2, 0.2, 0.3, k.dark, 0, 1.9, 0.3)); // the cross beam the arm slams into
     frame.add(box(1.3, 0.8, 0.6, k.dark, 0, 0.7, -1.1)); // counterweight box
     if (theme === 'goblin') frame.add(box(0.2, 0.9, 0.2, k.accent, 0.6, 0.7, 1.2));
+    if (theme === 'djinn') oasisEngineDress(frame);
     const baked = bake(frame);
     const g = new THREE.Group();
     g.add(baked);
@@ -307,7 +360,7 @@ export function makeCatapult(theme: Theme): Catapult {
     arm.add(beam);
     const cup = cyl(0.34, 0.24, 0.24, k.dark, 7, 0, 2.7, 0);
     arm.add(cup);
-    const shot: Shot = theme === 'paladin' ? 'holy' : theme === 'sorcerer' ? 'orb' : theme === 'necromancer' ? 'skull' : theme === 'goblin' ? 'barrel' : theme === 'druid' ? 'boulder' : theme === 'orc' ? 'rock' : 'fire';
+    const shot: Shot = theme === 'frost' ? 'ice' : theme === 'djinn' ? 'sun' : theme === 'paladin' ? 'holy' : theme === 'sorcerer' ? 'orb' : theme === 'necromancer' ? 'skull' : theme === 'goblin' ? 'barrel' : theme === 'druid' ? 'boulder' : theme === 'orc' ? 'rock' : 'fire';
     const ammo = ammoMesh(shot);
     ammo.position.set(0, 3.1, 0);
     arm.add(ammo);
@@ -359,6 +412,18 @@ export function ammoMesh(shot: Shot): THREE.Object3D {
       for (let i = 0; i < 4; i++) { const a = (i / 4) * Math.PI * 2; g.add(cone(0.06, 0.3, 0x2e2b2a, 4, Math.cos(a) * 0.42, 0.1, Math.sin(a) * 0.42).rotateZ(-Math.cos(a) * 1.2).rotateX(Math.sin(a) * 1.2)); }
       g.add(mesh(new THREE.IcosahedronGeometry(0.28, 0), 0xff8a3a, { emissive: 0xc0400a }).translateY(0.12));
       break;
+    case 'sun':
+      // a ball of gathered sunlight from the sun engine's mirror
+      g.add(sunShot());
+      break;
+    case 'sunstone':
+      // the temple slinger's shot: a stone clad in beaten gold, glowing through its cracks
+      g.add(sunstone());
+      break;
+    case 'ice':
+      // a boulder of blue ice bristling with crystals, flung by the frost trebuchet
+      g.add(iceShot());
+      break;
     default:
       g.add(blob(0.4, 0x5a4a3a, 0, 0, 0));
       g.add(mesh(new THREE.IcosahedronGeometry(0.3, 0), 0xffb347, { emissive: 0xff6a1a }));
@@ -372,6 +437,10 @@ export function shotFire(shot: Shot): { flame: number; core: number; smoke: numb
     case 'holy': return { flame: 0xffc84a, core: 0xfff6d0, smoke: 0xd8ccb0 };
     case 'orb': return { flame: 0x9a6aff, core: 0xe6d8ff, smoke: 0x6a5a8a };
     case 'skull': return { flame: 0x3fdc7a, core: 0xc8ffd8, smoke: 0x4a5a50 };
+    case 'sun': return { flame: 0xffc040, core: 0xfff4c0, smoke: 0x8a7a5a };
+    case 'sunstone': return { flame: 0xffb640, core: 0xfff0b0, smoke: 0x7a7258 };
+    // (the ice bursts into cold blue fire and freezing mist)
+    case 'ice': return { flame: 0x7fd4ff, core: 0xeafaff, smoke: 0xcfe2ee };
     default: return { flame: 0xff7a2a, core: 0xffd35a, smoke: 0x5e5650 };
   }
 }

@@ -15,6 +15,11 @@ import {
 } from './props';
 import { druidHall, druidWatchtower, leafTotem, toadstools } from './grove';
 import { beastSkull, boarPen, brazier, orcDress, orcModel, orcPost } from './warcamp';
+import { oasisModel, oasisPlaque, oasisPost, oasisStableEmblem } from './oasis';
+import { dwarfModel, forgePlaque, forgePost } from './deepforge';
+import { frostModel, frostPlaque, frostPost } from './frosthold';
+import { wildCrop } from './wilds';
+import { saurianDress, saurianModel, saurianSign, saurianSignAt } from './templecity';
 
 export interface Built {
   obj: THREE.Group;
@@ -58,6 +63,26 @@ function baseModel(id: BuildingId, t: number, color: number): Built {
     const o = orcModel(id, t, color, r);
     if (o) return o;
   }
+  if (getTheme() === 'djinn') {
+    // the Oasis builds everything its own way
+    const o = oasisModel(id, t, color, r);
+    if (o) return o;
+  }
+  if (getTheme() === 'dwarf') {
+    // the Forgelord's hold builds everything in stone and bronze, its own way
+    const o = dwarfModel(id, t, color, r, { tree });
+    if (o) return o;
+  }
+  if (getTheme() === 'frost') {
+    // the Frost Queen's court builds everything in ice, white stone and birch, its own way
+    const o = frostModel(id, t, color, r);
+    if (o) return o;
+  }
+  if (getTheme() === 'saurian') {
+    // the Saurian King's temple-city builds everything in stone, jade and thatch, its own way
+    const o = saurianModel(id, t, color, r);
+    if (o) return o;
+  }
   switch (id) {
     case 'main': {
       const th = getTheme();
@@ -90,7 +115,8 @@ function baseModel(id: BuildingId, t: number, color: number): Built {
 /** In a hero's village the headquarters wears that hero's crown on its roof. */
 function crowned(b: Built, t: number): Built {
   const theme = getTheme();
-  if (theme === 'classic' || theme === 'paladin') return b;
+  // (the wilds' heroes crown their own halls in their own way)
+  if (theme === 'classic' || theme === 'paladin' || theme === 'frost' || theme === 'dwarf' || theme === 'djinn' || theme === 'saurian') return b;
   const top = [0, 5.0, 6.4, 7.3, 10.2, 11.4][t];
   const size = [0, 0.75, 0.85, 0.95, 1.2, 1.3][t];
   const c = hqCrown(theme, rng(t * 7 + 3));
@@ -424,6 +450,9 @@ function themePost(h: number): THREE.Group {
     case 'goblin': return skullOnPole(h);
     case 'necromancer': return gravePost(h);
     case 'orc': return orcPost(h);
+    case 'djinn': return oasisPost(h);
+    case 'dwarf': return forgePost(h);
+    case 'frost': return frostPost(h);
     default: {
       const g = new THREE.Group();
       g.add(cyl(0.07, 0.09, h, C.woodDark, 5));
@@ -955,6 +984,9 @@ function farm(t: number, r: () => number): Built {
     if (th === 'druid' && i % 3 === 1) return flowerField(6.5, 5, r);
     if (th === 'paladin' && i % 3 === 1) return sunflowerField(6.5, 5, r);
     if (th === 'orc' && i % 3 === 1) return boarPen(6.5, 5, r);
+    // the eastern desert and the southern jungle sow crops of their own
+    const wild = wildCrop(6.5, 5, r, i % 4 === 3 ? 'pumpkin' : 'wheat', i % 3 !== 2);
+    if (wild) return wild;
     if (i % 4 === 3) return pumpkinPatch(6.5, 5, r, false);
     return wheatField(6.5, 5, r, i % 3 !== 2);
   };
@@ -2491,6 +2523,14 @@ function themed(id: BuildingId, t: number, b: Built): Built {
   const theme = getTheme();
   if (theme === 'classic' || id === 'main') return b;
   if (theme === 'orc') return orcDress(id, t, b, rng(id.length * 31 + t));
+  // (the Oasis's buildings are all its own, dressed as they are built)
+  if (theme === 'djinn') return b;
+  // (and so are the Forgelord's)
+  if (theme === 'dwarf') return b;
+  // (and the Frost Queen's)
+  if (theme === 'frost') return b;
+  // (and the Saurian King's)
+  if (theme === 'saurian') return saurianDress(id, t, b, rng(id.length * 31 + t));
   if (id === 'watchtower') return theme === 'druid' ? druidWatchtower(t) : themedWatchtower(t, theme);
   if (id === 'statue') return themedStatue(theme);
   const r = rng(id.length * 31 + t);
@@ -2587,6 +2627,9 @@ function bar(len: number, thick: number, color: number, x: number, y: number, a:
 /** The board behind the emblem. */
 function plaque(theme: Theme): THREE.Group {
   const g = new THREE.Group();
+  if (theme === 'djinn') return oasisPlaque();
+  if (theme === 'dwarf') return forgePlaque();
+  if (theme === 'frost') return frostPlaque();
   if (theme === 'paladin') {
     const board = extrude([[-0.62, 0.55], [0.62, 0.55], [0.62, -0.25], [0, -1.0], [-0.62, -0.25]], 0.09, 0x2c56b0);
     g.add(board);
@@ -2640,6 +2683,8 @@ function plaque(theme: Theme): THREE.Group {
 
 /** The emblem itself: crossed weapons for the barracks, a hammer for the smithy, and so on. */
 function signEmblem(kind: SignKind, theme: Theme): THREE.Group {
+  // (the Oasis's stable hangs out a golden camel rather than a horseshoe)
+  if (theme === 'djinn' && kind === 'stable') return oasisStableEmblem();
   const g = new THREE.Group();
   const X = 0.62;
   if (kind === 'barracks') {
@@ -2747,6 +2792,14 @@ function hangSign(id: BuildingId, b: Built, theme: Theme): void {
   const spot = SIGN_SPOTS[id];
   if (!spot) return;
   const sign = new THREE.Group();
+  // (the temple-city hangs its own round stone plaques on the lintels of its portals)
+  const own = theme === 'saurian' ? saurianSignAt(id) : null;
+  if (own) {
+    sign.add(saurianSign(id));
+    sign.position.set(...own);
+    b.obj.add(sign);
+    return;
+  }
   sign.add(plaque(theme), signEmblem(id as SignKind, theme));
   // gabled walls take the sign on the gable; the druids' round cottages under the turf eave
   const y = spot.tower ? spot.h + 0.5 : theme === 'druid' ? spot.h - 0.6 : spot.h + 0.6;

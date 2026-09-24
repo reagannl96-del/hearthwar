@@ -3,10 +3,13 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { ARMY_ORDER, UNITS } from '../../engine/data/units';
 import type { Res, ResKey, UnitId, Units } from '../../engine/types';
 import { themeOfHero, themedUnitName, type VillageTheme } from '../../engine/data/themes';
-import { Icon, themedUnitIcon } from '../art/icons';
+import { REGION_NAMES, type Region } from '../../engine/regions';
+import { ICON_NAMES, Icon, themedUnitIcon } from '../art/icons';
 import { coords, fmt, fmtClock, fmtDur, fmtShort } from '../format';
 import { copyText } from '../clipboard';
 import { now, toast, village, warp, usePane } from '../store';
+
+const HAS_ICON = new Set(ICON_NAMES);
 
 export const RES_LABEL: Record<ResKey, string> = { wood: 'Wood', clay: 'Clay', iron: 'Iron' };
 
@@ -77,7 +80,9 @@ export function unitName(u: UnitId, plural = false, theme: VillageTheme = viewTh
 }
 
 export function UnitIcon({ u, size = 18, theme = viewTheme(), title }: { u: UnitId; size?: number; theme?: VillageTheme; title?: string }) {
-  return <Icon name={themedUnitIcon(u, theme)} size={size} title={title} />;
+  // a look whose troops have no art of their own yet falls back on the classic troop
+  const name = themedUnitIcon(u, theme);
+  return <Icon name={HAS_ICON.has(name) ? name : u} size={size} title={title} />;
 }
 
 export function UnitBadge({ u, n, dim, theme = viewTheme() }: { u: UnitId; n?: number; dim?: boolean; theme?: VillageTheme }) {
@@ -140,13 +145,27 @@ export function Btn(p: JSX.ButtonHTMLAttributes<HTMLButtonElement> & { variant?:
   return <button type="button" class={`btn btn-${variant} ${small ? 'btn-sm' : ''} ${cls ?? ''}`} {...rest} />;
 }
 
-export function Tabs<T extends string>({ tabs, active, onChange }: { tabs: { id: T; label: ComponentChildren; badge?: number }[]; active: T; onChange: (t: T) => void }) {
+/** A little glowing speech bubble: something new to read (the tribe forum). */
+export function NewPosts({ n, title = 'New posts', size = 16 }: { n?: number; title?: string; size?: number }) {
+  return (
+    <span class="new-posts" title={title} aria-label={n ? `${n} ${title.toLowerCase()}` : title}>
+      <svg viewBox="0 0 20 18" width={size} height={Math.round(size * 0.9)} aria-hidden="true">
+        <path d="M3 1.5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H9l-4.5 3.5V13.5H3a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z" fill="currentColor" stroke="rgba(10,30,70,0.55)" stroke-width="1.2" />
+        <circle cx="6" cy="7.5" r="1.3" fill="#1d4a9a" /><circle cx="10" cy="7.5" r="1.3" fill="#1d4a9a" /><circle cx="14" cy="7.5" r="1.3" fill="#1d4a9a" />
+      </svg>
+      {n ? <span class="num">{n}</span> : null}
+    </span>
+  );
+}
+
+export function Tabs<T extends string>({ tabs, active, onChange }: { tabs: { id: T; label: ComponentChildren; badge?: number; unread?: number }[]; active: T; onChange: (t: T) => void }) {
   return (
     <div class="tabs" role="tablist">
       {tabs.map((t) => (
-        <button type="button" role="tab" aria-selected={t.id === active} class={`tab ${t.id === active ? 'is-active' : ''}`} onClick={() => onChange(t.id)}>
+        <button type="button" role="tab" aria-selected={t.id === active} class={`tab ${t.id === active ? 'is-active' : ''} ${t.unread ? 'has-unread' : ''}`} onClick={() => onChange(t.id)}>
           {t.label}
           {t.badge ? <span class="badge">{t.badge}</span> : null}
+          {t.unread ? <NewPosts n={t.unread} title="Unread threads" /> : null}
         </button>
       ))}
     </div>
@@ -264,5 +283,21 @@ export function Section({ title, children, actions, class: cls }: { title?: Comp
       )}
       {children}
     </section>
+  );
+}
+
+/** A land's name as a title: "the frozen north" → "Frozen north". */
+export function regionTitle(r: Region): string {
+  const s = REGION_NAMES[r].replace(/^the /, '');
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+/** A small badge for one of the realm's lands: a dot in the land's colour, then its name (or what is passed). */
+export function RegionChip({ r, children, class: cls, title }: { r: Region; children?: ComponentChildren; class?: string; title?: string }) {
+  return (
+    <span class={`region-chip region-${r} ${cls ?? ''}`} title={title}>
+      <i aria-hidden="true" />
+      {children ?? regionTitle(r)}
+    </span>
   );
 }

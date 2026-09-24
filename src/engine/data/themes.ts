@@ -8,10 +8,11 @@
 import type { UnitId } from '../types';
 import { UNITS } from './units';
 
-export type VillageTheme = 'classic' | 'paladin' | 'sorcerer' | 'druid' | 'goblin' | 'necromancer' | 'orc';
+export type VillageTheme = 'classic' | 'paladin' | 'sorcerer' | 'druid' | 'goblin' | 'necromancer' | 'orc' | 'frost' | 'dwarf' | 'djinn' | 'saurian';
 
 export function themeOfHero(hero: UnitId | null | undefined): VillageTheme {
-  return hero === 'paladin' || hero === 'sorcerer' || hero === 'druid' || hero === 'goblin' || hero === 'necromancer' || hero === 'orc' ? hero : 'classic';
+  return hero === 'paladin' || hero === 'sorcerer' || hero === 'druid' || hero === 'goblin' || hero === 'necromancer' || hero === 'orc'
+    || hero === 'frost' || hero === 'dwarf' || hero === 'djinn' || hero === 'saurian' ? hero : 'classic';
 }
 
 type Names = Partial<Record<UnitId, [name: string, plural: string]>>;
@@ -78,6 +79,70 @@ export const THEMED_UNITS: Record<Exclude<VillageTheme, 'classic'>, Names> = {
     militia: ['Grove Folk', 'Grove Folk'],
   },
   // the clans: green-skinned grunts in crude iron, wargs and war boars for horses
+  // the Frost Queen's court of the north: ice and fur, wolves, owls and mammoths
+  frost: {
+    spear: ['Ice Warden', 'Ice Wardens'],
+    sword: ['Frostguard', 'Frostguards'],
+    axe: ['Rime Reaver', 'Rime Reavers'],
+    archer: ['Frost Archer', 'Frost Archers'],
+    scout: ['Snow Owl', 'Snow Owls'],
+    light: ['Snow-Wolf Rider', 'Snow-Wolf Riders'],
+    marcher: ['Sleigh Archer', 'Sleigh Archers'],
+    heavy: ['Mammoth Rider', 'Mammoth Riders'],
+    ram: ['Ice Ram', 'Ice Rams'],
+    catapult: ['Frost Trebuchet', 'Frost Trebuchets'],
+    noble: ['Ice Herald', 'Ice Heralds'],
+    trader: ['Reindeer Sledge', 'Reindeer Sledges'],
+    militia: ['Hearth Guard', 'Hearth Guard'],
+  },
+  // the Forgelord's dwarves of the burning mountain: shields, runes, goats and steam
+  dwarf: {
+    spear: ['Shieldbearer', 'Shieldbearers'],
+    sword: ['Ironbreaker', 'Ironbreakers'],
+    axe: ['Longbeard', 'Longbeards'],
+    archer: ['Quarreller', 'Quarrellers'],
+    scout: ['Tunnel Scout', 'Tunnel Scouts'],
+    light: ['Goat Rider', 'Goat Riders'],
+    marcher: ['Goat Crossbow', 'Goat Crossbows'],
+    heavy: ['Anvil Knight', 'Anvil Knights'],
+    ram: ['Steam Drill', 'Steam Drills'],
+    catapult: ['Flame Ballista', 'Flame Ballistae'],
+    noble: ['Thane', 'Thanes'],
+    trader: ['Mine Cart', 'Mine Carts'],
+    militia: ['Miners', 'Miners'],
+  },
+  // the Djinn's desert host: blades, camels, falcons and brass
+  djinn: {
+    spear: ['Sand Guard', 'Sand Guards'],
+    sword: ['Blade Dancer', 'Blade Dancers'],
+    axe: ['Dune Raider', 'Dune Raiders'],
+    archer: ['Desert Archer', 'Desert Archers'],
+    scout: ['Desert Falcon', 'Desert Falcons'],
+    light: ['Camel Rider', 'Camel Riders'],
+    marcher: ['Camel Archer', 'Camel Archers'],
+    heavy: ['Sun Lancer', 'Sun Lancers'],
+    ram: ['Brass Ram', 'Brass Rams'],
+    catapult: ['Sun Engine', 'Sun Engines'],
+    noble: ['Vizier', 'Viziers'],
+    trader: ['Camel Caravan', 'Camel Caravans'],
+    militia: ['Oasis Watch', 'Oasis Watch'],
+  },
+  // the Saurian King's cold-blooded host: skinks, saurus and raptors, horned beasts
+  saurian: {
+    spear: ['Skink Spear', 'Skink Spears'],
+    sword: ['Saurus Guard', 'Saurus Guards'],
+    axe: ['Saurus Warrior', 'Saurus Warriors'],
+    archer: ['Blowpiper', 'Blowpipers'],
+    scout: ['Chameleon', 'Chameleons'],
+    light: ['Raptor Rider', 'Raptor Riders'],
+    marcher: ['Raptor Archer', 'Raptor Archers'],
+    heavy: ['Horned Rider', 'Horned Riders'],
+    ram: ['Bonehead', 'Boneheads'],
+    catapult: ['Temple Slinger', 'Temple Slingers'],
+    noble: ['Sun Priest', 'Sun Priests'],
+    trader: ['Pack Lizard', 'Pack Lizards'],
+    militia: ['Jungle Folk', 'Jungle Folk'],
+  },
   orc: {
     spear: ['Spear Grunt', 'Spear Grunts'],
     sword: ['Cleaver', 'Cleavers'],

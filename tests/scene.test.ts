@@ -100,7 +100,7 @@ describe('village layout', () => {
 
   it('every building still fits in every hero theme', () => {
     const bad: string[] = [];
-    for (const theme of ['paladin', 'sorcerer', 'druid', 'goblin', 'necromancer', 'orc'] as const) {
+    for (const theme of ['paladin', 'sorcerer', 'druid', 'goblin', 'necromancer', 'orc', 'djinn', 'dwarf', 'frost', 'saurian'] as const) {
       setTheme(theme);
       const th = new Map<BuildingId, P[][]>(IDS.map((id) => [id, tierLevels(id).map((l) => footprint(id, l))]));
       setTheme('classic');
@@ -276,7 +276,7 @@ describe('village layout', () => {
     const ctx = new Proxy({}, { get: () => () => ({ addColorStop() {} }), set: () => true });
     if (!hadDoc) (globalThis as Record<string, unknown>).document = { createElement: () => ({ getContext: () => ctx }) };
     try {
-      for (const theme of ['classic', 'paladin', 'sorcerer', 'druid', 'goblin', 'necromancer', 'orc'] as const) {
+      for (const theme of ['classic', 'paladin', 'sorcerer', 'druid', 'goblin', 'necromancer', 'orc', 'djinn', 'dwarf', 'frost', 'saurian'] as const) {
         setTheme(theme);
         for (const id of IDS) for (const l of tierLevels(id)) if (inside(footprint(id, l), [fx, fz], R)) { bad.push(`${theme}: in the ${id} (level ${l})`); break; }
         const sc = buildScenery();
@@ -300,5 +300,68 @@ describe('village layout', () => {
       if (!hadDoc) delete (globalThis as Record<string, unknown>).document;
     }
     expect(bad).toEqual([]);
+    // (it builds every theme's whole scenery, so it gets more time than the rest)
+  }, 30_000);
+});
+
+describe('the wilds (the eastern desert and the southern jungle)', () => {
+  /** Scenery (trees, cacti, thickets, buttes...) standing inside a building's footprint, below its eaves. */
+  function clashes(): string[] {
+    const bad = new Set<string>();
+    // the jungle's mist needs a canvas to paint on
+    const hadDoc = 'document' in globalThis;
+    const ctx = new Proxy({}, { get: () => () => ({ addColorStop() {} }), set: () => true });
+    if (!hadDoc) (globalThis as Record<string, unknown>).document = { createElement: () => ({ getContext: () => ctx }) };
+    try {
+      const shapes = IDS.map((id) => ({ id, s: tierLevels(id).map((l) => footprint(id, l)).pop()! }));
+      const sc = buildScenery();
+      sc.updateMatrixWorld(true);
+      const v = new THREE.Vector3();
+      sc.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (!m.isMesh || o.userData.dynamic) return;
+        const pos = m.geometry.getAttribute('position');
+        for (let i = 0; i < pos.count; i += 3) {
+          v.fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld);
+          const ground = Math.hypot(v.x, v.z) > WALL_R ? heightAt(v.x, v.z) : 0;
+          if (v.y - ground < 0.3 || v.y - ground > 5) continue;
+          for (const { id, s } of shapes) if (inside(s, [v.x, v.z], -0.4)) bad.add(`${id} at ${v.x.toFixed(0)},${v.z.toFixed(0)}`);
+        }
+      });
+    } finally {
+      if (!hadDoc) delete (globalThis as Record<string, unknown>).document;
+    }
+    return [...bad];
+  }
+
+  it('nothing that grows or stands out there stands inside a building', () => {
+    try {
+      for (const s of ['desert', 'jungle'] as const) {
+        setSeason(s);
+        expect(clashes().slice(0, 5).map((c) => `${s}: ${c}`)).toEqual([]);
+      }
+    } finally {
+      setSeason('fall');
+    }
+  });
+
+  it('the dunes never swallow the fields or the workplaces outside the walls', () => {
+    setSeason('desert');
+    try {
+      for (const id of OUTSIDE) {
+        const [x, z] = LAYOUT[id];
+        // the level ground under each workplace stays level, dunes or not
+        for (let a = 0; a < 12; a++) for (const d of [0, 6, 12]) {
+          const px = x + Math.cos(a) * d, pz = z + Math.sin(a) * d;
+          expect(Math.abs(heightAt(px, pz) - heightAt(x, z)), `${id} at ${px.toFixed(0)},${pz.toFixed(0)}`).toBeLessThan(0.05);
+        }
+      }
+      // and the dunes are really there, out on the sand
+      let rise = 0;
+      for (let a = 0; a < 40; a++) rise = Math.max(rise, heightAt(Math.cos(a) * 120, Math.sin(a) * 120) - (setSeason('fall'), heightAt(Math.cos(a) * 120, Math.sin(a) * 120)) + (setSeason('desert'), 0));
+      expect(rise).toBeGreaterThan(1);
+    } finally {
+      setSeason('fall');
+    }
   });
 });
