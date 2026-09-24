@@ -415,15 +415,17 @@ export class VillageRenderer {
     (this.scene.fog as THREE.Fog).color = sky;
     this.container.classList.toggle('is-night', n);
     if (n) {
-      // a bright, cool moonlit night: everything reads, and the lamps and windows glow warm against it
-      this.hemi.color.set(winter ? 0x9ab4ff : volc ? 0xb08aa0 : 0x7c94ff);
-      this.hemi.groundColor.set(volc ? 0x3a1a14 : 0x2a2440);
-      this.hemi.intensity = winter ? 1.0 : 0.85;
-      this.sun.color.set(0xbcd0ff);
-      this.sun.intensity = winter ? 1.45 : 1.25;
+      // a bright, cool moonlit night: every building reads, and the lamps and windows glow warm against it
+      // (the dark-built villages, the Horde's and the Necropolis, get a little more moonlight)
+      const dark = this.opts.theme === 'orc' || this.opts.theme === 'necromancer' ? 1.25 : 1;
+      this.hemi.color.set(winter ? 0xa4bcff : volc ? 0xb896a8 : 0x9aaeff);
+      this.hemi.groundColor.set(volc ? 0x4a2a22 : 0x4a4258);
+      this.hemi.intensity = (winter ? 1.0 : 1.35) * dark;
+      this.sun.color.set(0xc8d8ff);
+      this.sun.intensity = (winter ? 1.45 : 1.8) * dark;
       this.fill.color.set(volc ? 0xff6a3a : 0x8a70d0);
-      this.fill.intensity = 0.45;
-      this.renderer.toneMappingExposure = 1.22;
+      this.fill.intensity = 0.55;
+      this.renderer.toneMappingExposure = winter ? (dark > 1 ? 1.35 : 1.22) : dark > 1 ? 1.55 : 1.4;
     } else {
       this.fill.color.set(0xb9c7ff);
       this.hemi.color.set(winter ? 0xf2f6ff : 0xfff0d8);
@@ -1313,8 +1315,10 @@ const MARCH_ROAD: [number, number][] = [[0, 11], [0, 44], [0, 72], [-5, 84], [-1
 function marchFigures(units: Units): TroopModel[] {
   const map: Partial<Record<keyof Units, TroopModel>> = {
     spear: 'spear', sword: 'sword', axe: 'axe', archer: 'archer', scout: 'scout', light: 'light', marcher: 'marcher',
-    heavy: 'heavy', paladin: 'paladin', sorcerer: 'sorcerer', druid: 'druid', goblin: 'goblin', orc: 'orc', noble: 'noble', ram: 'axe', catapult: 'axe',
+    heavy: 'heavy', paladin: 'paladin', sorcerer: 'sorcerer', druid: 'druid', goblin: 'goblin', orc: 'orc', noble: 'noble', ram: 'axe', catapult: 'axe', trader: 'trader',
   };
+  // horse merchants travel alone: one figure for each, up to a string of six
+  if (units.trader && Object.keys(units).length === 1) return Array.from({ length: Math.min(6, units.trader) }, () => 'trader' as TroopModel);
   const kinds = (Object.entries(units) as [keyof Units, number][]).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]);
   const total = kinds.reduce((a, [, n]) => a + n, 0);
   const n = Math.min(6, Math.max(2, Math.round(Math.log10(total + 1) * 2)));

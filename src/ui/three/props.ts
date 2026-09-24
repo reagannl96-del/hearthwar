@@ -598,7 +598,7 @@ const STEEL = 0xb9c4cc;
 const STEEL_DK = 0x6a7782;
 const SHAFT = 0x7a5230;
 
-export type TroopModel = 'spear' | 'sword' | 'axe' | 'archer' | 'scout' | 'noble' | 'light' | 'marcher' | 'heavy' | 'paladin' | 'sorcerer' | 'druid' | 'goblin' | 'necromancer' | 'orc';
+export type TroopModel = 'spear' | 'sword' | 'axe' | 'archer' | 'scout' | 'noble' | 'light' | 'marcher' | 'heavy' | 'paladin' | 'sorcerer' | 'druid' | 'goblin' | 'necromancer' | 'orc' | 'trader';
 
 function helmet(g: THREE.Group, color = STEEL) {
   g.add(cyl(0.16, 0.23, 0.2, color, 7, 0, 1.3));
@@ -1405,11 +1405,53 @@ function paladinRider(): THREE.Group {
   return g;
 }
 
+/**
+ * A horse merchant on the road: his mount (each people's own: a stag for the druids, a
+ * bone horse for the necromancers, a pack boar for the orcs...) loaded with bales and chests.
+ */
+function packTrader(): THREE.Group {
+  const theme = getTheme();
+  const g = new THREE.Group();
+  let mount: THREE.Group;
+  let seat = 1.3;
+  let bale = 0xc9a86a, strap = 0x5a3f28, tunic = 0x6e5a2e;
+  if (theme === 'druid') { mount = stag(0xa8703e); bale = 0x7a8a4a; tunic = 0x5a5a3c; }
+  else if (theme === 'goblin') { mount = boar(); seat = 1.2; bale = 0x8a7a4a; tunic = 0x6a5a2a; }
+  else if (theme === 'necromancer') { mount = boneHorse(false); bale = 0x3a3440; strap = 0x1f1d24; tunic = 0x2e2a33; }
+  else if (theme === 'orc') { mount = warBoar(); seat = 1.32; bale = 0x7a5a3a; strap = 0x8e2a1a; tunic = 0x5a4632; }
+  else if (theme === 'sorcerer') { mount = horse(0x3a2f6a); bale = 0x3c2470; strap = 0xc9a24a; tunic = 0x46307a; }
+  else if (theme === 'paladin') { mount = horse(0xe8e2d6); bale = 0xf3eee2; strap = 0x2c56b0; tunic = 0x2c56b0; }
+  else mount = horse(C.horse);
+  mount.rotation.y = -Math.PI / 2;
+  g.add(mount);
+  // a bale or chest hung either side, and a big bundle lashed on behind the rider
+  for (const x of [-0.46, 0.46]) {
+    g.add(box(0.3, 0.46, 0.62, bale, x, 0.95, -0.15));
+    g.add(box(0.32, 0.07, 0.64, strap, x, 1.02, -0.15));
+  }
+  g.add(box(0.72, 0.4, 0.5, bale, 0, seat + 0.1, -0.55));
+  g.add(box(0.74, 0.06, 0.12, strap, 0, seat + 0.12, -0.55));
+  if (theme === 'sorcerer') {
+    const c = mesh(new THREE.OctahedronGeometry(0.12, 0), 0xb58cff, { emissive: 0x5a2fb0 });
+    c.position.set(0, seat + 0.45, -0.55);
+    g.add(c);
+  } else if (theme === 'paladin' || theme === 'classic') {
+    g.add(box(0.3, 0.2, 0.26, C.gold, 0, seat + 0.4, -0.55)); // a little strongbox on top
+  }
+  const man = person(tunic);
+  man.scale.setScalar(0.85);
+  man.position.set(0, seat, 0.15);
+  g.add(man);
+  for (const c of g.children) c.castShadow = true;
+  return g;
+}
+
 export function troop(kind: TroopModel): THREE.Group {
+  if (kind === 'trader') return packTrader();
   return kind === 'light' || kind === 'marcher' || kind === 'heavy' || kind === 'paladin' ? rider(kind) : footSoldier(kind);
 }
 
-export const isRider = (k: TroopModel) => k === 'light' || k === 'marcher' || k === 'heavy' || k === 'paladin';
+export const isRider = (k: TroopModel) => k === 'light' || k === 'marcher' || k === 'heavy' || k === 'paladin' || k === 'trader';
 
 // ---------- hero themes: landmarks ----------
 

@@ -84,6 +84,9 @@ export function VillageScreen() {
             marches={[
               ...pv.commands.filter((c) => c.fromVid === v.id && (c.kind === 'attack' || c.kind === 'support')).map((c) => ({ id: c.id, kind: 'out' as const, units: c.units ?? {}, at: c.depart })),
               ...pv.commands.filter((c) => c.fromVid === v.id && c.kind === 'return').map((c) => ({ id: c.id, kind: 'home' as const, units: c.units ?? {}, at: c.arrive })),
+              // horse merchants ride out with their loads, and home again, down the same road
+              ...pv.commands.filter((c) => c.fromVid === v.id && c.kind === 'trade' && (c.units?.trader ?? 0) > 0).map((c) => ({ id: c.id, kind: 'out' as const, units: c.units ?? {}, at: c.depart })),
+              ...pv.commands.filter((c) => c.fromVid === v.id && c.kind === 'tradeback' && (c.units?.trader ?? 0) > 0).map((c) => ({ id: c.id, kind: 'home' as const, units: c.units ?? {}, at: c.arrive })),
             ]}
             now={now.value}
             militia={!!v.militiaUntil && v.militiaUntil > now.value}
