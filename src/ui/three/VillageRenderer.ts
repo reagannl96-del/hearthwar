@@ -629,7 +629,7 @@ export class VillageRenderer {
         ? `<span class="lvl-num">${lvl}<i class="lvl-up">${up}</i></span><span class="lvl-name">${BUILDINGS[id].name}</span>`
         : `<span class="lvl-num">${lvl}</span><span class="lvl-name">${BUILDINGS[id].name}</span>`;
       s.label.classList.toggle('is-building', up !== undefined);
-      s.label.classList.toggle('is-max', BUILDINGS[id].max > 1 && lvl >= BUILDINGS[id].max);
+      s.label.classList.toggle('is-max', lvl > 0 && lvl >= BUILDINGS[id].max);
       s.label.dataset.id = id;
     }
   }
