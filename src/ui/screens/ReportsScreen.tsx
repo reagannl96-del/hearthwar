@@ -3,6 +3,8 @@ import { BUILDINGS, BUILDING_ORDER } from '../../engine/data/buildings';
 import { ARMY_ORDER, HERO_POWERS, ITEM_BY_ID, UNITS, isHero, itemHero } from '../../engine/data/units';
 import type { BattleData, Report, ResKey, SideInfo, UnitId, Units, SharedReport } from '../../engine/types';
 import { Icon } from '../art/icons';
+import { BBEditor } from '../bbcode/Editor';
+import { FORUM_MAX_TEXT } from '../../engine/tribes';
 import { Btn, Empty, PlayerLink, Res, Section, VillageLink, UnitIcon, unitName } from '../components/common';
 import { fmt, fmtAgo, fmtClock } from '../format';
 import { act, battleReplay, host, now, rallyTarget, view, warp, usePane } from '../store';
@@ -147,9 +149,9 @@ function ShareReport({ r }: { r: Report }) {
           {thread === 'new' && (
             <label class="field"><span>Thread title</span><input type="text" maxLength={80} value={title} onInput={(e) => setTitle(e.currentTarget.value)} /></label>
           )}
-          <label class="field"><span>Message (optional)</span><textarea rows={3} value={text} onInput={(e) => setText(e.currentTarget.value)} placeholder="Anything to add?" /></label>
+          <div class="field"><label for="share-msg">Message (optional)</label><BBEditor id="share-msg" label="Message" rows={3} maxLength={FORUM_MAX_TEXT} value={text} onChange={setText} placeholder="Anything to add?" names={tribe.members.map((m) => m.name)} /></div>
           <div class="row gap">
-            <Btn type="submit" disabled={thread === 'new' && !title.trim()}>Share report</Btn>
+            <Btn type="submit" disabled={(thread === 'new' && !title.trim()) || text.length > FORUM_MAX_TEXT}>Share report</Btn>
             <Btn variant="quiet" onClick={() => setOpen(false)}>Cancel</Btn>
           </div>
         </form>

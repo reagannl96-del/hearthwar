@@ -19,6 +19,10 @@ export const RIGHT_LABEL: Record<TribeRight, string> = {
 export const JOIN_WINDOW = 7 * 24 * 3_600_000;
 const FORUM_MAX_THREADS = 60;
 const FORUM_MAX_POSTS = 200;
+/** a forum post, room for BBCode tags on top of what it says */
+export const FORUM_MAX_TEXT = 5000;
+/** the tribe's public description and members-only announcement */
+export const TRIBE_TEXT_MAX = 3000;
 
 const fail = (error: string): ActionResult => ({ ok: false, error });
 
@@ -43,6 +47,15 @@ export function relation(w: World, fromTribe: number | null, toTribe: number | n
 /** Tribe points: the sum of its members' points. */
 export function tribePoints(w: World, t: Tribe): number {
   return t.members.reduce((s, id) => s + (w.players[id]?.points ?? 0), 0);
+}
+
+/**
+ * Longer text players write (posts, descriptions): kept as plain text, line breaks
+ * and all. Control characters go; BBCode tags stay as typed (they are only ever
+ * drawn by the client, never turned into HTML).
+ */
+export function cleanText(s: unknown, max: number): string {
+  return String(s ?? '').replace(/\r\n?/g, '\n').replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, '').trim().slice(0, max);
 }
 
 function clean(s: unknown, max: number): string {
@@ -263,8 +276,8 @@ export function editTribe(w: World, pid: number, patch: { description?: string; 
   const t = tribeOf(w, pid);
   if (!t) return fail('You are not in a tribe.');
   if (!hasRight(t, pid, 'lead')) return fail('Only leaders can edit the tribe.');
-  if (patch.description !== undefined) t.description = String(patch.description).slice(0, 2000);
-  if (patch.internal !== undefined) t.internal = String(patch.internal).slice(0, 2000);
+  if (patch.description !== undefined) t.description = cleanText(patch.description, TRIBE_TEXT_MAX);
+  if (patch.internal !== undefined) t.internal = cleanText(patch.internal, TRIBE_TEXT_MAX);
   if (patch.name !== undefined) {
     const n = clean(patch.name, 32);
     if (n.length < 3) return fail('The name needs at least 3 letters.');
@@ -391,7 +404,7 @@ function shareable(w: World, pid: number, reportId: number | undefined): SharedR
 export function forumNewThread(w: World, pid: number, title: string, text: string, reportId?: number): ActionResult {
   const t = tribeOf(w, pid);
   if (!t) return fail('You are not in a tribe.');
-  const ti = clean(title, 80), tx = String(text ?? '').trim().slice(0, 4000);
+  const ti = clean(title, 80), tx = cleanText(text, FORUM_MAX_TEXT);
   const report = shareable(w, pid, reportId);
   if (report === null) return fail('That report is gone.');
   if (!ti) return fail('Give the thread a title.');
@@ -410,7 +423,7 @@ export function forumReply(w: World, pid: number, threadId: number, text: string
   const t = tribeOf(w, pid);
   const th = t?.forum?.find((x) => x.id === threadId);
   if (!t || !th) return fail('That thread is gone.');
-  const tx = String(text ?? '').trim().slice(0, 4000);
+  const tx = cleanText(text, FORUM_MAX_TEXT);
   const report = shareable(w, pid, reportId);
   if (report === null) return fail('That report is gone.');
   if (!tx && !report) return fail('Write something first.');

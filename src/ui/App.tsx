@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'preact/hooks';
 import { navOrder, saveNavOrder } from './navOrder';
+import { captureThreadLink, openThreadLink, takeThreadLink } from './deepLink';
 import { Icon } from './art/icons';
-import { Clock, unitName } from './components/common';
+import { Clock, CopyButton, unitName } from './components/common';
 import { QUADRANT_NAME, coords, fmt, fmtDur, quadrant } from './format';
 import { BuildingScreen } from './screens/BuildingScreen';
 import { MapScreen } from './screens/MapScreen';
@@ -19,7 +20,7 @@ import { VillageScreen } from './screens/VillageScreen';
 import { ManagerScreen } from './screens/ManagerScreen';
 import { GameOver } from './screens/GameOver';
 import {
-  PaneCtx, applyTheme, dismissToast, host, liveRes, now, online, paused, resumeSucceeded, setPaused, setSplit, setWarp, sidePane, split, swapPanes, toasts, view, warp,
+  PaneCtx, applyTheme, mainPane, dismissToast, host, liveRes, now, online, paused, resumeSucceeded, setPaused, setSplit, setWarp, sidePane, split, swapPanes, toasts, view, warp,
   type Route, usePane,
 } from './store';
 
@@ -27,6 +28,15 @@ export function App() {
   const pane = usePane();
   useEffect(() => {
     applyTheme();
+    // a shared forum link (#t/…): remembered now, opened once a realm is up
+    const onHash = () => {
+      if (!captureThreadLink() || !host.value || !view.value) return;
+      const ref = takeThreadLink();
+      if (ref) openThreadLink(ref, mainPane);
+    };
+    onHash();
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
   }, []);
   if (!host.value || !view.value) return <TitleScreen />;
   // every village lost: only the end screen (the header and pages need a village)
@@ -38,7 +48,11 @@ function Game() {
   const pane = usePane();
   const v = view.value!;
   // the realm opened and drew: a refresh may bring the player straight back to it
-  useEffect(() => { resumeSucceeded(); }, []);
+  useEffect(() => {
+    resumeSucceeded();
+    const ref = takeThreadLink();
+    if (ref) openThreadLink(ref, pane);
+  }, []);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
@@ -106,7 +120,7 @@ function PaneView() {
     <>
       {r.name === 'village' && <VillageScreen />}
       {r.name === 'building' && <BuildingScreen id={r.id} tab={r.tab} />}
-      {r.name === 'map' && <MapScreen focus={r.focus} />}
+      {r.name === 'map' && <MapScreen focus={r.focus} at={r.at} />}
       {r.name === 'reports' && <ReportsScreen id={r.id} />}
       {r.name === 'ranking' && <RankingScreen player={r.player} />}
       {r.name === 'quests' && <QuestsScreen />}
@@ -116,7 +130,7 @@ function PaneView() {
       {r.name === 'news' && <NewsScreen />}
       {r.name === 'realm' && <RealmScreen />}
       {r.name === 'banner' && <BannerScreen />}
-      {r.name === 'tribe' && <TribeScreen id={r.id} tab={r.tab} />}
+      {r.name === 'tribe' && <TribeScreen id={r.id} tab={r.tab} thread={r.thread} post={r.post} />}
     </>
   );
 }
@@ -209,7 +223,7 @@ function Header() {
             <span class="vname">{cur.name}</span>
           )}
           <span class="vcoords">
-            {coords(cur.x, cur.y)} · <span title={`${QUADRANT_NAME[quadrant(cur.x, cur.y, v.config.size)]} quadrant`}>{quadrant(cur.x, cur.y, v.config.size)}</span> · <span class="num">{fmt(cur.points)}</span> pts
+            {coords(cur.x, cur.y)}<CopyButton text={coords(cur.x, cur.y)} label={`Copy coordinates ${coords(cur.x, cur.y)}`} class="on-dark" /> · <span title={`${QUADRANT_NAME[quadrant(cur.x, cur.y, v.config.size)]} quadrant`}>{quadrant(cur.x, cur.y, v.config.size)}</span> · <span class="num">{fmt(cur.points)}</span> pts
           </span>
         </div>
         {list.length > 1 && (

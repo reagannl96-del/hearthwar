@@ -1,11 +1,12 @@
 import type { ComponentChildren, JSX } from 'preact';
-import { useEffect, useRef } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { ARMY_ORDER, UNITS } from '../../engine/data/units';
 import type { Res, ResKey, UnitId, Units } from '../../engine/types';
 import { themeOfHero, themedUnitName, type VillageTheme } from '../../engine/data/themes';
 import { Icon, themedUnitIcon } from '../art/icons';
 import { coords, fmt, fmtClock, fmtDur, fmtShort } from '../format';
-import { now, village, warp, usePane } from '../store';
+import { copyText } from '../clipboard';
+import { now, toast, village, warp, usePane } from '../store';
 
 export const RES_LABEL: Record<ResKey, string> = { wood: 'Wood', clay: 'Clay', iron: 'Iron' };
 
@@ -202,8 +203,38 @@ export function NumInput({ value, onInput, max, id, placeholder }: { value: numb
 export function VillageLink({ vid, name, x, y }: { vid: number; name: string; x: number; y: number }) {
   const pane = usePane();
   return (
-    <button type="button" class="link" onClick={() => pane.go({ name: 'map', focus: vid })} title="Show on the map">
-      {name} <span class="coords">({coords(x, y)})</span>
+    <span class="vlink">
+      <button type="button" class="link" onClick={() => pane.go({ name: 'map', focus: vid })} title="Show on the map">
+        {name} <span class="coords">({coords(x, y)})</span>
+      </button>
+      <CopyButton text={coords(x, y)} label={`Copy coordinates ${coords(x, y)}`} class="is-reveal" />
+    </span>
+  );
+}
+
+/**
+ * A small copy-to-clipboard button: a tick and a "Copied!" bubble for a moment
+ * after, or a toast if the browser refused. The visible button stays small, but its
+ * tap area is a thumb wide.
+ */
+export function CopyButton({ text, label = 'Copy', children, class: cls, done = 'Copied!', icon = 'copy' }: { text: string; label?: string; children?: ComponentChildren; class?: string; done?: string; icon?: 'copy' | 'link' }) {
+  const [copied, setCopied] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout>>();
+  useEffect(() => () => clearTimeout(timer.current), []);
+  const onClick = async (e: MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const ok = await copyText(text);
+    clearTimeout(timer.current);
+    if (!ok) { setCopied(false); toast(`Could not reach the clipboard. Copy it by hand: ${text}`, 'warn'); return; }
+    setCopied(true);
+    timer.current = setTimeout(() => setCopied(false), 1600);
+  };
+  return (
+    <button type="button" class={`copy-btn ${children ? 'has-text' : ''} ${copied ? 'is-done' : ''} ${cls ?? ''}`} onClick={onClick} title={label} aria-label={children ? undefined : label}>
+      <Icon name={copied ? 'check' : icon} size={14} />
+      {children}
+      <span class="copy-tip" role="status" aria-live="polite">{copied ? done : ''}</span>
     </button>
   );
 }

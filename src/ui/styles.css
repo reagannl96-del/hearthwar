@@ -1357,8 +1357,7 @@ input.tiny { width: 56px; padding: 2px 4px; }
 .tribe-invites li, .forum-threads li { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 4px; background: rgba(120, 80, 30, 0.07); flex-wrap: wrap; }
 .forum-threads li { display: block; }
 .forum-posts li { padding: 8px 10px; border-radius: 4px; background: rgba(255, 250, 235, 0.6); border: 1px solid var(--line); }
-.post-head { display: flex; gap: 8px; align-items: baseline; }
-.post-head .link { margin-left: auto; }
+.post-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .prewrap { white-space: pre-wrap; margin: 0; }
 .stack-sm { display: grid; gap: 8px; }
 .rel-edit { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
@@ -1698,3 +1697,165 @@ button.realm-row:hover { background: var(--surface-2); border-color: var(--line)
   }
 }
 @media (max-width: 760px) { .banner-savebar { bottom: calc(72px + env(safe-area-inset-bottom, 0px)); } }
+
+/* ---------- copy to clipboard ---------- */
+
+.copy-btn {
+  position: relative;
+  display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+  min-width: 24px; height: 24px; padding: 0 4px; margin: -2px 0 -2px 4px;
+  vertical-align: middle;
+  border: 1px solid transparent; border-radius: 4px; background: transparent;
+  color: var(--ink-2); cursor: pointer; font-size: 0.75rem; font-weight: 800; line-height: 1;
+}
+/* the button looks small, but a thumb gets 36px to hit */
+.copy-btn::before { content: ''; position: absolute; inset: -6px; }
+.copy-btn:hover { background: rgba(120, 80, 30, 0.12); color: var(--ink); border-color: var(--line); }
+.copy-btn.has-text { padding: 0 7px; border-color: var(--line-strong); background: var(--parch-hi); }
+.copy-btn.is-done { color: var(--ok); border-color: var(--ok); }
+.copy-btn.is-bb { font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; letter-spacing: 0.02em; }
+.copy-tip {
+  position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translate(-50%, 3px);
+  padding: 2px 7px; border-radius: 4px; background: var(--leather-3); color: var(--parch-hi);
+  font: 700 0.72rem/1.4 var(--font-body); white-space: nowrap; pointer-events: none;
+  opacity: 0; transition: opacity 0.12s, transform 0.12s; z-index: 5;
+}
+.copy-tip:empty { display: none; }
+.copy-btn.is-done .copy-tip { opacity: 1; transform: translate(-50%, 0); }
+.copy-tip::after { content: ''; position: absolute; top: 100%; left: 50%; margin-left: -4px; border: 4px solid transparent; border-top-color: var(--leather-3); }
+.copy-btn.on-dark { color: var(--brass-hi); }
+.copy-btn.on-dark:hover { background: rgba(255, 220, 150, 0.12); color: #fff; border-color: transparent; }
+.copy-btn.on-dark.is-done { color: #b9e08a; border-color: transparent; }
+.copy-btn.on-dark .copy-tip { top: calc(100% + 6px); bottom: auto; background: var(--parch-hi); color: var(--ink); }
+.copy-btn.on-dark .copy-tip::after { top: auto; bottom: 100%; border-top-color: transparent; border-bottom-color: var(--parch-hi); }
+.map-info-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 2px 4px; }
+.map-info-meta .copy-btn { margin: 0; }
+.map-info-meta .coord-text { font-weight: 700; color: var(--ink-2); }
+/* village links show their copy button on hover or focus; on touch screens it is always there */
+.vlink { display: inline-flex; align-items: center; flex-wrap: wrap; }
+@media (hover: hover) and (pointer: fine) {
+  .copy-btn.is-reveal { opacity: 0; transition: opacity 0.12s; }
+  .vlink:hover .copy-btn.is-reveal, .vlink:focus-within .copy-btn.is-reveal, .copy-btn.is-reveal.is-done { opacity: 1; }
+}
+@media (pointer: coarse) {
+  .copy-btn { min-width: 28px; height: 28px; }
+}
+
+/* ---------- BBCode posts ---------- */
+
+.bb { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.5; }
+.bb-center { text-align: center; }
+.bb-hr { border: 0; border-top: 1px solid var(--line-strong); margin: 8px 0; }
+.bb-url { color: var(--link); font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
+.bb-url:hover { color: var(--accent-hover); }
+.bb .link { white-space: normal; }
+.bb-coord .coords { font-weight: 600; }
+.bb-coord.is-off, .bb-player.is-unknown, .bb-tribe.is-unknown { font-weight: 700; color: var(--ink-2); }
+.bb-thread { display: inline; }
+.bb-quote {
+  margin: 6px 0; padding: 6px 10px 7px;
+  border-left: 3px solid var(--brass-dark); border-radius: 0 4px 4px 0;
+  background: rgba(120, 80, 30, 0.08);
+  white-space: pre-wrap;
+}
+.bb-quote-head { font-size: 0.8rem; color: var(--ink-2); margin-bottom: 2px; }
+.bb-quote .bb-quote { background: rgba(120, 80, 30, 0.07); }
+.bb-code {
+  margin: 6px 0; padding: 7px 10px; overflow-x: auto; white-space: pre;
+  background: #2f2216; color: #f3e2bd; border-radius: 4px; border: 1px solid #1a120a;
+  font: 0.85rem/1.45 ui-monospace, 'Cascadia Mono', Consolas, 'Courier New', monospace;
+}
+.bb-code code { font: inherit; }
+.bb-list { margin: 4px 0; padding-left: 1.4em; white-space: normal; }
+.bb-list li { white-space: pre-wrap; padding: 0; background: none; border: 0; }
+.bb-spoiler { margin: 6px 0; border: 1px dashed var(--line-strong); border-radius: 4px; background: rgba(60, 40, 20, 0.06); white-space: normal; }
+.bb-spoiler.is-open { border-style: solid; background: rgba(255, 250, 235, 0.5); }
+.bb-spoiler-head {
+  display: flex; align-items: center; gap: 8px; width: 100%; min-height: 36px; padding: 4px 10px;
+  border: 0; background: linear-gradient(#efdcb4, #e2c790); border-radius: 3px; cursor: pointer; text-align: left;
+  font-weight: 800; color: var(--ink);
+}
+.bb-spoiler.is-open .bb-spoiler-head { border-radius: 3px 3px 0 0; border-bottom: 1px solid var(--line); }
+.bb-spoiler-head:hover { filter: brightness(1.04); }
+.bb-spoiler-caret { display: inline-block; transition: transform 0.15s; color: var(--accent); }
+.bb-spoiler.is-open .bb-spoiler-caret { transform: rotate(90deg); }
+.bb-spoiler-title { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.bb-spoiler-hint { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.bb-spoiler-body { padding: 7px 10px; white-space: pre-wrap; }
+@media (prefers-reduced-motion: reduce) { .bb-spoiler-caret { transition: none; } }
+
+/* ---------- forum ---------- */
+
+.forum-posts > li { scroll-margin: 80px; transition: box-shadow 0.3s, border-color 0.3s; }
+.forum-posts > li.is-target { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.post-tools { margin-left: auto; display: inline-flex; align-items: center; gap: 10px; }
+.post-body { margin-top: 4px; }
+.post-num { margin: 0; font-size: 0.72rem; color: var(--muted); }
+.forum-excerpt { color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; }
+.forum-threads, .forum-mini { grid-template-columns: minmax(0, 1fr); }
+.forum-threads li, .forum-mini li { min-width: 0; }
+.forum-reply { margin-top: 10px; }
+.field > label { font-weight: 800; }
+
+/* ---------- BBCode editor ---------- */
+
+.bb-editor { display: grid; gap: 0; min-width: 0; }
+.bb-bar {
+  display: flex; align-items: stretch; gap: 6px; min-width: 0;
+  padding: 3px; border: 1px solid var(--line-strong); border-bottom: 0; border-radius: 4px 4px 0 0;
+  background: linear-gradient(#efdcb4, #e4cc98);
+}
+.bb-tools {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 1px; flex: 1; min-width: 0;
+}
+/* on touch screens the buttons stay on one line and the row scrolls sideways */
+@media (pointer: coarse) {
+  .bb-tools { flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .bb-tools::-webkit-scrollbar { display: none; }
+  /* a soft fade at the edge says there is more to swipe to */
+  .bb-tools { -webkit-mask-image: linear-gradient(90deg, #000 88%, transparent); mask-image: linear-gradient(90deg, #000 88%, transparent); padding-right: 16px; }
+}
+.bb-tool {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; padding: 0; border: 1px solid transparent; border-radius: 4px;
+  background: transparent; color: var(--ink-2); cursor: pointer; font: 700 1rem/1 var(--font-body);
+}
+.bb-tool:hover:not(:disabled) { background: rgba(255, 250, 235, 0.7); border-color: var(--line-strong); color: var(--ink); }
+.bb-tool.is-on { background: var(--parch-hi); border-color: var(--accent); color: var(--accent); }
+.bb-tool:disabled { opacity: 0.4; cursor: default; }
+.bb-t-i { font-family: Georgia, serif; }
+.bb-t-color { display: inline-grid; justify-items: center; font-weight: 800; line-height: 1; }
+.bb-t-color i { display: block; width: 16px; height: 4px; margin-top: 1px; border-radius: 1px; background: linear-gradient(90deg, #b8392b, #d9761e, #3f7a1f, #2c56b0, #6b3a9c); }
+.bb-t-size { font-weight: 800; font-size: 1.05rem; }
+.bb-t-size small { font-size: 0.65em; }
+.bb-t-help { font-weight: 800; }
+.bb-sep { flex: none; width: 1px; height: 20px; margin: 0 3px; background: var(--line-strong); opacity: 0.7; }
+.bb-mode { flex: none; align-self: center; background: var(--parch-hi); }
+.bb-mode button { padding: 4px 10px; min-height: 30px; }
+.bb-drawer {
+  padding: 8px; border: 1px solid var(--line-strong); border-bottom: 0;
+  background: var(--parch-hi); max-height: 220px; overflow-y: auto;
+}
+.bb-swatches { display: flex; flex-wrap: wrap; gap: 6px; }
+.bb-swatch { width: 32px; height: 32px; border-radius: 50%; border: 2px solid var(--parch-hi); box-shadow: 0 0 0 1px var(--line-strong); cursor: pointer; }
+.bb-swatch:hover { box-shadow: 0 0 0 2px var(--accent); }
+.bb-picks { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.bb-picks .chip { min-height: 32px; }
+.bb-picks .chip.is-plain { border-style: dashed; }
+.bb-picks-note { flex-basis: 100%; }
+.bb-help { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1px; margin: 0; font-size: 0.82rem; }
+.bb-help dt code { font: 0.78rem ui-monospace, Consolas, monospace; color: var(--accent); overflow-wrap: anywhere; }
+.bb-help dd { margin: 0 0 6px; color: var(--ink-2); }
+.bb-editor textarea, .bb-preview { border-radius: 0 0 4px 4px; }
+.bb-editor textarea { display: block; min-height: 5em; }
+.bb-preview {
+  padding: 7px 9px; border: 1px solid var(--line-strong); background: rgba(255, 250, 235, 0.75);
+  overflow-wrap: anywhere; max-height: 60vh; overflow-y: auto;
+}
+.bb-count { justify-self: end; font-size: 0.72rem; color: var(--muted); margin-top: 2px; font-variant-numeric: tabular-nums; }
+.bb-count.is-near { color: var(--danger); font-weight: 800; }
+@media (max-width: 560px) {
+  .bb-bar { flex-wrap: wrap; row-gap: 3px; }
+  .bb-mode { order: -1; width: 100%; display: flex; }
+  .bb-mode button { flex: 1; }
+}

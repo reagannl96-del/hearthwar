@@ -15,7 +15,7 @@ import { setSoundEnabled, sfx } from './sound';
 export type Route =
   | { name: 'village' }
   | { name: 'building'; id: BuildingId; tab?: string }
-  | { name: 'map'; focus?: number }
+  | { name: 'map'; focus?: number; at?: [number, number] }
   | { name: 'reports'; id?: number }
   | { name: 'ranking'; player?: number }
   | { name: 'quests' }
@@ -25,7 +25,7 @@ export type Route =
   | { name: 'news' }
   | { name: 'realm' }
   | { name: 'banner' }
-  | { name: 'tribe'; id?: number; tab?: string };
+  | { name: 'tribe'; id?: number; tab?: string; thread?: number; post?: number };
 
 export interface Toast {
   id: number;

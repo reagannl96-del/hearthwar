@@ -7,7 +7,7 @@ import { lsGet } from '../../host/storage';
 import { forestSprite, lookOfHero, onVillageArt, spriteBox, villageSprite, villageStage } from '../mapSprites';
 import { isVolcanic, isWinter } from '../../engine/world';
 import { Icon } from '../art/icons';
-import { Btn, UnitList, UnitIcon, unitName } from '../components/common';
+import { Btn, CopyButton, UnitList, UnitIcon, unitName } from '../components/common';
 import { loadFarmTemplates, tplName } from '../farmTemplates';
 import { coords, fmt, fmtAgo, fmtDur, parseCoords, quadrant } from '../format';
 import { TribeTag } from './TribeScreen';
@@ -21,11 +21,13 @@ const TERRAIN_COLORS: Record<string, [string, string]> = {
   m: ['--map-hill', '--map-hill-2'],
 };
 
+const clampField = (n: number, size: number) => Math.max(0, Math.min(size - 1, Math.floor(n)));
+
 function cssVar(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || '#888';
 }
 
-export function MapScreen({ focus }: { focus?: number }) {
+export function MapScreen({ focus, at }: { focus?: number; at?: [number, number] }) {
   const pane = usePane();
   const h = host.value!;
   const pv = view.value!;
@@ -49,7 +51,7 @@ export function MapScreen({ focus }: { focus?: number }) {
     const off = onVillageArt(() => setArtLoaded((n) => n + 1));
     return () => { off(); };
   }, []);
-  const start = (focus !== undefined ? byId.get(focus) : undefined) ?? byId.get(cur.id)!;
+  const start = (focus !== undefined ? byId.get(focus) : undefined) ?? (at ? { x: clampField(at[0], data.size), y: clampField(at[1], data.size) } : undefined) ?? byId.get(cur.id)!;
   const [center, setCenter] = useState<[number, number]>([start.x + 0.5, start.y + 0.5]);
   const [zoom, setZoom] = useState<number>(() => Number(lsGet('hw-map-zoom')) || 22);
   const [sel, setSel] = useState<number | null>(focus ?? null);
@@ -100,6 +102,14 @@ export function MapScreen({ focus }: { focus?: number }) {
       if (f) { setCenter([f.x + 0.5, f.y + 0.5]); setSel(focus); }
     }
   }, [focus]);
+  // a spot on the map with or without a village on it (a [coord] link from the forum)
+  const atKey = at ? `${at[0]}|${at[1]}` : '';
+  useEffect(() => {
+    if (!at || focus !== undefined) return;
+    const x = clampField(at[0], data.size), y = clampField(at[1], data.size);
+    setCenter([x + 0.5, y + 0.5]);
+    setSel(grid.get(y * data.size + x)?.id ?? null);
+  }, [atKey]);
 
   // resolve theme colors once per render pass
   const readColors = () => {
@@ -968,7 +978,12 @@ function VillagePanel({ v, data, onClose }: { v: MapVillage; data: MapData; onCl
         <button type="button" class="icon-btn map-info-close" aria-label="Close" onClick={onClose}><Icon name="close" size={14} /></button>
         <h3>{v.name}</h3>
         {info.bonus && <div class="map-info-bonus"><BonusChip type={info.bonus} /></div>}
-        <div class="muted small">{coords(v.x, v.y)} · {quadrant(v.x, v.y, view.value!.config.size)} · <span class="num">{fmt(v.points)}</span> points</div>
+        <div class="muted small map-info-meta">
+          <span class="num coord-text">{coords(v.x, v.y)}</span>
+          <CopyButton text={coords(v.x, v.y)} label={`Copy coordinates ${coords(v.x, v.y)}`} />
+          <CopyButton text={`[coord]${coords(v.x, v.y)}[/coord]`} label="Copy as BBCode for the forum" class="is-bb">BBCode</CopyButton>
+          <span>· {quadrant(v.x, v.y, view.value!.config.size)} · <span class="num">{fmt(v.points)}</span> points</span>
+        </div>
       </header>
       <dl class="facts">
         <dt>Ruler</dt>

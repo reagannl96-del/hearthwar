@@ -1,10 +1,14 @@
 import { SharedReportCard } from './ReportsScreen';
-import { useEffect, useState } from 'preact/hooks';
-import { RIGHT_LABEL, TRIBE_MAX_MEMBERS, TRIBE_RIGHTS } from '../../engine/tribes';
+import { useEffect, useRef, useState } from 'preact/hooks';
+import { FORUM_MAX_TEXT, RIGHT_LABEL, TRIBE_MAX_MEMBERS, TRIBE_RIGHTS, TRIBE_TEXT_MAX } from '../../engine/tribes';
 import type { Diplomacy, TribeRight } from '../../engine/types';
 import type { MyTribeView, TribeProfileView } from '../../engine/view';
 import { Icon } from '../art/icons';
-import { Btn, Countdown, Empty, Section, Tabs } from '../components/common';
+import { BBEditor, appendQuote } from '../bbcode/Editor';
+import { excerpt } from '../bbcode/parse';
+import { BBCode } from '../bbcode/render';
+import { Btn, CopyButton, Countdown, Empty, Section, Tabs } from '../components/common';
+import { threadLink } from '../deepLink';
 import { coords, fmt, fmtAgo } from '../format';
 import { act, host, now, view, usePane } from '../store';
 
@@ -13,13 +17,13 @@ type Home = ReturnType<NonNullable<typeof host.value>['tribeHome']>;
 
 const REL_LABEL: Record<Diplomacy | 'own', string> = { ally: 'Ally', nap: 'Non-aggression pact', enemy: 'Enemy', own: 'Your tribe' };
 
-export function TribeScreen({ id, tab }: { id?: number; tab?: string }) {
+export function TribeScreen({ id, tab, thread, post }: { id?: number; tab?: string; thread?: number; post?: number }) {
   const h = host.value!;
   view.value; // re-render on updates
   const home = h.tribeHome();
   if (id !== undefined && id !== home.tribe?.id) return <TribeProfile id={id} />;
   if (!home.tribe) return <NoTribe home={home} />;
-  return <MyTribe t={home.tribe} tab={(tab as Tab) ?? 'overview'} />;
+  return <MyTribe t={home.tribe} tab={(tab as Tab) ?? 'overview'} thread={thread} post={post} />;
 }
 
 /** The tag, as Tribal Wars shows it: [TAG], clickable to the tribe's profile. */
@@ -251,14 +255,14 @@ function TribeProfile({ id }: { id: number }) {
           </div>
         </Section>
       )}
-      {t.description && <Section title="About"><p class="prewrap">{t.description}</p></Section>}
+      {t.description && <Section title="About"><BBCode text={t.description} /></Section>}
       <Section title={`Members (${t.members.length})`}><MembersTable t={t} /></Section>
       <Section title="Diplomacy"><Relations t={t} /></Section>
     </div>
   );
 }
 
-function MyTribe({ t, tab }: { t: MyTribeView; tab: Tab }) {
+function MyTribe({ t, tab, thread, post }: { t: MyTribeView; tab: Tab; thread?: number; post?: number }) {
   const pane = usePane();
   const can = (r: TribeRight) => t.myRights.includes(r) || t.myRights.includes('lead');
   const tabs: { id: Tab; label: string; badge?: number }[] = [
@@ -277,7 +281,7 @@ function MyTribe({ t, tab }: { t: MyTribeView; tab: Tab }) {
       {tab === 'members' && <Section title={`Members (${t.members.length}/${TRIBE_MAX_MEMBERS})`}><MembersTable t={t} manage={t} /></Section>}
       {tab === 'invites' && <Invites t={t} />}
       {tab === 'diplomacy' && <DiplomacyTab t={t} canEdit={can('diplomacy')} />}
-      {tab === 'forum' && <Forum t={t} />}
+      {tab === 'forum' && <Forum t={t} thread={thread} post={post} />}
       {tab === 'settings' && <Settings t={t} />}
     </div>
   );
@@ -289,10 +293,10 @@ function Overview({ t }: { t: MyTribeView }) {
     <div class="grid-2">
       <div class="stack">
         <Section title="Announcement">
-          {t.internal ? <p class="prewrap">{t.internal}</p> : <Empty>The leaders haven't posted an announcement.</Empty>}
+          {t.internal ? <BBCode text={t.internal} /> : <Empty>The leaders haven't posted an announcement.</Empty>}
         </Section>
         <Section title="About the tribe">
-          {t.description ? <p class="prewrap">{t.description}</p> : <Empty>No public description yet.</Empty>}
+          {t.description ? <BBCode text={t.description} /> : <Empty>No public description yet.</Empty>}
         </Section>
       </div>
       <div class="stack">
@@ -319,7 +323,13 @@ function Overview({ t }: { t: MyTribeView }) {
             <ul class="forum-mini">
               {t.forum.slice(0, 5).map((th) => {
                 const last = th.posts[th.posts.length - 1];
-                return <li><b>{th.title}</b> <span class="muted small">· {t.names[last?.by ?? th.by]} {fmtAgo(last?.t ?? th.t, now.value)}</span></li>;
+                const said = last?.text ? excerpt(last.text, 80) : last?.report ? 'shared a report' : '';
+                return (
+                  <li>
+                    <button type="button" class="link" onClick={() => pane.go({ name: 'tribe', tab: 'forum', thread: th.id })}><b>{th.title}</b></button> <span class="muted small">· {t.names[last?.by ?? th.by]} {fmtAgo(last?.t ?? th.t, now.value)}</span>
+                    {said && <div class="forum-excerpt muted small">{said}</div>}
+                  </li>
+                );
               })}
             </ul>
           )}
@@ -419,44 +429,105 @@ function DiplomacyTab({ t, canEdit }: { t: MyTribeView; canEdit: boolean }) {
   );
 }
 
-function Forum({ t }: { t: MyTribeView }) {
-  const [open, setOpen] = useState<number | null>(null);
+/** A quoted post without the quotes inside it, so replies don't nest forever. */
+function withoutQuotes(text: string): string {
+  let s = text;
+  for (let i = 0; i < 10; i++) {
+    const next = s.replace(/\[quote(?:=[^\]\n]*)?\](?:(?!\[quote[\]=])[\s\S])*?\[\/quote\]\n?/gi, '');
+    if (next === s) break;
+    s = next;
+  }
+  return s.trim();
+}
+
+function Forum({ t, thread, post }: { t: MyTribeView; thread?: number; post?: number }) {
+  const pane = usePane();
   const [title, setTitle] = useState('');
   const [text, setText] = useState('');
   const [reply, setReply] = useState('');
+  const [flash, setFlash] = useState<number | null>(null);
+  const replyBox = useRef<HTMLTextAreaElement | null>(null);
   const me = view.value!.me.id;
   const mod = t.myRights.includes('forum') || t.myRights.includes('lead');
-  const th = open !== null ? t.forum.find((x) => x.id === open) : undefined;
+  const th = thread !== undefined ? t.forum.find((x) => x.id === thread) : undefined;
   const unread = new Set(view.value!.forumUnread);
-  const openThread = (id: number) => { setOpen(id); if (unread.has(id)) act({ type: 'forumRead', thread: id }); };
+  const names = t.members.map((m) => m.name);
+  const openThread = (id: number) => { pane.go({ name: 'tribe', tab: 'forum', thread: id }); if (unread.has(id)) act({ type: 'forumRead', thread: id }); };
+  const allThreads = () => pane.go({ name: 'tribe', tab: 'forum' });
   // replies that arrive while the thread is open count as read
   useEffect(() => { if (th && unread.has(th.id)) act({ type: 'forumRead', thread: th.id }); });
-  if (th) {
+  // a link to one post: bring it into view and light it up for a moment
+  useEffect(() => {
+    if (post === undefined || !th) return;
+    const el = document.getElementById(`post-${post}`);
+    if (!el) return;
+    el.scrollIntoView({ block: 'center', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    setFlash(post);
+    const off = setTimeout(() => setFlash(null), 2600);
+    return () => clearTimeout(off);
+  }, [thread, post, !!th]);
+
+  const quote = (author: string, body: string) => {
+    setReply((r) => appendQuote(r, author, withoutQuotes(body)));
+    requestAnimationFrame(() => {
+      const el = replyBox.current;
+      if (!el) return;
+      el.focus({ preventScroll: true });
+      el.setSelectionRange(el.value.length, el.value.length);
+      el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    });
+  };
+
+  if (thread !== undefined && !th) {
     return (
-      <Section title={th.title} actions={<Btn small variant="ghost" onClick={() => setOpen(null)}>‹ All threads</Btn>}>
-        <ul class="forum-posts">
-          {th.posts.map((p, i) => (
-            <li>
-              <div class="post-head">
-                <b>{t.names[p.by] ?? 'Someone'}</b> <span class="muted small">{fmtAgo(p.t, now.value)}</span>
-                {(mod || p.by === me) && i > 0 && <button type="button" class="link small" onClick={() => act({ type: 'forumDelete', thread: th.id, post: p.id })}>delete</button>}
-              </div>
-              {p.text && <p class="prewrap">{p.text}</p>}
-              {p.report && <SharedReportCard r={p.report} />}
-            </li>
-          ))}
-        </ul>
-        <form class="stack-sm" onSubmit={(e) => { e.preventDefault(); if (act({ type: 'forumReply', thread: th.id, text: reply })) setReply(''); }}>
-          <textarea rows={3} value={reply} onInput={(e) => setReply(e.currentTarget.value)} placeholder="Write a reply" />
-          <div class="row gap">
-            <Btn type="submit" disabled={!reply.trim()}>Reply</Btn>
+      <Section title="Thread not found" actions={<Btn small variant="ghost" onClick={allThreads}>‹ All threads</Btn>}>
+        <Empty>This thread has been deleted, or it belongs to another tribe's forum.</Empty>
+      </Section>
+    );
+  }
+
+  if (th) {
+    const tooLong = reply.length > FORUM_MAX_TEXT;
+    return (
+      <Section
+        title={<>{th.sticky && <span class="pill">Pinned</span>} {th.title}</>}
+        actions={<>
+          <CopyButton text={threadLink(th.id)} label="Copy a link to this thread (only your tribe can open it)" icon="link">Copy link</CopyButton>
+          <Btn small variant="ghost" onClick={allThreads}>‹ All threads</Btn>
+        </>}
+      >
+        <ol class="forum-posts">
+          {th.posts.map((p, i) => {
+            const author = t.names[p.by] ?? 'Someone';
+            return (
+              <li id={`post-${p.id}`} class={flash === p.id ? 'is-target' : ''}>
+                <div class="post-head">
+                  <button type="button" class="link" onClick={() => pane.go({ name: 'ranking', player: p.by })}>{author}</button>
+                  <span class="muted small">{fmtAgo(p.t, now.value)}</span>
+                  <span class="post-tools">
+                    {p.text && <button type="button" class="link small post-quote" onClick={() => quote(author, p.text)} title={`Quote ${author} in your reply`}>Quote</button>}
+                    {(mod || p.by === me) && i > 0 && <button type="button" class="link small" onClick={() => { if (confirm('Delete this post?')) act({ type: 'forumDelete', thread: th.id, post: p.id }); }}>Delete</button>}
+                    <CopyButton text={threadLink(th.id, p.id)} label={`Copy a link to post #${i + 1}`} icon="link" class="post-num">#{i + 1}</CopyButton>
+                  </span>
+                </div>
+                {p.text && <BBCode text={p.text} class="post-body" />}
+                {p.report && <SharedReportCard r={p.report} />}
+              </li>
+            );
+          })}
+        </ol>
+        <form class="stack-sm forum-reply" onSubmit={(e) => { e.preventDefault(); if (!tooLong && act({ type: 'forumReply', thread: th.id, text: reply })) setReply(''); }}>
+          <BBEditor id="forum-reply" label="Your reply" value={reply} onChange={setReply} rows={4} maxLength={FORUM_MAX_TEXT} placeholder="Write a reply" names={names} inputRef={replyBox} />
+          <div class="row gap wrap">
+            <Btn type="submit" disabled={!reply.trim() || tooLong}>Reply</Btn>
             {mod && <Btn variant="ghost" onClick={() => act({ type: 'forumPin', thread: th.id, sticky: !th.sticky })}>{th.sticky ? 'Unpin' : 'Pin'}</Btn>}
-            {(mod || th.by === me) && <Btn variant="quiet" onClick={() => { if (confirm('Delete this whole thread?')) { act({ type: 'forumDelete', thread: th.id }); setOpen(null); } }}>Delete thread</Btn>}
+            {(mod || th.by === me) && <Btn variant="quiet" onClick={() => { if (confirm('Delete this whole thread?')) { act({ type: 'forumDelete', thread: th.id }); allThreads(); } }}>Delete thread</Btn>}
           </div>
         </form>
       </Section>
     );
   }
+  const tooLong = text.length > FORUM_MAX_TEXT;
   return (
     <div class="grid-2">
       <Section title="Threads">
@@ -464,10 +535,12 @@ function Forum({ t }: { t: MyTribeView }) {
           <ul class="forum-threads">
             {t.forum.map((x) => {
               const last = x.posts[x.posts.length - 1];
+              const said = last?.text ? excerpt(last.text, 110) : last?.report ? 'shared a report' : '';
               return (
                 <li>
                   <button type="button" class={`link ${unread.has(x.id) ? 'is-unread' : ''}`} onClick={() => openThread(x.id)}>{unread.has(x.id) && <span class="unread-dot" aria-label="New posts" />}{x.sticky && <span class="pill">Pinned</span>} <b>{x.title}</b></button>
                   <div class="muted small">{x.posts.length} post{x.posts.length === 1 ? '' : 's'} · last by {t.names[last?.by ?? x.by]} {fmtAgo(last?.t ?? x.t, now.value)}</div>
+                  {said && <div class="forum-excerpt small">{said}</div>}
                 </li>
               );
             })}
@@ -475,10 +548,10 @@ function Forum({ t }: { t: MyTribeView }) {
         )}
       </Section>
       <Section title="New thread">
-        <form class="stack-sm" onSubmit={(e) => { e.preventDefault(); if (act({ type: 'forumThread', title, text })) { setTitle(''); setText(''); } }}>
+        <form class="stack-sm" onSubmit={(e) => { e.preventDefault(); if (tooLong) return; const r = act({ type: 'forumThread', title, text }); if (r) { setTitle(''); setText(''); } }}>
           <input type="text" maxLength={80} value={title} onInput={(e) => setTitle(e.currentTarget.value)} placeholder="Title" aria-label="Title" />
-          <textarea rows={5} value={text} onInput={(e) => setText(e.currentTarget.value)} placeholder="What's on your mind?" aria-label="Message" />
-          <div><Btn type="submit" disabled={!title.trim() || !text.trim()}>Post</Btn></div>
+          <BBEditor id="forum-new" label="Message" value={text} onChange={setText} rows={6} maxLength={FORUM_MAX_TEXT} placeholder="What's on your mind? Try [b]bold[/b], [spoiler]…[/spoiler] or coordinates like 500|500." names={names} />
+          <div><Btn type="submit" disabled={!title.trim() || !text.trim() || tooLong}>Post</Btn></div>
         </form>
       </Section>
     </div>
@@ -500,8 +573,8 @@ function Settings({ t }: { t: MyTribeView }) {
               <label class="field grow"><span>Name</span><input type="text" maxLength={32} value={name} onInput={(e) => setName(e.currentTarget.value)} /></label>
               <label class="field"><span>Tag</span><input type="text" maxLength={6} value={tag} onInput={(e) => setTag(e.currentTarget.value.replace(/\s/g, ''))} /></label>
             </div>
-            <label class="field"><span>Public description (anyone can read it)</span><textarea rows={4} value={desc} onInput={(e) => setDesc(e.currentTarget.value)} /></label>
-            <label class="field"><span>Announcement (members only)</span><textarea rows={4} value={internal} onInput={(e) => setInternal(e.currentTarget.value)} /></label>
+            <div class="field"><label for="tribe-desc">Public description (anyone can read it)</label><BBEditor id="tribe-desc" label="Public description" rows={5} maxLength={TRIBE_TEXT_MAX} value={desc} onChange={setDesc} names={t.members.map((m) => m.name)} /></div>
+            <div class="field"><label for="tribe-internal">Announcement (members only)</label><BBEditor id="tribe-internal" label="Announcement" rows={5} maxLength={TRIBE_TEXT_MAX} value={internal} onChange={setInternal} names={t.members.map((m) => m.name)} /></div>
             <div><Btn type="submit">Save</Btn></div>
           </form>
         </Section>

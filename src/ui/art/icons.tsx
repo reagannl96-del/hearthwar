@@ -8,7 +8,7 @@ import type { VillageTheme } from '../../engine/data/themes';
 
 type IconName = 'wood' | 'clay' | 'iron' | 'pop' | 'storage' | 'time' | 'points' | 'loyalty' | 'coin' | 'merchant' | 'hide'
   | UnitId | `b_${BuildingId}`
-  | 'attack' | 'support' | 'return' | 'report' | 'map' | 'village' | 'quest' | 'rank' | 'settings' | 'overview' | 'pause' | 'play' | 'ff' | 'bell' | 'close' | 'star' | 'shield' | 'trade' | 'news' | 'prev' | 'next' | 'flag' | 'tribe';
+  | 'attack' | 'support' | 'return' | 'report' | 'map' | 'village' | 'quest' | 'rank' | 'settings' | 'overview' | 'pause' | 'play' | 'ff' | 'bell' | 'close' | 'copy' | 'check' | 'link' | 'star' | 'shield' | 'trade' | 'news' | 'prev' | 'next' | 'flag' | 'tribe';
 
 const S = (props: { children: preact.ComponentChildren; size: number; class?: string; title?: string }) => (
   <svg viewBox="0 0 24 24" width={props.size} height={props.size} class={`icon ${props.class ?? ''}`} aria-hidden={props.title ? undefined : 'true'} role={props.title ? 'img' : undefined}>
@@ -1260,6 +1260,17 @@ const paths: Record<string, () => JSX.Element> = {
   close: () => <path d="m6 4.6 6 6 6-6L19.4 6l-6 6 6 6-1.4 1.4-6-6-6 6L4.6 18l6-6-6-6Z" fill="currentColor" />,
   prev: () => <path d="M15 4 7 12l8 8 1.4-1.4L9.8 12l6.6-6.6Z" fill="currentColor" />,
   next: () => <path d="m9 4 8 8-8 8-1.4-1.4 6.6-6.6-6.6-6.6Z" fill="currentColor" />,
+  // two sheets, one over the other: copy to the clipboard
+  copy: () => (
+    <g fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
+      <rect x="8.5" y="8.5" width="11.5" height="12.5" rx="2" />
+      <path d="M15.5 5.5V5a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v9.5a2 2 0 0 0 2 2h.5" />
+    </g>
+  ),
+  link: () => (
+    <path d="M10.2 13.8a3.6 3.6 0 0 0 5.1 0l3.2-3.2a3.6 3.6 0 0 0-5.1-5.1l-1.2 1.2m1.6 5.3a3.6 3.6 0 0 0-5.1 0l-3.2 3.2a3.6 3.6 0 0 0 5.1 5.1l1.2-1.2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+  ),
+  check: () => <path d="m4 12.6 5.2 5.2L20 7l-1.6-1.6-9.2 9.2-3.6-3.6Z" fill="currentColor" />,
 };
 
 // every troop in each village's style: 'spear' is the classic, 'goblin_spear' the goblin one
