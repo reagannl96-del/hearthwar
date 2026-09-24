@@ -10,7 +10,7 @@ import {
 import type { BuildingId, RecruitBuilding, ResKey, UnitId } from '../../engine/types';
 import type { VillageView } from '../../engine/view';
 import { Icon } from '../art/icons';
-import { Btn, Cost, Countdown, Empty, NumInput, Progress, Section, UnitList, UnitIcon, unitName } from '../components/common';
+import { Bar, Btn, Cost, Countdown, Empty, NumInput, Progress, Section, UnitList, UnitIcon, unitName } from '../components/common';
 import { fmt, fmtDur } from '../format';
 import { act, host, liveRes, now, view, warp, usePane } from '../store';
 import { MarketPanel } from './MarketScreen';
@@ -369,7 +369,19 @@ function AcademyPanel({ v }: { v: VillageView }) {
             Every nobleman needs crowns minted in advance: the first needs <b>1</b>, the second <b>2</b> more, the third <b>3</b> more, and so on.
             Each village you already rule (beyond your first) counts as a nobleman used.
           </p>
-          <dl class="facts">
+          {/* where you stand at a glance: crowns in hand, and how far to the next nobleman */}
+          <div class="crown-tracker">
+            <div class="crown-stat"><span class="crown-num num">{n.coins}</span><span class="crown-label">crowns minted</span></div>
+            <div class={`crown-stat ${n.canTrain > 0 ? 'is-ready' : ''}`}>
+              <span class="crown-num num">{n.canTrain > 0 ? n.canTrain : n.coinsNeeded}</span>
+              <span class="crown-label">{n.canTrain > 0 ? (n.canTrain === 1 ? 'nobleman ready to train' : 'noblemen ready to train') : `more for nobleman #${n.used + 1}`}</span>
+            </div>
+          </div>
+          <div class="crown-progress">
+            <Bar value={n.coins} max={n.nextCoins} tone={n.canTrain > 0 ? 'ok' : 'accent'} />
+            <span class="small"><b class="num">{Math.min(n.coins, n.nextCoins)}</b> of <b class="num">{n.nextCoins}</b> crowns toward nobleman #{n.used + 1}</span>
+          </div>
+          <dl class="facts small">
             <dt>Crowns minted</dt><dd class="num">{n.coins}</dd>
             <dt>Noblemen supported</dt><dd class="num">{n.allowed}</dd>
             <dt>Used (noblemen + extra villages)</dt><dd class="num">{n.used}</dd>
