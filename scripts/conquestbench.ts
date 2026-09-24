@@ -146,3 +146,4 @@ void finished;
   const all = Object.values(w.villages).filter((v) => v.ownerId !== null).length;
   console.log('== top tribes: ' + tribes.slice(0, 5).map((t) => `[${t.tag}] ${t.n}m ${t.v}v (${Math.round((t.v / all) * 100)}%)`).join(' | '));
 }
+console.log(`== save size: ${(JSON.stringify(w).length / 1e6).toFixed(1)} MB (${Object.keys(w.villages).length} villages, ${Object.keys(w.commands).length} commands on the road)`);
