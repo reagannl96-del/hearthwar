@@ -601,7 +601,7 @@ function stepPyramid(o: { levels: number; w0: number; d0: number; w1: number; d1
     g.add(box(W(i), stepH, D(i), i % 2 ? ST : ST_OLD, 0, y, cz));
     g.add(box(W(i) + 0.14, 0.16, D(i) + 0.14, ST_LT, 0, y + stepH - 0.16, cz));
     // the recessed panel band on each course, red on every other one
-    g.add(box(W(i) + 0.05, stepH * 0.32, D(i) + 0.05, i % 2 === 1 && o.painted !== false ? PAINT : ST_DK, 0, y + stepH * 0.3, cz));
+    g.add(box(W(i) + 0.12, stepH * 0.32, D(i) + 0.12, i % 2 === 1 && o.painted !== false ? PAINT : ST_DK, 0, y + stepH * 0.3, cz));
     // carved panels in a row along each face above the band
     const ph = stepH * 0.24, py = y + stepH * 0.66;
     for (const [len, along, off, facing] of [[W(i), 'x', D(i) / 2, 1], [W(i), 'x', -D(i) / 2, -1], [D(i), 'z', W(i) / 2, 1], [D(i), 'z', -W(i) / 2, -1]] as [number, string, number, number][]) {
@@ -609,11 +609,11 @@ function stepPyramid(o: { levels: number; w0: number; d0: number; w1: number; d1
       for (let k = 0; k < np; k++) {
         const t = -len / 2 + ((k + 0.5) * len) / np;
         if (along === 'x' && facing > 0 && Math.abs(t) < sw / 2 + 0.9) continue;
-        const p = along === 'x' ? box(0.9, ph, 0.06, ST_DK, t, py, cz + off + facing * 0.02) : box(0.06, ph, 0.9, ST_DK, off + facing * 0.02, py, cz + t);
+        const p = along === 'x' ? box(0.9, ph, 0.06, ST_DK, t, py, cz + off + facing * 0.06) : box(0.06, ph, 0.9, ST_DK, off + facing * 0.06, py, cz + t);
         g.add(p);
         // on the red courses, a jade stud between the panels that glows at night
         if (i % 2 === 1 && o.painted !== false) {
-          const jy = y + stepH * 0.46, e = 0.05;
+          const jy = y + stepH * 0.46, e = 0.1;
           const j = along === 'x' ? glow(new THREE.BoxGeometry(0.18, 0.18, 0.06)).translateX(t).translateY(jy).translateZ(cz + off + facing * e) : glow(new THREE.BoxGeometry(0.06, 0.18, 0.18)).translateX(off + facing * e).translateY(jy).translateZ(cz + t);
           g.add(j);
         }
@@ -629,7 +629,8 @@ function stepPyramid(o: { levels: number; w0: number; d0: number; w1: number; d1
   const zf = cz + D(0) / 2, zt = cz + D(n - 1) / 2 - 0.3;
   const steps = n * 3;
   const run = (zf - zt) / steps, rise = (top - y0) / steps;
-  for (let k = 0; k < steps; k++) g.add(box(sw, rise * (k + 1), run + 0.02, k % 3 === 2 ? ST : ST_LT, 0, y0, zf - k * run - run / 2));
+  // (each step stands a touch proud of the ledge trims it meets, so their tops never flicker)
+  for (let k = 0; k < steps; k++) g.add(box(sw, rise * (k + 1) + 0.04, run + 0.02, k % 3 === 2 ? ST : ST_LT, 0, y0, zf - k * run - run / 2));
   // the balustrades: sloped rails running up either side, a serpent head at the foot of each
   const slope = Math.atan2(top - y0, zf - zt);
   const len = Math.hypot(top - y0, zf - zt);
