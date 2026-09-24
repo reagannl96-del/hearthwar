@@ -7,7 +7,7 @@ import { resolveBattle } from '../combat';
 import { isProtected, news, sendTrain, sendTroops, travelTime, withdrawSupport } from '../commands';
 import { BUILDINGS, BUILDING_ORDER } from '../data/buildings';
 import { HEROES, UNITS } from '../data/units';
-import { COIN_COST, distance, hasUnits, hideCap, moraleFor, recruitTime, resGte, unitsCarry, unitsCount } from '../formulas';
+import { COIN_COST, distance, farmCap, hasUnits, hideCap, moraleFor, recruitTime, resGte, unitsCarry, unitsCount } from '../formulas';
 import { nextRandom } from '../rng';
 import { villagesNear } from '../spatial';
 import { EXCHANGE_RATE, exchangeQuote } from '../market';
@@ -16,7 +16,7 @@ import { TRIBE_MAX_MEMBERS, mergeTribes, tribeFull, acceptInvite, answerApplicat
 import { tribeName } from '../data/names';
 import type { AITraits, BattleData, Incident, BuildingId, Command, Player, Res, Tribe, UnitId, Units, Village, VillageRole, World } from '../types';
 import { RES_KEYS } from '../types';
-import { farmMax, loyaltyRegen, popFree, queuedLevel, recruitQueueEnd, storageOf, unitAvailable, updateVillage } from '../village';
+import { buildingsPop, farmMax, loyaltyRegen, popFree, troopsPop, queuedLevel, recruitQueueEnd, storageOf, unitAvailable, updateVillage } from '../village';
 import { aiThinkInterval } from '../world';
 
 type P = NonNullable<Player['ai']>['personality'];
@@ -91,6 +91,34 @@ const ARMY: Record<P, Partial<Record<UnitId, number>>> = {
 };
 
 const TROOP_SHARE: Record<P, number> = { warlord: 0.5, farmer: 0.38, turtle: 0.42, expander: 0.35, opportunist: 0.44, guardian: 0.45 };
+
+/**
+ * The army a village should carry, as troop population per point of the village (good
+ * players keep 2:1, full-offense growers 3:1). Each ruler has its own taste within its
+ * temperament, so some villages are loaded and some lean.
+ */
+const ARMY_RATIO: Record<P, number> = { warlord: 2.6, opportunist: 2.3, guardian: 2.1, turtle: 2.0, expander: 1.7, farmer: 1.4 };
+
+function armyRatio(p: Player): number {
+  const h = ((p.id * 2654435761) >>> 0) % 1000 / 1000; // steady per ruler
+  return ARMY_RATIO[p.ai!.personality] * (0.8 + h * 0.45);
+}
+
+/** Troop population a village is after, within what a full farm could feed (the farm grows to fit it). */
+function armyTarget(p: Player, v: Village): number {
+  const full = farmCap(30, v.bonus);
+  const room = full - buildingsPop(v) - Math.round(full * 0.06);
+  return Math.max(0, Math.min(room, Math.round(v.points * armyRatio(p))));
+}
+
+/** Troop population of a village: home, in training and away. */
+const armyPopOf = (v: Village) => troopsPop(v);
+
+/** How far along a village's army is towards what it should carry (1 = there). */
+function armyFill(p: Player, v: Village): number {
+  const target = armyTarget(p, v);
+  return target <= 0 ? 1 : Math.min(1, armyPopOf(v) / target);
+}
 
 const OFFENSIVE: UnitId[] = ['axe', 'light', 'marcher', 'heavy', 'ram', 'catapult'];
 
@@ -306,9 +334,18 @@ function incomingIndex(w: World, p: Player): Map<number, Command[]> {
 
 function build(w: World, p: Player, v: Village): void {
   const slots = buildQueueSlots(v);
+  // an established village well short of its army puts its resources into troops first
+  const lean = v.points >= 600 && v.buildings.barracks > 0 && armyFill(p, v) < 0.5;
   for (let guard = 0; guard < slots && v.buildQueue.length < slots; guard++) {
-    const b = chooseBuild(w, p, v);
+    // short of troops: a faster barracks and stable come before anything else
+    // (and a smithy, without which a taken village can only make spearmen)
+    const FAST: [BuildingId, number][] = [['smithy', 5], ['barracks', 20], ['stable', 15], ['smithy', 15]];
+    // the farm first, if it can't feed the army the village is after
+    const farmShort = lean && farmMax(v) - buildingsPop(v) < armyTarget(p, v) * 1.05 && queuedLevel(v, 'farm') < 30;
+    const fast = farmShort && checkBuild(w, v, 'farm').ok ? 'farm' : lean ? FAST.find(([x, lvl]) => queuedLevel(v, x) < lvl && checkBuild(w, v, x).ok)?.[0] : undefined;
+    const b = fast ?? chooseBuild(w, p, v);
     if (!b) return;
+    if (lean && b !== 'farm' && b !== 'warehouse' && b !== 'wall' && b !== 'barracks' && b !== 'stable' && b !== 'smithy') return;
     if (!applyAction(w, p.id, { type: 'build', vid: v.id, building: b }).ok) return;
   }
 }
@@ -423,25 +460,35 @@ function recruit(w: World, p: Player, v: Village): void {
   if (v.buildings.barracks < 1) return;
   const pers = p.ai!.personality;
   const diff = w.config.difficulty;
-  const share = TROOP_SHARE[pers] * (diff === 'hard' ? 1.15 : diff === 'easy' ? 0.8 : 1);
+  const base = TROOP_SHARE[pers] * (diff === 'hard' ? 1.15 : diff === 'easy' ? 0.8 : 1);
   if (v.buildings.main < 3) return;
   // troops get a share of whatever is in store; the loot they bring back pays for buildings.
-  // Surplus beyond the next building's needs is spent more freely.
-  const reserve = buildReserve(w, p, v);
+  // A village short of the army it should carry spends far more on troops, and doesn't
+  // hold back for the next building; one at strength spends its usual share.
+  const fill = armyFill(p, v);
+  const share = Math.min(0.9, base + (1 - base) * Math.max(0, 0.9 - fill));
+  const reserve = fill < 0.6 ? { wood: 0, clay: 0, iron: 0 } : buildReserve(w, p, v);
   const budget = {
     wood: v.res.wood * share + Math.max(0, v.res.wood - reserve.wood) * (1 - share) * 0.5,
     clay: v.res.clay * share + Math.max(0, v.res.clay - reserve.clay) * (1 - share) * 0.5,
     iron: v.res.iron * share + Math.max(0, v.res.iron - reserve.iron) * (1 - share) * 0.5,
   };
-  const horizon = aiThinkInterval(w) * 3;
+  // a village at strength tops up a little at a time; one short of its army queues
+  // hours of training, the way a person fills the barracks before going to bed
+  const horizon = fill < 0.6 ? 8 * 60 * MIN : fill < 0.9 ? 3 * 60 * MIN : aiThinkInterval(w) * 3;
   const army = armyCount(v);
   const armyPop = Object.entries(army).reduce((s, [k, n]) => s + (n ?? 0) * UNITS[k as UnitId].pop, 0) + 1;
   const role = villageRole(w, p, v);
   const weights = counterWeights(w, p, role, roleWeights(p, role));
-  const options = (Object.keys(weights) as UnitId[])
+  let options = (Object.keys(weights) as UnitId[])
     .filter((u) => unitAvailable(w, v, u).ok)
     .map((u) => ({ u, deficit: weights[u]! - ((army[u] ?? 0) * UNITS[u].pop) / armyPop }))
     .sort((a, b) => b.deficit - a.deficit);
+  // none of the village's own recipe can be made yet (a taken village without a smithy):
+  // it trains what it can meanwhile rather than sitting on its resources
+  if (options.length === 0 || (fill < 0.6 && options.every((o) => o.u === 'scout'))) {
+    options = (['axe', 'light', 'sword', 'spear'] as UnitId[]).filter((u) => unitAvailable(w, v, u).ok).map((u) => ({ u, deficit: 1 }));
+  }
   const usedBuildings = new Set<string>();
   // keep room on the farm for more buildings and for noblemen
   const popReserve = Math.round(farmMax(v) * 0.06) + (v.buildings.academy > 0 || v.buildings.main >= 18 ? 450 : 0);
@@ -1108,7 +1155,13 @@ function farm(w: World, p: Player, v: Village): void {
       const defenders = unitsCount(intel.units) - (intel.units.scout ?? 0);
       const wall = intel.buildings?.wall ?? intel.wall ?? 0;
       if (defenders > 25 || wall > 3) continue;
+      // a person's village is hit hard, not tickled: a fifth of the attackers at home ride along
       const group = raidGroup(v, wall);
+      if (group) for (const u of ['axe', 'light', 'marcher', 'heavy'] as UnitId[]) {
+        const spare = (v.units[u] ?? 0) - (group[u] ?? 0);
+        const add = Math.floor(Math.max(0, spare) * 0.2);
+        if (add > 0) group[u] = (group[u] ?? 0) + add;
+      }
       if (!group) break;
       if (!sendTroops(w, { ownerId: p.id, fromVid: v.id, toVid: t.id, kind: 'attack', units: group, tag: 'farm' }).ok) break;
       ai.memory[t.id] = w.now;

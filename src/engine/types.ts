@@ -524,6 +524,8 @@ export interface World {
   round?: boolean;
   /** how many barbarian villages the realm holds when full; lost ones are slowly replaced up to this */
   barbTarget?: number;
+  /** one-off events already run on this realm (e.g. a wave of newcomers), so a restart never repeats them */
+  onceDone?: string[];
   /** client-side shadow only: attacks on fellow tribe members, as sent by the server */
   tribeAlerts?: TribeAlert[];
 }

@@ -21,7 +21,7 @@ import { privatePacket, publicSnapshot } from '../src/engine/shadow';
 import { invalidateSpatial } from '../src/engine/spatial';
 import type { Difficulty, RoundResult, World } from '../src/engine/types';
 import { recomputeCounters, recomputePlayerPoints } from '../src/engine/village';
-import { SIZE_PRESETS, WORLD_VERSION, createWorld, defaultConfig, migrateWorld, reinforceRulers, respawnHuman, spawnPlayer } from '../src/engine/world';
+import { SIZE_PRESETS, WORLD_VERSION, createWorld, defaultConfig, migrateWorld, reinforceRulers, respawnHuman, welcomeWave, spawnPlayer } from '../src/engine/world';
 import type { ClientMsg, ServerMsg } from '../src/net/protocol';
 
 const env = process.env;
@@ -75,6 +75,9 @@ async function loadWorld(): Promise<World> {
       recomputeCounters(w);
       migrateWorld(w);
       const came = reinforceRulers(w, AI_RULERS);
+      // a one-off wave of newcomers to liven the realm up (runs once, whatever restarts follow)
+      const wave = welcomeWave(w, 'wave-2026-09-24', 35);
+      if (wave > 0) console.log(`A wave of ${wave} new AI rulers arrived.`);
       w.config.aiCount = Math.max(w.config.aiCount, AI_TARGET);
       if (came > 0) console.log(`${came} AI rulers joined, for ${AI_RULERS} in all.`);
       recomputePlayerPoints(w);

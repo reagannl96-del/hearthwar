@@ -578,6 +578,22 @@ export function abandonRealm(w: World, p: Player): void {
   w.mapRev++;
 }
 
+/**
+ * A wave of newcomers, once per key: `count` rulers settle the open land together (with
+ * the head start late arrivals get), and the realm's usual size grows to keep them.
+ */
+export function welcomeWave(w: World, key: string, count: number): number {
+  if (w.finished || (w.onceDone ?? []).includes(key)) return 0;
+  (w.onceDone ??= []).push(key);
+  const head = Math.min(14, 4 + Math.floor(w.now / (24 * HOUR)) * 2);
+  let n = 0;
+  for (let i = 0; i < count; i++) if (foundAiRuler(w, head)) n++;
+  const living = Object.values(w.players).filter((p) => p.kind === 'ai' && !p.eliminated).length;
+  w.config.aiCount = Math.max(w.config.aiCount, living);
+  if (n > 0) news(w, `A great wave of settlers has reached the realm: ${n} new rulers have founded villages on the open land.`, 'player');
+  return n;
+}
+
 /** Found an AI ruler at a spot with real elbow room; null when the realm has none left. */
 function foundAiRuler(w: World, headStart = 0): Player | null {
   const taken = new Set(Object.values(w.players).map((p) => p.color));

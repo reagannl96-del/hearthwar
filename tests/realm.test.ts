@@ -319,3 +319,17 @@ describe('hero abilities', () => {
     expect(back.units.axe).toBe(1000 - lost + Math.floor(lost * 0.08));
   });
 });
+
+describe('a wave of newcomers', () => {
+  it('settles the rulers once per key, however often the server restarts', async () => {
+    const { createWorld, defaultConfig, welcomeWave } = await import('../src/engine/world');
+    const w = createWorld({ worldName: 'W', playerName: 'P', villageName: 'Home', seed: 5, config: { ...defaultConfig(), aiCount: 4, size: 120 } });
+    const count = () => Object.values(w.players).filter((p) => p.kind === 'ai' && !p.eliminated).length;
+    const before = count();
+    expect(welcomeWave(w, 'wave-test', 10)).toBe(10);
+    expect(count()).toBe(before + 10);
+    expect(w.config.aiCount).toBeGreaterThanOrEqual(before + 10);
+    expect(welcomeWave(w, 'wave-test', 10)).toBe(0);
+    expect(count()).toBe(before + 10);
+  });
+});
