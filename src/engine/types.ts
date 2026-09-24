@@ -458,6 +458,8 @@ export interface Tribe {
   joins?: number[];
   /** attacks on members lately, for the rulers among them to answer (AI bookkeeping) */
   incidents?: Incident[];
+  /** other tribe id -> bad blood from their attacks on us (fades over a day or so), and when the war began */
+  friction?: Record<number, { n: number; at: number; warSince?: number }>;
   /** other tribe id -> relation */
   diplomacy?: Record<number, Diplomacy>;
   forum?: ForumThread[];

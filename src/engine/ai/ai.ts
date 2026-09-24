@@ -4,7 +4,7 @@
 
 import { applyAction, buildQueueSlots, checkBuild, nobleInfo, recruitCheck, researchCheck, villageHero } from '../actions';
 import { resolveBattle } from '../combat';
-import { isProtected, sendTrain, sendTroops, travelTime, withdrawSupport } from '../commands';
+import { isProtected, news, sendTrain, sendTroops, travelTime, withdrawSupport } from '../commands';
 import { BUILDINGS, BUILDING_ORDER } from '../data/buildings';
 import { HEROES, UNITS } from '../data/units';
 import { COIN_COST, distance, hasUnits, hideCap, moraleFor, recruitTime, resGte, unitsCarry, unitsCount } from '../formulas';
@@ -1694,9 +1694,12 @@ function tribeLife(w: World, p: Player): void {
       if (best && applyToTribe(w, p.id, best.id).ok) return;
     }
   }
-  // on our own for a good while and doing well: found a tribe and gather the neighbours
-  if (!t0 && w.now - (ai.tribelessSince ?? w.now) > DAY_MS && myPts >= 1500) {
-    const chance = ai.personality === 'warlord' || ai.personality === 'expander' ? 0.08 : 0.03;
+  // on our own for a while: found a tribe and gather the neighbours (likelier for a born leader,
+  // and far likelier with several rulers nearby who have no tribe either)
+  if (!t0 && w.now - (ai.tribelessSince ?? w.now) > FOUND_AFTER && myPts >= 600) {
+    const lead = ai.personality === 'warlord' || ai.personality === 'expander' || ai.personality === 'opportunist' ? 0.12 : 0.05;
+    const loners = tribelessNear(w, p, 25);
+    const chance = lead * (loners >= 3 ? 2.5 : loners >= 1 ? 1.3 : 0.5);
     if (nextRandom(w) < chance) {
       for (let tries = 0; tries < 4; tries++) {
         const tn = tribeName(w);
@@ -1711,6 +1714,7 @@ function tribeLife(w: World, p: Player): void {
   if (t.founderId === p.id && seekMerger(w, p, t, tp)) return;
   // answer other tribes' diplomacy
   if (!hasRight(t, p.id, 'diplomacy')) return;
+  tribeDiplomacy(w, p, t, tp);
   // a tribe that took one of ours is an enemy
   for (const [vid, at] of Object.entries(ai.lost ?? {})) {
     if (w.now - at > DAY_MS) continue;
@@ -1739,13 +1743,93 @@ function tribeLife(w: World, p: Player): void {
     const ours = t.diplomacy?.[other.id];
     if (!theirView || ours === theirView) continue;
     const op = tribePoints(w, other);
-    if (theirView === 'enemy') setDiplomacy(w, p.id, other.id, 'enemy');
+    if (theirView === 'enemy') {
+      setDiplomacy(w, p.id, other.id, 'enemy');
+      ((t.friction ??= {})[other.id] ??= { n: 0, at: w.now }).warSince ??= w.now;
+    }
     else if (theirView === 'nap' && !ours && op >= tp * 0.6) setDiplomacy(w, p.id, other.id, 'nap');
     else if (theirView === 'ally' && !ours && op >= tp * 0.8) setDiplomacy(w, p.id, other.id, nextRandom(w) < 0.5 ? 'ally' : 'nap');
   }
 }
 
 const HOUR_MS = 3_600_000;
+/** A ruler without a tribe thinks about founding one after this long. */
+const FOUND_AFTER = 5 * HOUR_MS;
+
+/** Rulers without a tribe living within this many fields of us. */
+function tribelessNear(w: World, p: Player, r: number): number {
+  const home = w.villages[p.villages[0]];
+  if (!home) return 0;
+  const seen = new Set<number>();
+  for (const v of villagesNear(w, home.x, home.y, r)) {
+    const o = v.ownerId !== null ? w.players[v.ownerId] : null;
+    if (o && o.id !== p.id && o.kind === 'ai' && o.tribeId === null && !o.eliminated) seen.add(o.id);
+  }
+  return seen.size;
+}
+
+/** Tribes that have members within this many fields of ours. */
+function neighbourTribes(w: World, t: Tribe, r: number): Tribe[] {
+  const out = new Set<number>();
+  for (const m of t.members) {
+    const home = w.villages[w.players[m]?.villages[0] ?? -1];
+    if (!home) continue;
+    for (const v of villagesNear(w, home.x, home.y, r)) {
+      const o = v.ownerId !== null ? w.players[v.ownerId] : null;
+      if (o?.tribeId != null && o.tribeId !== t.id) out.add(o.tribeId);
+    }
+  }
+  return [...out].map((id) => w.tribes[id]).filter((x): x is Tribe => !!x);
+}
+
+/**
+ * A tribe's dealings with the tribes around it, decided by its leader now and then:
+ *  - war on a tribe whose attacks have built up bad blood (people's tribes too), or,
+ *    for a warlike leader, on a rival of about its own size right next door;
+ *  - an alliance with a tribe fighting the same enemy (their leaders answer as they see fit);
+ *  - peace with an enemy once the fighting has died down for a couple of days.
+ * Tribes of people keep their own counsel; only rulers' tribes are steered here.
+ */
+function tribeDiplomacy(w: World, p: Player, t: Tribe, tp: number): void {
+  if (nextRandom(w) > 0.06) return;
+  const ai = p.ai!;
+  const warlike = ai.personality === 'warlord' || ai.personality === 'opportunist' ? 1 : ai.personality === 'turtle' || ai.personality === 'guardian' ? 0.35 : 0.6;
+  const around = neighbourTribes(w, t, 25);
+  const fr = (t.friction ??= {});
+  for (const o of around) {
+    const cur = t.diplomacy?.[o.id];
+    const bad = fr[o.id] ? frictionNow(w, fr[o.id]) : 0;
+    const op = tribePoints(w, o);
+    if (cur === 'enemy') {
+      // peace, when the war has gone quiet for a while
+      const since = fr[o.id]?.warSince ?? w.now;
+      if (bad < 0.5 && w.now - since > 2 * DAY_MS && nextRandom(w) < 0.3) {
+        setDiplomacy(w, p.id, o.id, null);
+        const theirLead = w.players[o.founderId ?? -1];
+        if (theirLead?.kind === 'ai' && o.diplomacy?.[t.id] === 'enemy') setDiplomacy(w, theirLead.id, t.id, null);
+        news(w, `[${t.tag}] and [${o.tag}] have made peace.`, 'world');
+      }
+      continue;
+    }
+    if (cur === 'ally') continue;
+    // war: enough bad blood, or a warlike leader eyeing a rival its own size
+    const rival = op > tp * 0.6 && op < tp * 1.5;
+    if (bad >= 4 / warlike || (rival && nextRandom(w) < 0.08 * warlike)) {
+      setDiplomacy(w, p.id, o.id, 'enemy');
+      (fr[o.id] ??= { n: bad, at: w.now }).warSince = w.now;
+      news(w, `[${t.tag}] ${t.name} has declared war on [${o.tag}] ${o.name}.`, 'world');
+      return;
+    }
+    // an alliance against a common enemy
+    const ours = Object.entries(t.diplomacy ?? {}).filter(([, d]) => d === 'enemy').map(([id]) => Number(id));
+    const common = ours.some((e) => o.diplomacy?.[e] === 'enemy');
+    if (common && !cur && op >= tp * 0.4 && nextRandom(w) < 0.5) {
+      setDiplomacy(w, p.id, o.id, 'ally');
+      news(w, `[${t.tag}] offers an alliance to [${o.tag}] against their common enemy.`, 'world');
+      return;
+    }
+  }
+}
 
 /**
  * Tribes grow the way they do on a real server: a small tribe of rulers, a few days
@@ -1920,6 +2004,13 @@ function attackClass(units: Units): Incident['cls'] {
   return pop[top] / total >= 0.6 ? top : 'mixed';
 }
 
+/** How much an attack sours things between two tribes: a lost battle stings more. */
+const inc_weight = (data: BattleData) => (data.winner === 'attacker' ? 1.5 : 1);
+/** Bad blood fades: about a third a day. */
+function frictionNow(w: World, fr: { n: number; at: number }): number {
+  return fr.n * Math.pow(0.67, (w.now - fr.at) / DAY_MS);
+}
+
 /** Write an attack down for whoever will answer it: the victim's tribe, or the victim alone. */
 function logIncident(w: World, c: Command, target: Village, data: BattleData): void {
   if (target.ownerId === null || c.tag === 'scout' || c.tag === 'fake' || c.tag === 'farm') return;
@@ -1934,6 +2025,11 @@ function logIncident(w: World, c: Command, target: Village, data: BattleData): v
     won: data.winner === 'attacker', cls: attackClass(data.attUnits), scouts: 0, supports: 0, strikes: 0, seen: [],
   };
   const t = victim.tribeId !== null ? w.tribes[victim.tribeId] : undefined;
+  if (t && attacker.tribeId !== null && w.tribes[attacker.tribeId]) {
+    const fr = ((t.friction ??= {})[attacker.tribeId] ??= { n: 0, at: w.now });
+    fr.n = frictionNow(w, fr) + (data.conquered ? 4 : inc_weight(data));
+    fr.at = w.now;
+  }
   const list = t ? (t.incidents ??= []) : victim.ai ? (victim.ai.incidents ??= []) : null;
   if (!list) return;
   list.unshift(inc);

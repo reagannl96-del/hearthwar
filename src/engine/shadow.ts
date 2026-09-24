@@ -67,7 +67,7 @@ export function publicSnapshot(w: World): PublicSnapshot {
   const tribes: World['tribes'] = {};
   for (const id in w.tribes) {
     const t = w.tribes[id];
-    tribes[id] = { ...t, internal: '', invites: [], forum: [], applications: [], incidents: undefined };
+    tribes[id] = { ...t, internal: '', invites: [], forum: [], applications: [], incidents: undefined, friction: undefined };
   }
   return {
     rev: w.mapRev,
