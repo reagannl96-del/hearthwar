@@ -210,8 +210,8 @@ function Profile({ pid }: { pid: number }) {
             <tbody>
               {p.villages.sort((a, b) => b.points - a.points).map((v) => (
                 <tr>
-                  <td>{v.name}</td>
-                  <td class="num">{coords(v.x, v.y)}</td>
+                  <td><button type="button" class="link" onClick={() => pane.go({ name: 'map', focus: v.id })} title="Show on the map">{v.name}</button></td>
+                  <td class="num"><button type="button" class="link num" onClick={() => pane.go({ name: 'map', focus: v.id })} title="Show on the map">{coords(v.x, v.y)}</button></td>
                   <td class="right num">{fmt(v.points)}</td>
                   <td class="right"><Btn small variant="ghost" onClick={() => pane.go({ name: 'map', focus: v.id })}><Icon name="map" size={14} /> Map</Btn></td>
                 </tr>
