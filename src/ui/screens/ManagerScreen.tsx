@@ -5,7 +5,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { BUILDINGS, BUILDING_ORDER } from '../../engine/data/buildings';
 import { ARMY_ORDER, UNITS, isHero } from '../../engine/data/units';
-import { ARMY_PRESETS, BUILD_PRESETS, type ArmyTemplate, type BuildStep, type BuildTemplate, type ManagerState } from '../../engine/manager';
+import { ARMY_PRESETS, BUILD_PRESETS, MANAGER_MIN_VILLAGES, type ArmyTemplate, type BuildStep, type BuildTemplate, type ManagerState } from '../../engine/manager';
 import type { BuildingId, UnitId } from '../../engine/types';
 import type { VillageView } from '../../engine/view';
 import { Btn, Empty, NumInput, Section, Tabs, UnitIcon, unitName } from '../components/common';
@@ -66,6 +66,18 @@ export function ManagerScreen() {
     save(m);
   };
 
+  if (pv.villages.length < MANAGER_MIN_VILLAGES) {
+    return (
+      <div class="stack">
+        <div class="page-head"><h1>Village manager</h1></div>
+        <Section title="Locked">
+          <p>The village manager is a tool for running an empire. It unlocks once you rule <b>{MANAGER_MIN_VILLAGES} villages</b>; you rule {pv.villages.length}.</p>
+          <p class="muted small">Then you can give each village a build template and an army template, and the realm works through them for you even while you are away. Your saved templates are kept; if you drop below {MANAGER_MIN_VILLAGES} villages the manager switches itself off.</p>
+          <div class="row"><Btn small variant="ghost" onClick={() => pane.go({ name: 'quests' })}>See your quests</Btn></div>
+        </Section>
+      </div>
+    );
+  }
   return (
     <div class="stack">
       <div class="page-head">

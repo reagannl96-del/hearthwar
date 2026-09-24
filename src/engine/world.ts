@@ -13,6 +13,7 @@ import { villageHero } from './actions';
 import { normalizeTribes } from './tribes';
 import { scheduleRoundEnd } from './round';
 import { createVillage, updateVillage } from './village';
+import { managerUnlocked, switchOffManager } from './manager';
 
 export const WORLD_VERSION = 1;
 
@@ -150,6 +151,8 @@ export function migrateWorld(w: World): void {
   for (const id in w.players) {
     const p = w.players[id];
     if (p.protectedUntil > cap) p.protectedUntil = cap;
+    // the village manager needs five villages: anyone who had it on with fewer has it switched off
+    if (p.manager && !managerUnlocked(p)) switchOffManager(p);
   }
 }
 

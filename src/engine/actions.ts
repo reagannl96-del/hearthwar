@@ -19,7 +19,7 @@ import {
 import { claimQuest } from './quests';
 import { exchangeQuote } from './market';
 import { restartPlayer } from './world';
-import { setManager } from './manager';
+import { MANAGER_MIN_VILLAGES, managerUnlocked, setManager } from './manager';
 import {
   acceptInvite, cancelInvite, createTribe, declineInvite, disbandTribe, editTribe, forumDelete, forumNewThread, forumPin, forumReply,
   invitePlayer, kickMember, leaveTribe, setDiplomacy, setRights, forumRead,
@@ -474,6 +474,7 @@ export function applyAction(w: World, pid: number, a: Action): ActionResult {
     case 'manager': {
       const p = w.players[pid];
       if (!p || p.kind !== 'human') return fail('Only rulers can use the village manager.');
+      if (!managerUnlocked(p)) return fail(`The village manager unlocks once you rule ${MANAGER_MIN_VILLAGES} villages.`);
       setManager(w, p, a.manager);
       return { ok: true };
     }

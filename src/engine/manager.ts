@@ -35,6 +35,20 @@ const RECRUIT_AHEAD = 2 * 3_600_000;
 
 export const emptyManager = (): ManagerState => ({ build: [], army: [], villages: {} });
 
+/** The manager is a tool for running an empire: it unlocks at this many villages. */
+export const MANAGER_MIN_VILLAGES = 5;
+export const managerUnlocked = (p: Player) => p.villages.length >= MANAGER_MIN_VILLAGES;
+
+/**
+ * Below the villages it needs, the manager is switched off: no village follows a
+ * template any more (the templates themselves are kept for when it unlocks again).
+ */
+export function switchOffManager(p: Player): void {
+  if (!p.manager) return;
+  p.manager.villages = {};
+  p.manager.tickAt = undefined;
+}
+
 // ---------- ready-made templates ----------
 
 const ladder = (...rungs: [BuildingId, number][][]): BuildStep[] => rungs.flat().map(([b, to]) => ({ b, to }));
@@ -137,6 +151,7 @@ export function sanitizeManager(w: World, p: Player, raw: unknown): ManagerState
 /** Save the manager and make sure it is looking over the villages. */
 export function setManager(w: World, p: Player, raw: unknown): void {
   p.manager = sanitizeManager(w, p, raw);
+  if (!managerUnlocked(p)) { switchOffManager(p); return; }
   if (Object.keys(p.manager.villages).length === 0) return;
   if (p.manager.tickAt === undefined || p.manager.tickAt < w.now) {
     p.manager.tickAt = w.now + 1000;
@@ -211,6 +226,8 @@ function manageArmy(w: World, p: Player, v: Village, t: ArmyTemplate, reserve: R
 export function runManager(w: World, p: Player): void {
   const m = p.manager;
   if (!m || p.eliminated) return;
+  // fell below the villages it needs: it switches off
+  if (!managerUnlocked(p)) { switchOffManager(p); return; }
   let any = false;
   for (const [k, mv] of Object.entries(m.villages)) {
     const vid = Number(k);

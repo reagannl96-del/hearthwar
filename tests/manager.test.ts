@@ -3,6 +3,7 @@ import { applyAction } from '../src/engine/actions';
 import { advance } from '../src/engine/game';
 import { ARMY_PRESETS, BUILD_PRESETS } from '../src/engine/manager';
 import { createWorld, defaultConfig } from '../src/engine/world';
+import { conquer } from '../src/engine/commands';
 
 const HOUR = 3_600_000;
 
@@ -10,6 +11,10 @@ function world() {
   const w = createWorld({ worldName: 'M', playerName: 'Me', villageName: 'Home', seed: 3, config: { ...defaultConfig(), size: 60, aiCount: 2 } });
   const me = Object.values(w.players).find((p) => p.kind === 'human')!;
   const v = w.villages[me.villages[0]];
+  // the manager unlocks at five villages: take four barbarian villages nearby
+  const barbs = Object.values(w.villages).filter((b) => b.ownerId === null)
+    .sort((a, b) => Math.hypot(a.x - v.x, a.y - v.y) - Math.hypot(b.x - v.x, b.y - v.y)).slice(0, 4);
+  for (const b of barbs) conquer(w, b, me.id);
   return { w, me, v };
 }
 
@@ -68,5 +73,19 @@ describe('the village manager', () => {
     const before = v2.buildings.clay ?? v2.buildings.claypit;
     advance(w2, w2.now + 6 * HOUR);
     expect(v2.buildings.claypit).toBeGreaterThan(before);
+  });
+
+  it('unlocks at five villages, and switches itself off below that', () => {
+    const { w, me, v } = world();
+    const m = { build: [{ id: 1, ...BUILD_PRESETS[0] }], army: [], villages: { [v.id]: { build: 1 } } };
+    expect(applyAction(w, me.id, { type: 'manager', manager: m }).ok).toBe(true);
+    // losing a village takes it under five: the next look finds it switched off, templates kept
+    const lost = w.villages[me.villages[me.villages.length - 1]];
+    conquer(w, lost, Object.values(w.players).find((p) => p.kind === 'ai')!.id);
+    advance(w, w.now + 2 * 60_000);
+    expect(Object.keys(me.manager!.villages)).toHaveLength(0);
+    expect(me.manager!.build).toHaveLength(1);
+    // and it cannot be switched back on until there are five again
+    expect(applyAction(w, me.id, { type: 'manager', manager: m }).ok).toBe(false);
   });
 });
