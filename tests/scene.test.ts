@@ -9,8 +9,8 @@ import { buildModel, visualTier } from '../src/ui/three/buildings';
 import { LAYOUT, OUTSIDE, WALL_R, buildingScale, heightAt, sceneryPlan } from '../src/ui/three/scene';
 import { WALK_PATHS } from '../src/ui/three/paths';
 import { setTheme } from '../src/ui/three/kit';
-import { CAMP_TENTS, TENT_MAX, TENT_MIN, TENT_R, campSlots, tentScale } from '../src/ui/three/camp';
-import { CAMP } from '../src/ui/three/scene';
+import { CAMP_TENTS, TENT_MAX, TENT_MIN, TENT_R, campSlots, pitchTents, tentScale } from '../src/ui/three/camp';
+import { CAMP_FIRE } from '../src/ui/three/scene';
 
 type P = [number, number];
 
@@ -209,17 +209,24 @@ describe('village layout', () => {
   });
 
   it('tents grow with the army, within limits', () => {
-    expect(tentScale(50)).toBeLessThan(0.6);
-    expect(tentScale(1000)).toBeGreaterThan(0.9);
-    expect(tentScale(1e6)).toBe(TENT_MAX);
     expect(tentScale(1)).toBe(TENT_MIN);
+    expect(tentScale(250)).toBe(TENT_MIN);
+    expect(tentScale(251)).toBeGreaterThan(TENT_MIN);
+    expect(tentScale(1000)).toBe(TENT_MAX);
+    // past a thousand, a second tent goes up
+    expect(pitchTents([2600]).map((t) => t.troops)).toEqual([1000, 1000, 600]);
+    expect(pitchTents([50, 400]).length).toBe(2);
+    // the camp has room for so many; every army still gets its own tent first
+    const big = pitchTents([50_000, 20_000, 30]);
+    expect(big.length).toBe(CAMP_TENTS);
+    expect(new Set(big.map((t) => t.army)).size).toBe(3);
   });
 
   it('the support camp stands clear of the wall, the paths, the buildings and the trees', () => {
     const bad: string[] = [];
     // every mix of army sizes: all huts, all great pavilions, and a spread between
-    const mixes = [Array(CAMP_TENTS).fill(TENT_MAX), Array(CAMP_TENTS).fill(TENT_MIN), [TENT_MAX, TENT_MAX], [TENT_MIN], [1.6, 1.2, 0.9, 0.7, 0.5, 0.45, 0.45, 0.45]];
-    const spots = [{ x: CAMP[0], z: CAMP[1], r: 0.9 }];
+    const mixes = [Array(CAMP_TENTS).fill(TENT_MAX), Array(CAMP_TENTS).fill(TENT_MIN), [TENT_MAX, TENT_MAX], [TENT_MIN], [1.4, 1.4, 1.2, 1, 0.8, 0.8, 1.4, 1.4, 1.4, 1.2, 0.8, 1]];
+    const spots = [{ x: CAMP_FIRE[0], z: CAMP_FIRE[1], r: 0.9 }];
     for (const m of mixes) {
       const slots = campSlots(m);
       slots.forEach((a, i) => {

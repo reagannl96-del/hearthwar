@@ -14,8 +14,8 @@ import { C, bake, box, disposeTree, mat, rng, setSeason, setTheme, type Season, 
 import { isRider, militiaman, person, plot, scaffold, troop, type TroopModel } from './props';
 import { heroAura, type Aura, type AuraHero } from './heroAura';
 import { FOOT_LOOPS, PEOPLE_LOOPS, RIDE_LOOPS } from './paths';
-import { CAMP, wallGuardPosts } from './scene';
-import { buildCamp, headcount, mainUnit, sentries, tentScale } from './camp';
+import { CAMP_FIRE, wallGuardPosts } from './scene';
+import { buildCamp, campPlan, headcount, mainUnit } from './camp';
 import { LAYOUT, OUTSIDE, WALL_R, buildScenery, buildTerrain, buildWall, buildingScale, heightAt } from './scene';
 import { BattleTheatre, type TheatreInput, type TheatreReport } from './battle/theatre';
 import { battleSfx } from '../sound';
@@ -227,7 +227,7 @@ export class VillageRenderer {
     this.scene.add(this.fireLight);
     // the support camp's fire (kept in the scene at zero so pitching a camp never recompiles the shaders)
     this.campLight = new THREE.PointLight(0xff9a3a, 0, 14, 1.6);
-    this.campLight.position.set(CAMP[0], heightAt(CAMP[0], CAMP[1]) + 2, CAMP[1]);
+    this.campLight.position.set(CAMP_FIRE[0], heightAt(CAMP_FIRE[0], CAMP_FIRE[1]) + 2, CAMP_FIRE[1] - 2);
     this.scene.add(this.campLight);
     for (let i = 0; i < 6; i++) {
       const l = new THREE.PointLight(0xffb45a, 0, 20, 1.6);
@@ -781,7 +781,7 @@ export class VillageRenderer {
   setSupport(armies: { theme: Theme; units: Units }[]): void {
     const list = armies.filter((a) => headcount(a.units) > 0).sort((a, b) => headcount(b.units) - headcount(a.units));
     // rebuild only when a tent would look different (its size moves in small steps)
-    const key = list.map((a) => { const n = headcount(a.units); return `${a.theme}:${mainUnit(a.units)}:${Math.round(tentScale(n) * 20)}:${sentries(n)}`; }).join('|');
+    const key = campPlan(list).map((t) => `${list[t.army].theme}:${mainUnit(list[t.army].units)}:${t.scale}`).join('|');
     if (key === this.campKey) return;
     this.campKey = key;
     if (this.camp) { this.scene.remove(this.camp); disposeTree(this.camp); this.camp = null; }
