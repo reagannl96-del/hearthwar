@@ -440,6 +440,9 @@ export interface RoundResult {
   /** wall-clock time it ended */
   endedReal: number;
   days: number;
+  /** the player with the most points when time ran out: the round's winner */
+  champion?: { name: string; tag: string | null; points: number; villages: number } | null;
+  /** the tribe holding the most of the realm */
   winner: { name: string; tag: string; color: string; share: number; villages: number; domination: boolean } | null;
   tribes: { name: string; tag: string; share: number }[];
   topRuler: { name: string; tag: string | null; points: number } | null;

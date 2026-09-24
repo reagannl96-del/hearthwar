@@ -1,7 +1,8 @@
 // A round of the realm: it runs for a set number of real days (two weeks unless
-// the world says otherwise). Whoever holds the most of the realm when time runs
-// out wins it; a tribe holding 60% of all ruled villages (barbarians don't count)
-// is dominating the world. When the round ends the realm freezes on its final
+// the world says otherwise). The player with the most points when time runs out
+// wins it. Tribes race for the realm too: the one holding the most of it is
+// remembered alongside, and one holding 60% of all ruled villages (barbarians
+// don't count) is dominating the world. When the round ends the realm freezes on its final
 // standings, and an online server then opens a fresh realm for the next round.
 
 import { news } from './commands';
@@ -74,13 +75,15 @@ export function finishRound(w: World): void {
     at: w.now,
     endedReal: Date.now(),
     days: roundDays(w),
+    champion: top ? { name: top.name, tag: top.tag, points: top.points, villages: top.villages } : null,
     winner: lead ? { name: lead.name, tag: lead.tag, color: lead.color, share: lead.share, villages: lead.villages, domination: lead.share >= DOMINATION } : null,
     tribes: s.tribes.slice(0, 5).map((t) => ({ name: t.name, tag: t.tag, share: t.share })),
     topRuler: top ? { name: top.name, tag: top.tag, points: top.points } : null,
   };
   w.finished = result;
   w.mapRev++;
-  news(w, lead
-    ? `The round is over! [${lead.tag}] ${lead.name} ${lead.share >= DOMINATION ? 'dominates' : 'leads'} the realm with ${Math.round(lead.share * 100)}% of its villages.`
-    : 'The round is over. No tribe held the realm.', 'world');
+  news(w, top
+    ? `The round is over! ${top.name}${top.tag ? ` [${top.tag}]` : ''} wins the realm with ${top.points.toLocaleString('en-US')} points.`
+      + (lead ? ` [${lead.tag}] ${lead.name} ${lead.share >= DOMINATION ? 'dominates' : 'leads'} the tribes with ${Math.round(lead.share * 100)}% of its villages.` : '')
+    : 'The round is over. Nobody holds the realm.', 'world');
 }

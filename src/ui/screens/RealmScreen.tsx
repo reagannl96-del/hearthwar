@@ -1,6 +1,6 @@
-// World progress: the race for the realm. Which tribes hold how much of it, how
-// close the leader is to dominating (60% of all ruled villages), how long the
-// round has left, and the winners of earlier rounds.
+// World progress: the race for the realm. Who leads on points (the top player
+// wins the round), which tribes hold how much of it, how long the round has
+// left, and the winners of earlier rounds.
 
 import { Icon } from '../art/icons';
 import { Countdown, Empty, Section } from '../components/common';
@@ -19,6 +19,10 @@ export function RealmScreen() {
   const left = r.endsAt !== null ? Math.max(0, r.endsAt - now.value) : null;
   const elapsed = left !== null ? Math.min(1, 1 - left / total) : 0;
   const lead = r.tribes[0];
+  const leader = r.rulers[0];
+  // rounds finished before the top player won them name the mightiest ruler instead
+  const champ = (x: { champion?: { name: string; tag: string | null; points: number } | null; topRuler: { name: string; tag: string | null; points: number } | null }) => x.champion ?? x.topRuler;
+  const fin = r.finished ? champ(r.finished) : null;
   const rows = r.tribes.slice(0, 8);
   const scale = Math.max(r.threshold + 0.1, ...rows.map((t) => t.share), r.tribeless.share);
 
@@ -27,16 +31,15 @@ export function RealmScreen() {
       <div class="page-head"><h1>The Realm</h1></div>
 
       {r.finished ? (
-        <div class={`realm-banner ${r.finished.winner?.domination ? 'is-domination' : ''}`}>
+        <div class="realm-banner is-domination">
           <Icon name="star" size={28} />
           <div>
             <div class="realm-banner-title">
-              {r.finished.winner
-                ? <>[{r.finished.winner.tag}] {r.finished.winner.name} {r.finished.winner.domination ? 'dominated' : 'won'} the realm</>
-                : 'The round is over'}
+              {fin ? <>{fin.name}{fin.tag && <> [{fin.tag}]</>} won the realm</> : 'The round is over'}
             </div>
             <div class="small">
-              {r.finished.winner && <>They held {pct(r.finished.winner.share)} of all ruled villages when time ran out. </>}
+              {fin && <>{fmt(fin.points)} points when time ran out. </>}
+              {r.finished.winner && <>Top tribe: [{r.finished.winner.tag}] {r.finished.winner.name}, holding {pct(r.finished.winner.share)} of all ruled villages. </>}
               {h.multiplayer ? 'The realm is frozen on its final standings; a new realm opens shortly.' : 'The realm is frozen on its final standings. Start a new realm from the title screen to play again.'}
             </div>
           </div>
@@ -54,9 +57,15 @@ export function RealmScreen() {
             </div>
           </div>
           <p class="small">
-            A tribe that holds <b>{pct(r.threshold)}</b> of all ruled villages (barbarians don't count) is <b>dominating</b> the realm.
-            When the round ends, the tribe holding the most of the realm wins it, and a fresh realm opens for the next round.
+            When the round ends after <b>{r.days} days</b>, the <b>player with the most points</b> wins the realm, and a fresh realm opens for the next round.
+            Tribes race for the realm too: one holding <b>{pct(r.threshold)}</b> of all ruled villages (barbarians don't count) is <b>dominating</b> it.
           </p>
+          {leader && (
+            <p class="realm-status is-domination">
+              {leader.id === r.meId ? <><b>You</b> lead</> : <><b>{leader.name}</b>{leader.tag && <> [{leader.tag}]</>} leads</>} the realm with <b class="num">{fmt(leader.points)}</b> points
+              {r.rulers[1] && <>, {fmt(leader.points - r.rulers[1].points)} ahead of {r.rulers[1].id === r.meId ? 'you' : r.rulers[1].name}</>}.
+            </p>
+          )}
           {lead && (
             <p class={`realm-status ${r.dominating ? 'is-domination' : ''}`}>
               {r.dominating
@@ -127,11 +136,11 @@ export function RealmScreen() {
               <li>
                 <Icon name="star" size={18} />
                 <div>
-                  <b>{p.winner ? `[${p.winner.tag}] ${p.winner.name}` : 'No winner'}</b>
-                  {p.winner && <span class="muted"> · {pct(p.winner.share)}{p.winner.domination ? ', domination' : ''}</span>}
+                  <b>{champ(p) ? champ(p)!.name : 'No winner'}</b>
+                  {champ(p) && <span class="muted"> · {fmt(champ(p)!.points)} points</span>}
                   <div class="muted small">
                     {p.world} · ended {new Date(p.endedReal).toLocaleDateString()}
-                    {p.topRuler && <> · mightiest ruler {p.topRuler.name} ({fmt(p.topRuler.points)} points)</>}
+                    {p.winner && <> · top tribe [{p.winner.tag}] {p.winner.name} ({pct(p.winner.share)}{p.winner.domination ? ', domination' : ''})</>}
                   </div>
                 </div>
               </li>

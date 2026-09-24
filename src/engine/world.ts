@@ -116,8 +116,8 @@ export function terrainAt(w: World, x: number, y: number): string {
  * fast realm, like a person checking their queues, never every few seconds.
  */
 export const aiThinkInterval = (w: World) => Math.min(300_000, Math.max(60_000, Math.round(18_000_000 / w.config.speed)));
-/** Beginner protection lasts a fixed 30 real minutes, whatever the world speed. */
-export const PROTECTION_MS = 30 * 60_000;
+/** Beginner protection lasts a fixed two and a half real hours, whatever the world speed. */
+export const PROTECTION_MS = 150 * 60_000;
 export const protectionEnd = (w: World) => w.now + PROTECTION_MS;
 
 /**
