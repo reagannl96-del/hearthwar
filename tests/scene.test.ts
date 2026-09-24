@@ -8,9 +8,10 @@ import type { BuildingId } from '../src/engine/types';
 import { buildModel, visualTier } from '../src/ui/three/buildings';
 import { LAYOUT, OUTSIDE, WALL_R, buildingScale, heightAt, sceneryPlan } from '../src/ui/three/scene';
 import { WALK_PATHS } from '../src/ui/three/paths';
-import { setTheme } from '../src/ui/three/kit';
+import { setSeason, setTheme } from '../src/ui/three/kit';
 import { CAMP_TENTS, TENT_MAX, TENT_MIN, TENT_R, campSlots, pitchTents, tentScale } from '../src/ui/three/camp';
-import { CAMP_FIRE } from '../src/ui/three/scene';
+import { CAMP_FIRE, FESTIVAL, buildScenery } from '../src/ui/three/scene';
+import { FESTIVAL_R } from '../src/ui/three/festival';
 
 type P = [number, number];
 
@@ -249,6 +250,54 @@ describe('village layout', () => {
           if (Math.hypot(t.x - x1 - dx * k, t.z - z1 - dz * k) < t.r + 1) { bad.push(`${name} runs through the tent at ${at}`); break; }
         }
       }
+    }
+    expect(bad).toEqual([]);
+  });
+
+  it('the winter festival stands clear of the buildings, the paths, the lamps and the trees in every theme', () => {
+    const bad: string[] = [];
+    const [fx, fz] = FESTIVAL, R = FESTIVAL_R;
+    // it only goes up in winter, when the trees outside are mostly pines
+    setSeason('winter');
+    if (Math.hypot(fx, fz) > WALL_R - 4 - R) bad.push('too close to the wall');
+    for (const [name, path] of Object.entries(WALK_PATHS)) {
+      const closed = [...path, path[0]];
+      for (let i = 0; i < closed.length - 1; i++) {
+        const [x1, z1] = closed[i], [x2, z2] = closed[i + 1];
+        const dx = x2 - x1, dz = z2 - z1, l2 = dx * dx + dz * dz || 1;
+        const k = Math.max(0, Math.min(1, ((fx - x1) * dx + (fz - z1) * dz) / l2));
+        if (Math.hypot(fx - x1 - dx * k, fz - z1 - dz * k) < R + 1) { bad.push(`${name} runs through it`); break; }
+      }
+    }
+    for (const it of sceneryPlan()) if (Math.hypot(it.x - fx, it.z - fz) < it.r + R) bad.push(`it stands on a ${it.kind}`);
+    // scenery that only some themes have (lamps, shrines, totems) is checked by its actual shape;
+    // the goblin swamp paints a texture, so give it a canvas to paint on
+    const hadDoc = 'document' in globalThis;
+    const ctx = new Proxy({}, { get: () => () => ({ addColorStop() {} }), set: () => true });
+    if (!hadDoc) (globalThis as Record<string, unknown>).document = { createElement: () => ({ getContext: () => ctx }) };
+    try {
+      for (const theme of ['classic', 'paladin', 'sorcerer', 'druid', 'goblin', 'necromancer'] as const) {
+        setTheme(theme);
+        for (const id of IDS) for (const l of tierLevels(id)) if (inside(footprint(id, l), [fx, fz], R)) { bad.push(`${theme}: in the ${id} (level ${l})`); break; }
+        const sc = buildScenery();
+        sc.updateMatrixWorld(true);
+        const v = new THREE.Vector3();
+        let hit = false;
+        sc.traverse((o) => {
+          const m = o as THREE.Mesh;
+          if (hit || !m.isMesh) return;
+          const pos = m.geometry.getAttribute('position');
+          for (let i = 0; i < pos.count && !hit; i++) {
+            v.fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld);
+            if (v.y > 0.08 && Math.hypot(v.x - fx, v.z - fz) < R) hit = true;
+          }
+        });
+        if (hit) bad.push(`${theme}: scenery in the way`);
+      }
+    } finally {
+      setTheme('classic');
+      setSeason('fall');
+      if (!hadDoc) delete (globalThis as Record<string, unknown>).document;
     }
     expect(bad).toEqual([]);
   });

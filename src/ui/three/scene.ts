@@ -47,6 +47,8 @@ export const RING_R = WALL_R - 4;
 export const CAMP_AREA = { x0: -37, x1: -8, rows: [54.8, 60.2] };
 /** The camp's fire, in front of the tents. */
 export const CAMP_FIRE: [number, number] = [-22.5, 64.4];
+/** Where the winter festival's tree goes up: open ground between the market, the watchtower and the warehouse, off every path. */
+export const FESTIVAL: [number, number] = [25, 14.5];
 
 // x1, z1, x2, z2, width
 const ROADS: [number, number, number, number, number][] = [

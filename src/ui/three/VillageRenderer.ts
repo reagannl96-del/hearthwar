@@ -14,8 +14,9 @@ import { C, bake, box, disposeTree, mat, rng, setSeason, setTheme, type Season, 
 import { isRider, militiaman, person, plot, scaffold, troop, type TroopModel } from './props';
 import { heroAura, type Aura, type AuraHero } from './heroAura';
 import { FOOT_LOOPS, PEOPLE_LOOPS, RIDE_LOOPS } from './paths';
-import { CAMP_FIRE, wallGuardPosts } from './scene';
-import { buildCamp, campPlan, headcount, mainUnit } from './camp';
+import { CAMP_FIRE, FESTIVAL, wallGuardPosts } from './scene';
+import { buildFestival, disposeFestival, festivalPeople, stepFestival } from './festival';
+import { buildCamp, campPlan, headcount, mainUnit, withTheme } from './camp';
 import { LAYOUT, OUTSIDE, WALL_R, buildScenery, buildTerrain, buildWall, buildingScale, heightAt } from './scene';
 import { BattleTheatre, type TheatreInput, type TheatreReport } from './battle/theatre';
 import { battleSfx } from '../sound';
@@ -147,6 +148,9 @@ export class VillageRenderer {
   private camp: THREE.Group | null = null;
   private campKey = '';
   private campLight: THREE.PointLight;
+  /** the winter festival's tree, its lights and the villagers round it */
+  private festival: THREE.Group | null = null;
+  private festLight: THREE.PointLight;
   private guardKey = '';
   private units: Units = {};
   /** what the hero at home does to the village (pillar of light, brambles, gold, souls, runes) */
@@ -229,6 +233,10 @@ export class VillageRenderer {
     this.campLight = new THREE.PointLight(0xff9a3a, 0, 14, 1.6);
     this.campLight.position.set(CAMP_FIRE[0], heightAt(CAMP_FIRE[0], CAMP_FIRE[1]) + 2, CAMP_FIRE[1] - 2);
     this.scene.add(this.campLight);
+    // the festival tree's warm glow at night (likewise always there, dark until it is wanted)
+    this.festLight = new THREE.PointLight(0xffc27a, 0, 13, 1.6);
+    this.festLight.position.set(FESTIVAL[0], 5, FESTIVAL[1] + 3.6);
+    this.scene.add(this.festLight);
     for (let i = 0; i < 6; i++) {
       const l = new THREE.PointLight(0xffb45a, 0, 20, 1.6);
       this.nightLights.push(l);
@@ -497,6 +505,7 @@ export class VillageRenderer {
     this.theatre = null;
     this.aura?.dispose();
     this.barrier?.traverse((o) => { if (o instanceof THREE.Mesh) (o.material as THREE.Material).dispose(); });
+    if (this.festival) { this.scene.remove(this.festival); disposeFestival(this.festival); this.festival = null; }
     this.disposed = true;
     cancelAnimationFrame(this.raf);
     this.ro.disconnect();
@@ -789,6 +798,22 @@ export class VillageRenderer {
     this.camp = buildCamp(list);
     this.camp.traverse((o) => { o.castShadow = true; o.receiveShadow = true; });
     this.scene.add(this.camp);
+  }
+
+  /** The winter festival: a lit tree by the market, presents under it and villagers gathered round. */
+  setFestive(on: boolean): void {
+    if (on === !!this.festival) return;
+    if (this.festival) {
+      this.scene.remove(this.festival);
+      disposeFestival(this.festival);
+      this.festival = null;
+      return;
+    }
+    // the villagers dress in the village's own fashion
+    const g = withTheme(this.opts.theme ?? 'classic', buildFestival);
+    g.position.set(FESTIVAL[0], 0, FESTIVAL[1]);
+    this.festival = g;
+    this.scene.add(g);
   }
 
   private updateGuards(): void {
@@ -1148,6 +1173,11 @@ export class VillageRenderer {
     for (const p of this.people) p.g.visible = !this.quiet;
     for (const p of this.troops) p.g.visible = !this.quiet;
     if (this.guards) this.guards.visible = !this.quiet;
+    if (this.festival) {
+      for (const p of festivalPeople(this.festival)) p.visible = !this.quiet;
+      stepFestival(this.festival, dt, t, this.night);
+    }
+    this.festLight.intensity = this.festival && this.night ? 4.5 + Math.sin(t * 2.3) * 0.5 : 0;
     // villagers
     for (const p of this.people) {
       p.t = (p.t + p.speed * dt) % p.len;

@@ -37,6 +37,8 @@ interface Props {
   replay?: { report: TheatreReport; at: number; fromX: number; fromY: number } | null;
   /** the replay has been handed to the scene (so it is not played again next time) */
   onReplayed?: () => void;
+  /** the winter festival is on: a lit tree, presents and villagers gathered round it */
+  festive?: boolean;
 }
 
 let gl: boolean | null = null;
@@ -66,6 +68,7 @@ export function Village3D(p: Props) {
       r.current.update(p.buildings, p.building, p.color, p.points);
       r.current.setTroops(p.units ?? {});
       r.current.setSupport(p.support ?? []);
+      r.current.setFestive(!!p.festive);
       if (import.meta.env.DEV) (window as unknown as { __vr: VillageRenderer }).__vr = r.current;
     } catch {
       setFailed(true);
@@ -110,6 +113,10 @@ export function Village3D(p: Props) {
   useEffect(() => {
     r.current?.setMilitia(!!p.militia);
   }, [p.militia, p.theme, p.winter]);
+
+  useEffect(() => {
+    r.current?.setFestive(!!p.festive);
+  }, [p.festive, p.theme, p.winter]);
 
   useEffect(() => {
     r.current?.setNight(p.night);

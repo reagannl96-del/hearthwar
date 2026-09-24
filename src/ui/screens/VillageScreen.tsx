@@ -5,7 +5,7 @@ import { Icon } from '../art/icons';
 import { Village3D } from '../three/Village3D';
 import { Btn, Countdown, Empty, Progress, Section, UnitList } from '../components/common';
 import { fmt } from '../format';
-import { act, battleReplay, host, isNightAt, liveRes, now, paused, prefs, sceneQuality, view, warp, usePane } from '../store';
+import { DAY_MS, act, battleReplay, host, isNightAt, liveRes, now, paused, prefs, sceneQuality, view, warp, usePane } from '../store';
 import type { TheatreInput } from '../three/battle/theatre';
 import { isVolcanic, isWinter } from '../../engine/world';
 import { CommandRow } from './RallyScreen';
@@ -15,6 +15,12 @@ const BONUS_TEXT: Record<string, string> = {
   farm: '+10% population', storage: '+50% storage and merchants', recruit: '33% faster recruitment',
 };
 
+/** Every village keeps its own festive day: one game day (two hours) in three, spread across the realm. */
+function festiveDay(vid: number, t: number): boolean {
+  const day = Math.floor(t / DAY_MS);
+  return (day + ((vid * 2654435761) >>> 0)) % 3 === 0;
+}
+
 export function VillageScreen() {
   const pane = usePane();
   const v = pane.village.value!;
@@ -22,6 +28,10 @@ export function VillageScreen() {
   const upgrading: Partial<Record<BuildingId, number>> = {};
   for (const j of v.buildQueue) upgrading[j.building] = j.level;
   const night = isNightAt(now.value);
+  const winter = isWinter(v.x, v.y, pv.config.size);
+  // a snowy village in good heart has its winter festival on its own festive day (one game day in three),
+  // and only while no attack is on its way
+  const festive = winter && v.morale >= 90 && festiveDay(v.id, now.value) && !pv.incoming.some((c) => c.toVid === v.id && c.kind === 'attack');
   const quest = pv.quests.find((q) => q.done) ?? pv.quests[0];
   const moves = [...pv.incoming.filter((c) => c.toVid === v.id), ...pv.commands.filter((c) => c.fromVid === v.id || c.toVid === v.id)]
     .sort((a, b) => a.arrive - b.arrive)
@@ -62,7 +72,8 @@ export function VillageScreen() {
             color={0xe0a526}
             points={v.points}
             villageId={v.id}
-            winter={isWinter(v.x, v.y, pv.config.size)}
+            winter={winter}
+            festive={festive}
             volcanic={isVolcanic(v.x, v.y, pv.config.size)}
             quality={sceneQuality(prefs.value)}
             night={night}
