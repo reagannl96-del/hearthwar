@@ -1888,84 +1888,164 @@ function glowWindow(x: number, y: number, z: number, ry = 0): THREE.Group {
 function druidHall(t: number): Built {
   const g = new THREE.Group();
   const r = rng(71 + t);
-  const trunkR = [0, 1.7, 2.2, 2.8, 3.3, 3.7][t];
-  const trunkH = [0, 2.8, 4.6, 6.2, 7.6, 9][t];
-  // the trunk, flared at the roots
-  g.add(cyl(trunkR * 0.85, trunkR * 1.15, trunkH, BARK, 9));
-  if (t >= 2) {
-    for (let i = 0; i < 5 + t; i++) {
-      const a = (i / (5 + t)) * Math.PI * 2 + 0.3;
-      const root = box(0.5 + t * 0.12, 0.7 + t * 0.15, trunkR * 0.9, BARK_DK, Math.cos(a) * trunkR * 0.95, 0, Math.sin(a) * trunkR * 0.95);
-      root.rotation.y = -a + Math.PI / 2;
-      g.add(root);
+  const AMBER = 0xffc25a, AMBER_E = 0xb0661a, FIREFLY = 0xe8ff8a, FIREFLY_E = 0x8ab020;
+  const lantern = (x: number, y: number, z: number) => {
+    g.add(box(0.04, 0.5, 0.04, 0x3a2a18, x, y, z));
+    const l = mesh(new THREE.IcosahedronGeometry(0.2, 0), AMBER, { emissive: AMBER_E });
+    l.position.set(x, y - 0.15, z);
+    l.userData.window = true;
+    g.add(l);
+  };
+  const fireflies = (n: number, rad: number, y: number) => {
+    const ff = new THREE.Group();
+    for (let i = 0; i < n; i++) {
+      const a = r() * Math.PI * 2, d = rad * (0.4 + r() * 0.6);
+      ff.add(mesh(new THREE.OctahedronGeometry(0.09, 0), FIREFLY, { emissive: FIREFLY_E }).translateX(Math.cos(a) * d).translateY(r() * 3).translateZ(Math.sin(a) * d));
     }
-  }
-  // doorway and glowing windows
-  g.add(box(1.1, 1.9, 0.3, C.door, 0, 0, trunkR * 1.02));
-  g.add(blob(0.62, BARK_DK, 0, 1.9, trunkR * 1.0, 1, 0.5, 0.35));
-  for (let i = 0; i < t; i++) {
-    const a = Math.PI / 2 + (i % 2 === 0 ? 0.7 : -0.7);
-    g.add(glowWindow(Math.cos(a) * trunkR * 0.98, 2.6 + i * 1.3, Math.sin(a) * trunkR * 0.98, Math.PI / 2 - a));
-  }
+    ff.userData.dynamic = true;
+    ff.userData.orbit = 0.25;
+    ff.userData.bob = 0.6;
+    ff.position.y = y;
+    g.add(ff);
+  };
   if (t === 1) {
-    // a stump with a mossy cap
-    g.add(blob(2.1, MOSS, 0, trunkH + 0.2, 0, 1, 0.45, 1));
-    g.add(blob(0.5, LEAF_LT, 1.1, trunkH + 0.7, 0.3));
-    return { obj: g, h: 5.5, w: 5, d: 5 };
-  }
-  // the crown of leaves
-  const crown = [0, 0, 3.4, 4.6, 5.8, 6.8][t];
-  const blobs = 3 + t * 2;
-  for (let i = 0; i < blobs; i++) {
-    const a = (i / blobs) * Math.PI * 2;
-    const rr = crown * (0.35 + r() * 0.35);
-    g.add(blob(crown * (0.42 + r() * 0.15), r() < 0.5 ? LEAF : LEAF_LT, Math.cos(a) * rr, trunkH + crown * 0.35 + r() * crown * 0.4, Math.sin(a) * rr * 0.8, 1, 0.75, 1, 1));
-  }
-  g.add(blob(crown * 0.6, LEAF, 0, trunkH + crown * 0.85, 0, 1, 0.7, 1, 1));
-  // platforms ringing the trunk
-  if (t >= 3) {
-    for (let k = 0; k < t - 2; k++) {
-      const y = 3.2 + k * 2.6;
-      g.add(cyl(trunkR + 1.3, trunkR + 1.3, 0.25, C.timberLight, 12, 0, y, 0));
-      for (let i = 0; i < 8; i++) {
-        const a = (i / 8) * Math.PI * 2;
-        g.add(box(0.12, 0.8, 0.12, C.timber, Math.cos(a) * (trunkR + 1.2), y + 0.25, Math.sin(a) * (trunkR + 1.2)));
-      }
-      const lamp = blob(0.2, 0xffd27a, trunkR + 1.2, y + 1.2, 0.3);
-      lamp.userData.window = true;
-      g.add(lamp);
-    }
-  }
-  // moss-roofed huts at the roots
-  if (t >= 3) {
-    for (const s of t >= 4 ? [-1, 1] : [-1]) {
-      const hut = house({ w: 3.2, d: 2.8, h: 1.8, roofH: 1.6, roof: MOSS, windows: 1 });
-      hut.position.set(s * (trunkR + 2.6), 0, 1.2);
-      hut.rotation.y = s * -0.4;
-      g.add(hut);
-    }
-  }
-  // standing stones and hanging vines on the oldest trees
-  if (t >= 4) {
-    const ring = trunkR + 4.4;
-    for (let i = 0; i < 9; i++) {
-      const a = (i / 9) * Math.PI * 2 + 0.2;
-      if (Math.sin(a) > 0.75) continue; // keep the doorway open
-      const st = box(0.55, 1.8 + r() * 0.8, 0.4, MENHIR, Math.cos(a) * ring, 0, Math.sin(a) * ring * 0.85);
+    // a sacred grove: a ring of mossy standing stones round a young oak, an altar stone before it
+    for (let i = 0; i < 7; i++) {
+      const a = (i / 7) * Math.PI * 2 + 0.2;
+      if (Math.sin(a) > 0.8) continue;
+      const st = box(0.6, 1.7 + r() * 0.7, 0.45, MENHIR, Math.cos(a) * 3.4, 0, Math.sin(a) * 3.4);
       st.rotation.y = -a;
       g.add(st);
+      g.add(blob(0.3, MOSS, Math.cos(a) * 3.4, 1.9, Math.sin(a) * 3.4, 1, 0.4, 1));
+    }
+    g.add(cyl(0.25, 0.35, 2.4, BARK, 6));
+    for (let i = 0; i < 4; i++) g.add(blob(0.9, i % 2 ? LEAF : LEAF_LT, (r() - 0.5) * 1.2, 2.6 + r() * 0.8, (r() - 0.5) * 1.2, 1, 0.8, 1));
+    g.add(box(1.6, 0.6, 0.9, MENHIR, 0, 0, 2.2));
+    g.add(mushrooms(6, r, 2.6));
+    fireflies(8, 3, 0.8);
+    return { obj: g, h: 5.5, w: 8, d: 8 };
+  }
+  if (t === 2) {
+    // a young oak with a round treehouse in its arms, a ladder up to it
+    g.add(cyl(1.0, 1.5, 5.2, BARK, 9));
+    for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2; const root = box(0.5, 0.7, 1.6, BARK_DK, Math.cos(a) * 1.4, 0, Math.sin(a) * 1.4); root.rotation.y = -a + Math.PI / 2; g.add(root); }
+    g.add(cyl(2.8, 2.8, 0.25, C.timberLight, 12, 0, 3.6));
+    g.add(cyl(2.0, 2.0, 1.8, 0xc9a56a, 10, 0, 3.85));
+    g.add(cone(2.6, 1.8, MOSS, 10, 0, 5.65));
+    g.add(glowWindow(0, 4.6, 2.02), glowWindow(1.6, 4.6, 1.2, 0.9));
+    const lad = new THREE.Group();
+    for (const x of [-0.3, 0.3]) lad.add(box(0.08, 3.8, 0.08, C.timber, x, 0, 0));
+    for (let y = 0.4; y < 3.6; y += 0.5) lad.add(box(0.6, 0.06, 0.06, C.timber, 0, y, 0));
+    lad.rotation.x = -0.2;
+    lad.position.set(0.8, 0, 3.3);
+    g.add(lad);
+    for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2; g.add(blob(1.6, i % 2 ? LEAF : LEAF_LT, Math.cos(a) * 2.4, 7 + r(), Math.sin(a) * 2.2, 1, 0.75, 1)); }
+    g.add(blob(2.2, LEAF, 0, 8.4, 0, 1, 0.7, 1));
+    lantern(2.6, 3.6, 0.6);
+    fireflies(10, 4, 1.2);
+    return { obj: g, h: 10.5, w: 9, d: 9 };
+  }
+  // the World Tree: three trunks grown into one, roots arching over the earth, a stair winding up it,
+  // platforms and lanterns in its boughs, an amber heart glowing in the bark
+  const R = [0, 0, 0, 2.3, 2.8, 3.1][t];
+  const H = [0, 0, 0, 7, 8.6, 10][t];
+  for (let i = 0; i < 3; i++) {
+    const a = (i / 3) * Math.PI * 2;
+    const tr = cyl(R * 0.55, R * 0.7, H, i === 1 ? BARK_DK : BARK, 8);
+    tr.position.set(Math.cos(a) * R * 0.38, 0, Math.sin(a) * R * 0.38);
+    tr.rotation.set(Math.sin(a) * 0.05, 0, -Math.cos(a) * 0.05);
+    g.add(tr);
+  }
+  // arching roots
+  for (let i = 0; i < 7; i++) {
+    const a = (i / 7) * Math.PI * 2 + 0.35;
+    if (Math.sin(a) > 0.85) continue; // the doorway
+    const pts = [0, 1, 2, 3].map((k) => new THREE.Vector3(Math.cos(a) * (R * 0.8 + k * 0.85), 1.6 - k * 0.55 + (k === 1 ? 0.35 : 0), Math.sin(a) * (R * 0.8 + k * 0.85)));
+    for (let k = 0; k < 3; k++) g.add(boneSeg(pts[k], pts[k + 1], 0.42 - k * 0.1, BARK_DK));
+  }
+  // the door in the roots, the amber heart above it
+  g.add(box(1.2, 2.0, 0.4, C.door, 0, 0, R * 0.95));
+  g.add(blob(0.7, BARK_DK, 0, 2.05, R * 0.92, 1, 0.5, 0.4));
+  if (t >= 4) {
+    const heart = mesh(new THREE.IcosahedronGeometry(0.55, 0), AMBER, { emissive: AMBER_E });
+    heart.scale.set(1, 1.4, 0.6);
+    heart.position.set(0, H * 0.55, R * 0.92);
+    heart.userData.window = true;
+    g.add(heart);
+    g.add(mesh(new THREE.TorusGeometry(0.75, 0.1, 5, 12), BARK_DK).translateY(H * 0.55).translateZ(R * 0.9));
+  }
+  // a stair of planks winding up round the trunk
+  const steps = 16 + t * 4;
+  for (let i = 0; i < steps; i++) {
+    const a = (i / steps) * Math.PI * 2 * 1.4 + 1.2;
+    const y = 0.4 + (i / steps) * (H * 0.8);
+    const st = box(1.1, 0.12, 0.5, C.timberLight, 0, 0, 0);
+    st.position.set(Math.cos(a) * (R + 0.55), y, Math.sin(a) * (R + 0.55));
+    st.rotation.y = -a;
+    g.add(st);
+  }
+  // platforms and their lanterns
+  for (let k = 0; k < t - 2; k++) {
+    const y = 3.4 + k * 2.7;
+    g.add(cyl(R + 1.4, R + 1.3, 0.25, C.timberLight, 14, 0, y));
+    for (let i = 0; i < 10; i++) { const a = (i / 10) * Math.PI * 2; g.add(box(0.1, 0.7, 0.1, C.timber, Math.cos(a) * (R + 1.3), y + 0.25, Math.sin(a) * (R + 1.3))); }
+    lantern(R + 1.3, y + 1.6, 0.4);
+    lantern(-(R + 1.3), y + 1.6, -0.4);
+  }
+  // the crown: great tiers of leaves
+  const crown = [0, 0, 0, 4.4, 5.4, 6.2][t];
+  const tiers = t - 1;
+  for (let k = 0; k < tiers; k++) {
+    // wide, flat layers of leaves: broad at the bottom, a dome on top
+    const y = H + k * crown * 0.26;
+    const rad = crown * (1.15 - k * 0.3);
+    const n = 7 + t;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + k * 0.4;
+      g.add(blob(rad * 0.4, (i + k) % 2 ? LEAF : LEAF_LT, Math.cos(a) * rad * 0.72, y + r() * 0.6, Math.sin(a) * rad * 0.62, 1, 0.55, 1, 1));
     }
   }
-  if (t >= 5) {
-    for (let i = 0; i < 10; i++) {
-      const a = (i / 10) * Math.PI * 2;
-      const len = 2 + r() * 2.5;
-      g.add(box(0.08, len, 0.08, MOSS_DK, Math.cos(a) * crown * 0.7, trunkH + crown * 0.2 - len, Math.sin(a) * crown * 0.55));
+  g.add(blob(crown * 0.62, LEAF_LT, 0, H + tiers * crown * 0.26 + 0.2, 0, 1, 0.5, 1, 1));
+  // boughs reaching out under the leaves
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2 + 0.6;
+    g.add(boneSeg(new THREE.Vector3(0, H - 0.5, 0), new THREE.Vector3(Math.cos(a) * crown * 0.75, H + 1.2, Math.sin(a) * crown * 0.6), 0.45, BARK));
+  }
+  if (t >= 4) {
+    // a little tree beside it with its own platform, joined by a rope bridge
+    const sx = -4.6, sz = 3.4, sy = 4.0;
+    g.add(cyl(0.45, 0.65, sy + 1.6, BARK, 7, sx, 0, sz));
+    g.add(cyl(1.3, 1.3, 0.2, C.timberLight, 10, sx, sy, sz));
+    g.add(blob(1.6, LEAF_LT, sx, sy + 2.6, sz, 1, 0.75, 1));
+    const a0 = new THREE.Vector3(sx + 1.1, sy + 0.1, sz - 0.4), a1 = new THREE.Vector3(-R * 0.8, 3.5, R * 0.3);
+    const n = 9;
+    for (let i = 0; i <= n; i++) {
+      const k = i / n;
+      const p = a0.clone().lerp(a1, k);
+      p.y -= Math.sin(k * Math.PI) * 0.6;
+      const plank = box(0.9, 0.08, 0.3, C.timberLight, p.x, p.y, p.z);
+      plank.rotation.y = -Math.atan2(a1.z - a0.z, a1.x - a0.x) + Math.PI / 2;
+      g.add(plank);
+    }
+    lantern(sx, sy + 1.5, sz + 1.2);
+    // vines hanging from the boughs
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2;
+      const len = 1.5 + r() * 2.5;
+      g.add(box(0.07, len, 0.07, MOSS_DK, Math.cos(a) * crown * 0.65, H + 0.6 - len, Math.sin(a) * crown * 0.5));
+      if (i % 3 === 0) g.add(blob(0.12, 0xe88aa6, Math.cos(a) * crown * 0.65, H + 0.6 - len, Math.sin(a) * crown * 0.5));
     }
   }
-  const h = trunkH + crown * 1.3;
-  const span = Math.max(crown * 2, (trunkR + 4.6) * 2 * (t >= 4 ? 1 : 0.6));
-  return { obj: g, h, w: span, d: span * 0.85 };
+  if (t === 5) {
+    // a spring at its roots, glowing faintly, and the stones of the old grove
+    g.add(cyl(1.5, 1.5, 0.08, 0x4aa0a8, 12, 3.4, 0.04, 3.2).translateY(0));
+    g.add(mesh(new THREE.CylinderGeometry(1.1, 1.1, 0.04, 12), 0x9ff0e0, { emissive: 0x2a8a7a, opacity: 0.6 }).translateX(3.4).translateY(0.1).translateZ(3.2));
+    for (let i = 0; i < 5; i++) { const a = (i / 5) * Math.PI * 2; g.add(box(0.5, 0.4, 0.4, MENHIR, 3.4 + Math.cos(a) * 1.8, 0, 3.2 + Math.sin(a) * 1.8)); }
+    for (let i = 0; i < 6; i++) { const a = -Math.PI * 0.2 - i * 0.45; const st = box(0.6, 2 + r() * 0.8, 0.45, MENHIR, Math.cos(a) * 5.6, 0, Math.sin(a) * 5.0 - 1); st.rotation.y = -a; g.add(st); }
+  }
+  fireflies(10 + t * 4, crown, 2);
+  const h = H + tiers * crown * 0.26 + crown * 0.5;
+  return { obj: g, h, w: 14, d: 14 };
 }
 
 const HIDE = 0x8a6a3e, HIDE_DK = 0x6b4f2c, RAG = 0x6f9a2a, RUST = 0x8a4b24, RUST_DK = 0x5f3218, JUNK_WOOD = 0x4e3620, BONE = 0xe8dfc8;
@@ -2005,98 +2085,200 @@ function skull(s: number): THREE.Group {
 function goblinHall(t: number): Built {
   const g = new THREE.Group();
   const r = rng(53 + t);
-  if (t <= 2) {
-    g.add(goblinTent(t === 1 ? 2.4 : 3, r));
-    if (t === 2) {
-      const t2 = goblinTent(2, r);
-      t2.position.set(-4.2, 0, -0.8);
-      g.add(t2);
-      for (let i = -4; i <= 4; i++) {
-        const st = cone(0.18, 1.6 + r() * 0.6, JUNK_WOOD, 4, i * 1.05, 0, 3.6 + Math.abs(i) * 0.12);
-        st.rotation.x = 0.25;
-        st.rotation.z = (r() - 0.5) * 0.3;
-        g.add(st);
-      }
-    }
-    const fire = campfire();
-    fire.position.set(2.6, 0, 2.4);
-    g.add(fire);
-    const b = new THREE.Group();
-    b.add(cyl(0.08, 0.08, 3.4, JUNK_WOOD, 4));
-    b.add(box(1.1, 0.7, 0.05, RAG, 0.6, 2.6, 0));
-    b.position.set(3, 0, -1.2);
-    g.add(b);
-    return { obj: g, h: t === 1 ? 5 : 6, w: t === 1 ? 7 : 11, d: t === 1 ? 6 : 8 };
-  }
-  // the lopsided fort
-  const fw = t === 3 ? 8 : 9.5, fd = t === 3 ? 6.5 : 7.5, fh = t === 3 ? 3.6 : 4.2;
-  const fort = new THREE.Group();
-  fort.add(box(fw, fh, fd, JUNK_WOOD));
-  for (let i = 0; i < 6; i++) fort.add(box(0.2, fh + 0.3, 0.12, 0x2f2012, -fw / 2 + 0.6 + i * ((fw - 1.2) / 5), 0, fd / 2 + 0.05));
-  // rusted plate roof, crooked
-  for (let i = 0; i < 4; i++) {
-    const p = box(fw / 4 + 0.5, 0.2, fd + 0.8, i % 2 ? RUST : RUST_DK, -fw / 2 + fw / 8 + i * (fw / 4), fh + 0.4 + (r() - 0.5) * 0.4, 0);
-    p.rotation.x = (r() - 0.5) * 0.25;
-    p.rotation.z = (r() - 0.5) * 0.3;
-    fort.add(p);
-  }
-  fort.add(box(1.4, 2.2, 0.25, 0x241a12, 0, 0, fd / 2 + 0.1));
-  const s1 = skull(1.1);
-  s1.position.set(0, 2.9, fd / 2 + 0.3);
-  fort.add(s1);
-  fort.rotation.z = 0.03;
-  g.add(fort);
-  // spikes along the roof edge
-  for (let i = 0; i < 7; i++) {
-    const sp = cone(0.14, 1.1, 0x3b3530, 4, -fw / 2 + 0.5 + i * ((fw - 1) / 6), fh + 0.5, fd / 2 + 0.3);
-    sp.rotation.x = 0.7;
-    g.add(sp);
-  }
-  // a teetering junk tower (or two)
-  const tower = (x: number, z: number, levels: number) => {
-    const tw = new THREE.Group();
-    let y = 0;
-    for (let i = 0; i < levels; i++) {
-      const s = 2.6 - i * 0.35;
-      const lvl = box(s, 1.8, s, i % 2 ? JUNK_WOOD : 0x5e4428, (r() - 0.5) * 0.4, y, (r() - 0.5) * 0.4);
-      lvl.rotation.y = (r() - 0.5) * 0.4;
-      tw.add(lvl);
-      y += 1.8;
-    }
-    tw.add(cone(1.5, 1.6, RUST, 4, 0, y, 0).rotateY(0.4));
-    const fl = new THREE.Group();
-    fl.add(cyl(0.06, 0.06, 2, JUNK_WOOD, 4));
-    fl.add(box(1, 0.6, 0.05, RAG, 0.55, 1.4, 0));
-    fl.position.set(0, y + 1.3, 0);
-    tw.add(fl);
-    tw.position.set(x, 0, z);
-    g.add(tw);
-    return y + 3.2;
+  const GOB = 0x7fa843, GOB_DK = 0x5e7f2c, EYE = 0xf2d64b, EYE_E = 0xa08010, SLIME = 0x9aff3a, SLIME_E = 0x4a9a10;
+  const lamp = (x: number, y: number, z: number) => {
+    g.add(box(0.06, 0.6, 0.06, JUNK_WOOD, x, y - 0.6, z));
+    const l = mesh(new THREE.IcosahedronGeometry(0.2, 0), SLIME, { emissive: SLIME_E });
+    l.position.set(x, y, z);
+    l.userData.window = true;
+    g.add(l);
   };
-  let h = fh + 2.5;
-  if (t >= 4) h = Math.max(h, tower(-fw / 2 - 1.8, -1.2, 4));
-  if (t >= 5) h = Math.max(h, tower(fw / 2 + 1.8, -1.6, 5));
-  if (t >= 5) {
-    // the great skull gate in front
-    const gate = new THREE.Group();
-    gate.add(box(0.5, 4.2, 0.5, JUNK_WOOD, -2.2, 0, 0));
-    gate.add(box(0.5, 4.2, 0.5, JUNK_WOOD, 2.2, 0, 0));
-    gate.add(box(5.2, 0.5, 0.6, JUNK_WOOD, 0, 4, 0));
-    const big = skull(2.4);
-    big.position.set(0, 5.6, 0);
-    gate.add(big);
-    gate.position.set(0, 0, fd / 2 + 2.6);
-    g.add(gate);
+  const rag = (x: number, y: number, z: number, h: number, color = RAG) => {
+    g.add(cyl(0.07, 0.08, h, JUNK_WOOD, 4, x, y, z));
+    const fl = box(1.0, 0.6, 0.05, color, x + 0.55, y + h - 0.7, z);
+    fl.userData.flag = true;
+    g.add(fl);
+  };
+  /** A shack of odd planks under a rusty lean of plates, a little crooked. */
+  const shack = (x: number, y: number, z: number, w: number, d: number, h: number, tilt: number) => {
+    const sh = new THREE.Group();
+    sh.add(box(w, h, d, r() < 0.5 ? JUNK_WOOD : 0x5e4428));
+    for (let i = 0; i < Math.round(w / 0.7); i++) sh.add(box(0.16, h + 0.1, 0.1, 0x2f2012, -w / 2 + 0.35 + i * 0.7, 0, d / 2 + 0.04));
+    for (let i = 0; i < 3; i++) {
+      const p = box(w / 3 + 0.4, 0.14, d + 0.6, i % 2 ? RUST : RUST_DK, -w / 3 + i * (w / 3), h + 0.1 + (r() - 0.5) * 0.3, 0);
+      p.rotation.z = (r() - 0.5) * 0.35;
+      p.rotation.x = (r() - 0.5) * 0.2;
+      sh.add(p);
+    }
+    sh.add(box(0.5, 0.5, 0.12, SLIME, (r() - 0.5) * w * 0.5, h * 0.55, d / 2 + 0.06).translateX(0));
+    (sh.children[sh.children.length - 1] as THREE.Mesh).material = mat(SLIME, { emissive: SLIME_E });
+    sh.children[sh.children.length - 1].userData.window = true;
+    sh.position.set(x, y, z);
+    sh.rotation.z = tilt;
+    g.add(sh);
+  };
+  // the chief's gold: always on show, a bigger heap every level
+  const hoard = (x: number, z: number, sz: number) => {
+    const hp = new THREE.Group();
+    hp.add(blob(1.0 * sz, 0xe0b040, 0, 0.2 * sz, 0, 1.3, 0.55, 1.1));
+    hp.add(blob(0.6 * sz, 0xf0c850, 0.3 * sz, 0.6 * sz, -0.1 * sz, 1, 0.6, 1));
+    for (let i = 0; i < 10 + t * 3; i++) {
+      const c = cyl(0.14, 0.14, 0.05, 0xf2cc55, 8, (r() - 0.5) * 2.6 * sz, 0, (r() - 0.5) * 2.6 * sz);
+      c.rotation.set(r() * 0.5, 0, r() * 0.5);
+      hp.add(c);
+    }
+    if (t >= 2) {
+      const ch = new THREE.Group();
+      ch.add(box(1.0, 0.55, 0.65, 0x6e4a2a), box(1.04, 0.08, 0.69, 0xb07a3a, 0, 0.28, 0), blob(0.4, 0xf0c850, 0, 0.58, 0, 1.2, 0.45, 0.8));
+      ch.position.set(1.4 * sz, 0, 0.8 * sz);
+      ch.rotation.y = 0.6;
+      hp.add(ch);
+    }
+    const glint = mesh(new THREE.OctahedronGeometry(0.16, 0), 0xffffff, { emissive: 0xffe08a });
+    glint.position.set(0.2 * sz, 1.05 * sz, 0.2 * sz);
+    glint.userData.dynamic = true;
+    glint.userData.orbit = 2.5;
+    glint.userData.bob = 0.1;
+    hp.add(glint);
+    hp.position.set(x, 0, z);
+    g.add(hp);
+  };
+  /** The gate is a goblin's face: yellow eyes, big ears, and its open mouth is the door. */
+  const faceGate = (z: number, sz: number) => {
+    const fg = new THREE.Group();
+    fg.add(blob(1.9, GOB, 0, 2.0, 0, 1.1, 1.0, 0.45));
+    for (const x of [-1, 1]) {
+      const ear = cone(0.45, 2.2, GOB_DK, 4, x * 1.9, 2.6, 0);
+      ear.rotation.z = -x * 1.2;
+      fg.add(ear);
+      fg.add(mesh(new THREE.IcosahedronGeometry(0.36, 0), EYE, { emissive: EYE_E }).translateX(x * 0.75).translateY(2.75).translateZ(0.72));
+      fg.add(box(0.2, 0.2, 0.1, 0x141010, x * 0.75, 2.66, 1.02));
+    }
+    fg.add(blob(0.35, GOB_DK, 0, 2.2, 0.85, 1, 1.2, 1));
+    fg.add(box(1.4, 1.6, 0.4, 0x141010, 0, 0, 0.72));
+    for (let i = 0; i < 4; i++) {
+      const up = cone(0.13, 0.38, 0xf4efe0, 4, -0.5 + i * 0.33, 1.6, 0.95);
+      up.rotation.x = Math.PI;
+      fg.add(up);
+    }
+    fg.add(box(1.6, 0.3, 0.5, GOB_DK, 0, 1.55, 0.75));
+    fg.scale.setScalar(sz);
+    fg.position.set(0, 0, z);
+    g.add(fg);
+  };
+  if (t <= 2) {
+    // a patched hide tent (a crooked shack beside it later), a totem, the fire and the chief's first gold
+    const tent = new THREE.Group();
+    tent.add(cone(2.6, 3.6, HIDE, 7));
+    for (let i = 0; i < 5; i++) { const a = (i / 5) * Math.PI * 2; tent.add(box(0.8, 0.7, 0.05, i % 2 ? HIDE_DK : RAG, Math.cos(a) * 1.5, 1.0 + (i % 2) * 0.5, Math.sin(a) * 1.5).rotateY(-a + Math.PI / 2)); }
+    for (let i = 0; i < 5; i++) { const a = (i / 5) * Math.PI * 2; tent.add(cone(0.06, 1.0, JUNK_WOOD, 4, Math.cos(a) * 0.3, 3.3, Math.sin(a) * 0.3)); }
+    tent.add(box(1.0, 1.4, 0.1, 0x241a12, 0, 0, 2.2));
+    tent.position.set(-0.8, 0, -0.6);
+    g.add(tent);
+    if (t === 2) shack(3.6, 0, -1.4, 3.2, 2.6, 2.2, 0.05);
+    const totem = new THREE.Group();
+    for (let i = 0; i < 3; i++) totem.add(box(0.7, 0.8, 0.7, i % 2 ? JUNK_WOOD : 0x5e4428, 0, i * 0.8, 0));
+    const sk = skull(0.7);
+    sk.position.set(0, 2.7, 0.1);
+    totem.add(sk);
+    totem.position.set(-3.6, 0, 2.2);
+    g.add(totem);
+    const fire = campfire();
+    fire.position.set(1.6, 0, 2.6);
+    g.add(fire);
+    hoard(2.2, -3.2, 0.7 + t * 0.15);
+    rag(3.4, 0, 2.4, 3.2);
+    lamp(-3.0, 1.6, 3.4);
+    return { obj: g, h: 6, w: 10, d: 9 };
   }
-  const bn = new THREE.Group();
-  bn.add(cyl(0.08, 0.08, 3.6, JUNK_WOOD, 4));
-  bn.add(box(1.2, 0.8, 0.05, RAG, 0.65, 2.7, 0));
-  bn.position.set(fw / 2 - 0.6, 0, fd / 2 + 1.2);
-  g.add(bn);
+  // the Junk Fortress: shacks stacked on shacks, leaning, lashed together with rope and luck
+  const levels = t === 3 ? 2 : t === 4 ? 3 : 4;
+  let y = 0;
+  for (let i = 0; i < levels; i++) {
+    const w = 6.2 - i * 1.1, d = 4.8 - i * 0.7, h = 2.3 - i * 0.1;
+    shack((r() - 0.5) * 0.8, y, -2.2 + (r() - 0.5) * 0.6, w, d, h, (r() - 0.5) * 0.08);
+    y += h + 0.25;
+  }
+  const top = y;
+  // a crooked lookout on stilts to one side, a rope bridge to it
+  const lx = 4.4, lz = 0.6, ly = t >= 4 ? 4.4 : 3.2;
+  for (const [dx, dz] of [[-0.8, -0.8], [0.8, -0.8], [-0.8, 0.8], [0.8, 0.8]]) {
+    const leg = box(0.18, ly, 0.18, JUNK_WOOD, lx + dx, 0, lz + dz);
+    leg.rotation.z = dx * 0.05;
+    g.add(leg);
+  }
+  shack(lx, ly, lz, 2.2, 2.2, 1.6, -0.06);
+  rag(lx + 0.6, ly + 1.8, lz, 2.2, GOB);
+  if (t >= 4) {
+    const a0 = new THREE.Vector3(lx - 1.1, ly + 0.1, lz), a1 = new THREE.Vector3(2.4, 2.6, -1.0);
+    for (let i = 0; i <= 8; i++) {
+      const k = i / 8;
+      const p = a0.clone().lerp(a1, k);
+      p.y -= Math.sin(k * Math.PI) * 0.5;
+      const plank = box(0.3, 0.07, 0.9, i % 3 ? JUNK_WOOD : RUST, p.x, p.y, p.z);
+      plank.rotation.y = -Math.atan2(a1.z - a0.z, a1.x - a0.x);
+      g.add(plank);
+    }
+    // a smokestack belching green smoke, and a windmill of old shields
+    g.add(cyl(0.35, 0.45, 3.2, RUST_DK, 7, -2.0, top - 0.3, -3.2));
+    const sm = new THREE.Object3D();
+    sm.userData.dynamic = true;
+    sm.userData.smoke = true;
+    sm.position.set(-2.0, top + 3.0, -3.2);
+    g.add(sm);
+    const mill = new THREE.Group();
+    for (let i = 0; i < 4; i++) {
+      const arm = new THREE.Group();
+      arm.add(box(0.12, 1.8, 0.08, JUNK_WOOD, 0, 0, 0));
+      arm.add(cyl(0.45, 0.45, 0.06, i % 2 ? RUST : 0x6e7a6a, 6, 0, 1.6, 0).rotateX(Math.PI / 2));
+      arm.rotation.z = (i / 4) * Math.PI * 2;
+      mill.add(arm);
+    }
+    mill.userData.dynamic = true;
+    mill.userData.spin = true;
+    mill.position.set(1.4, top + 0.9, -0.2);
+    g.add(mill);
+    g.add(box(0.2, 1.2, 0.2, JUNK_WOOD, 1.4, top - 0.2, -0.35));
+  }
+  if (t >= 5) {
+    // a crane on the top with a cage swinging from it (for whoever annoyed the chief)
+    g.add(box(0.25, 3.2, 0.25, JUNK_WOOD, -0.6, top, -2.4));
+    const boom = box(4.2, 0.22, 0.22, JUNK_WOOD, 0, 0, 0);
+    boom.geometry.translate(2.1, 0, 0);
+    boom.position.set(-0.6, top + 3.1, -2.4);
+    boom.rotation.z = 0.25;
+    g.add(boom);
+    const cage = new THREE.Group();
+    cage.add(box(0.03, 1.2, 0.03, 0x8a8a7a, 0, -1.2, 0));
+    cage.add(cyl(0.55, 0.55, 0.08, RUST_DK, 8, 0, -2.2, 0), cyl(0.55, 0.55, 0.08, RUST_DK, 8, 0, -1.2, 0));
+    for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2; cage.add(box(0.04, 1.0, 0.04, RUST_DK, Math.cos(a) * 0.52, -2.15, Math.sin(a) * 0.52)); }
+    cage.add(skull(0.5).translateY(-1.95));
+    cage.userData.dynamic = true;
+    cage.userData.flag = true;
+    cage.position.set(-0.6 + Math.cos(0.25) * 3.9, top + 3.1 + Math.sin(0.25) * 3.9, -2.4);
+    g.add(cage);
+    rag(-2.6, top, -1.0, 2.6, GOB);
+    rag(2.2, top - 2.5, -3.6, 2.6);
+  }
+  faceGate(1.2, t === 3 ? 0.85 : 1.0);
+  // spikes and skulls along the front
+  for (let i = 0; i < 6; i++) {
+    const x = -5 + i * 2;
+    if (Math.abs(x) < 1.5) continue;
+    const sp = cone(0.14, 1.3, 0x3b3530, 4, x, 0, 3.4);
+    sp.rotation.x = 0.35;
+    g.add(sp);
+    if (i % 2) { const sk = skull(0.4); sk.position.set(x, 1.4, 3.8); g.add(sk); }
+  }
+  hoard(-4.2, 1.6, 1.0 + (t - 3) * 0.25);
+  if (t >= 4) hoard(-3.6, -4.6, 0.8 + (t - 4) * 0.3);
+  lamp(-1.8, 2.2, 3.2);
+  lamp(1.8, 2.2, 3.2);
+  lamp(lx, ly + 2.2, lz + 1.2);
   const fire = campfire();
-  fire.position.set(-fw / 2 + 0.8, 0, fd / 2 + 1.6);
+  fire.position.set(2.6, 0, 3.8);
   g.add(fire);
-  return { obj: g, h, w: fw + (t >= 4 ? 5 : 0) + (t >= 5 ? 4 : 0), d: fd + (t >= 5 ? 5.5 : 1.5) };
+  return { obj: g, h: top + (t >= 5 ? 4.5 : t >= 4 ? 2.5 : 1.5), w: 13, d: 11 };
 }
 
 // ---------- hero themes: finishing touches per building ----------

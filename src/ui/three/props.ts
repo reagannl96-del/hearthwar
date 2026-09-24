@@ -558,14 +558,18 @@ function bird(owl: boolean): THREE.Group {
     beak.rotation.x = Math.PI / 2 + 0.5;
     b.add(beak);
   }
+  // the wings on hinges at the shoulders, so they can beat
   for (const side of [-1, 1]) {
-    const wing = box(0.5, 0.05, 0.26, wingCol, side * 0.3, 0.02, -0.02);
-    wing.rotation.z = side * 0.35;
-    b.add(wing);
+    const hinge = new THREE.Group();
+    hinge.add(box(0.5, 0.05, 0.26, wingCol, side * 0.25, 0, 0));
+    hinge.position.set(side * 0.08, 0.04, -0.02);
+    hinge.userData.flap = side;
+    b.add(hinge);
   }
   b.add(box(0.16, 0.04, 0.26, wingCol, 0, -0.12, -0.26));
   b.position.y = 1.9;
   g.add(b);
+  g.userData.flapping = true;
   if (owl) {
     const spark = mesh(new THREE.OctahedronGeometry(0.06, 0), 0xd9c2ff, { emissive: 0x7a4ad0 });
     spark.position.set(0.3, 2.25, -0.2);
@@ -581,15 +585,18 @@ function bats(): THREE.Group {
     const b = new THREE.Group();
     b.add(blob(0.12, 0x2e2a33, 0, 0, 0, 1, 1.2, 1));
     for (const side of [-1, 1]) {
-      const wing = box(0.36, 0.03, 0.2, 0x221f27, side * 0.2, 0, 0);
-      wing.rotation.z = side * 0.45;
-      b.add(wing);
+      const hinge = new THREE.Group();
+      hinge.add(box(0.36, 0.03, 0.2, 0x221f27, side * 0.18, 0, 0));
+      hinge.position.x = side * 0.04;
+      hinge.userData.flap = side;
+      b.add(hinge);
       b.add(mesh(new THREE.OctahedronGeometry(0.025, 0), 0x5cff9a, { emissive: 0x1f9a4a }).translateX(side * 0.04).translateY(0.06).translateZ(0.1));
     }
     b.position.set(x, y, z);
     b.scale.setScalar(s);
     g.add(b);
   }
+  g.userData.flapping = true;
   return g;
 }
 

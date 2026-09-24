@@ -1803,6 +1803,8 @@ export class BattleTheatre {
       }
       if (a.carry && a.carry.userData.showAt !== undefined && T >= (a.carry.userData.showAt as number)) a.carry.visible = true;
     }
+    // wings beat on anything that flies
+    if (f.flyer && !a.fallen) f.g.traverse((o) => { if (o.userData.flap) o.rotation.z = Math.sin(T * 13 + a.ph) * 0.7 * (o.userData.flap as number); });
     // what they are doing with their hands
     this.pose(a, dt, moving);
   }

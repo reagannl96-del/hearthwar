@@ -247,7 +247,7 @@ export function buildScenery(seed = 11): THREE.Group {
     const y = inside ? 0 : heightAt(it.x, it.z);
     const theme = getTheme();
     // the tournament ground (paladin) and the stone circle (sorcerer) outside the gate are kept clear
-    if ((theme === 'paladin' || theme === 'sorcerer' || theme === 'necromancer') && Math.hypot(it.x - 21, it.z - 57.5) < 13) continue;
+    if (theme !== 'classic' && Math.hypot(it.x - 21, it.z - 57.5) < 13) continue;
     if (inside && theme !== 'classic' && (it.kind === 'oak' || it.kind === 'birch')) {
       const lm = theme === 'paladin' ? sunShrine(r) : theme === 'sorcerer' ? crystalSpire() : theme === 'druid' ? greatTree(r) : theme === 'necromancer' ? necroObelisk(r) : skullTotem();
       if (theme === 'goblin') lm.scale.setScalar(1.5);
@@ -267,10 +267,10 @@ export function buildScenery(seed = 11): THREE.Group {
     else if (it.kind === 'barrel') g.add(barrel(it.x, it.z));
     else g.add(crate(it.x, it.z));
   }
-  if (getTheme() === 'goblin') addSwamp(g, r);
+  if (getTheme() === 'goblin') { addSwamp(g, r); addGoblinYard(g, r); }
   if (getTheme() === 'paladin') addTourney(g, r);
   if (getTheme() === 'sorcerer') addArcane(g, r);
-  if (getTheme() === 'druid') addGlade(g, r);
+  if (getTheme() === 'druid') { addGlade(g, r); addSpring(g, r); }
   if (getTheme() === 'necromancer') addGraveyard(g, r);
   if (getSeason() === 'volcanic') addVolcanic(g, r);
   return bake(g);
@@ -802,6 +802,109 @@ function addGlade(g: THREE.Group, r: () => number): void {
 }
 
 /** Reeds, cattails and drifting mist for a goblin swamp, kept off the paths and away from buildings. */
+/**
+ * The druids' sacred spring outside the gate: a pool with lilies, a ring of mossy
+ * standing stones round it, deer grazing at its edge, giant toadstools, and a
+ * great oak at the back.
+ */
+function addSpring(g: THREE.Group, r: () => number): void {
+  const cx = 21, cz = 57.5;
+  const at = (x: number, z: number) => heightAt(x, z);
+  const y0 = at(cx, cz);
+  const pool = new THREE.Mesh(new THREE.CircleGeometry(4.2, 18), mat(0x4a9aa8, { emissive: 0x0a3a40 }));
+  pool.rotation.x = -Math.PI / 2;
+  pool.position.set(cx, y0 + 0.08, cz);
+  g.add(pool);
+  g.add(cyl(4.5, 4.6, 0.12, 0x6a5a40, 18, cx, y0 - 0.02, cz));
+  for (let i = 0; i < 7; i++) {
+    const a = r() * Math.PI * 2, d = r() * 3.2;
+    const lily = new THREE.Mesh(new THREE.CircleGeometry(0.42, 7), mat(0x5e8c34));
+    lily.rotation.x = -Math.PI / 2;
+    lily.position.set(cx + Math.cos(a) * d, y0 + 0.11, cz + Math.sin(a) * d);
+    g.add(lily);
+    if (i % 2 === 0) g.add(blob(0.13, 0xf4c0d8, lily.position.x, y0 + 0.2, lily.position.z));
+  }
+  for (let i = 0; i < 9; i++) {
+    const a = (i / 9) * Math.PI * 2;
+    const x = cx + Math.cos(a) * 7.2, z = cz + Math.sin(a) * 6.4;
+    const st = box(0.9, 2.4 + (i % 3) * 0.5, 0.6, 0x8e9a80, x, at(x, z) - 0.2, z);
+    st.rotation.y = -a;
+    g.add(st);
+    g.add(blob(0.5, 0x5e7d32, x, at(x, z) + 2.3 + (i % 3) * 0.5, z, 1, 0.4, 1));
+  }
+  const deer = (x: number, z: number, rot: number, grazing: boolean) => {
+    const d = new THREE.Group();
+    d.add(box(0.5, 0.5, 1.3, 0xa0703c, 0, 0.9, 0));
+    for (const [lx, lz] of [[-0.18, 0.5], [0.18, 0.5], [-0.18, -0.5], [0.18, -0.5]]) d.add(box(0.1, 0.9, 0.1, 0x7a5230, lx, 0, lz));
+    const neck = box(0.2, 0.7, 0.2, 0xa0703c, 0, 1.2, 0.6);
+    neck.rotation.x = grazing ? 1.9 : 0.4;
+    d.add(neck);
+    const head = box(0.26, 0.26, 0.5, 0xa0703c, 0, grazing ? 0.6 : 1.85, grazing ? 1.3 : 0.9);
+    d.add(head);
+    if (!grazing) for (const s2 of [-1, 1]) { const ant = box(0.05, 0.6, 0.05, 0xe8dcc0, s2 * 0.15, 2.0, 0.75); ant.rotation.z = -s2 * 0.4; d.add(ant); }
+    d.add(blob(0.1, 0xf4f1e6, 0, 1.05, -0.7));
+    d.position.set(x, at(x, z), z);
+    d.rotation.y = rot;
+    g.add(d);
+  };
+  deer(cx - 4.4, cz + 3.2, 2.4, true);
+  deer(cx + 5.2, cz - 1.0, -1.4, false);
+  deer(cx + 3.6, cz + 4.4, 3.4, true);
+  for (let i = 0; i < 5; i++) {
+    const a = r() * Math.PI * 2, d = 9 + r() * 2;
+    const x = cx + Math.cos(a) * d, z = cz + Math.sin(a) * d, s2 = 0.8 + r() * 0.8;
+    g.add(cyl(0.2 * s2, 0.28 * s2, 1.3 * s2, 0xefe6d0, 6, x, at(x, z), z));
+    g.add(blob(0.8 * s2, i % 2 ? 0xc0392b : 0xd96b3a, x, at(x, z) + 1.35 * s2, z, 1, 0.45, 1));
+  }
+}
+
+/**
+ * The goblins' yard outside the gate: a great cauldron bubbling green over a fire,
+ * a scrap heap of everything they ever stole, and giant glowing toadstools.
+ */
+function addGoblinYard(g: THREE.Group, r: () => number): void {
+  const cx = 21, cz = 57.5;
+  const at = (x: number, z: number) => heightAt(x, z);
+  const y0 = at(cx, cz);
+  // the cauldron
+  g.add(mesh(new THREE.SphereGeometry(2.2, 12, 8, 0, Math.PI * 2, Math.PI * 0.35, Math.PI * 0.65), 0x2a2622).translateX(cx).translateY(y0 + 2.2).translateZ(cz));
+  const brew = new THREE.Mesh(new THREE.CircleGeometry(1.9, 14), mat(0x9aff3a, { emissive: 0x4a9a10 }));
+  brew.rotation.x = -Math.PI / 2;
+  brew.position.set(cx, y0 + 3.0, cz);
+  g.add(brew);
+  for (let i = 0; i < 3; i++) { const a = (i / 3) * Math.PI * 2; g.add(box(0.3, 1.2, 0.3, 0x2a2622, cx + Math.cos(a) * 1.6, y0, cz + Math.sin(a) * 1.6)); }
+  for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2; const lg = cyl(0.18, 0.18, 1.8, 0x5e4428, 5, cx + Math.cos(a) * 0.9, y0 + 0.1, cz + Math.sin(a) * 0.9); lg.rotation.set(Math.PI / 2, 0, a); g.add(lg); }
+  const flame = mesh(new THREE.ConeGeometry(0.9, 1.3, 6).translate(0, 0.65, 0), 0xff8a3a, { emissive: 0xd0501a });
+  flame.position.set(cx, y0 + 0.1, cz);
+  g.add(flame);
+  const bubbles = new THREE.Group();
+  for (let i = 0; i < 6; i++) bubbles.add(mesh(new THREE.IcosahedronGeometry(0.2 + r() * 0.15, 0), 0xc8ff7a, { emissive: 0x6ab020 }).translateX((r() - 0.5) * 2.4).translateZ((r() - 0.5) * 2.4));
+  bubbles.userData.dynamic = true;
+  bubbles.userData.bob = 0.35;
+  bubbles.userData.orbit = 0.5;
+  bubbles.position.set(cx, y0 + 3.1, cz);
+  g.add(bubbles);
+  // the scrap heap
+  const hx = cx + 9, hz = cz - 1;
+  g.add(blob(3.4, 0x55462f, hx, at(hx, hz), hz, 1.3, 0.45, 1.1));
+  for (let i = 0; i < 26; i++) {
+    const a = r() * Math.PI * 2, d = r() * 3.2;
+    const x = hx + Math.cos(a) * d, z = hz + Math.sin(a) * d, y = at(x, z) + 0.6 + (3.2 - d) * 0.45;
+    const k = i % 5;
+    const piece = k === 0 ? cyl(0.5, 0.5, 0.12, 0x6e4a2a, 8, x, y, z) : k === 1 ? box(1.2, 0.1, 0.8, 0x8a4b24, x, y, z) : k === 2 ? cyl(0.35, 0.3, 0.8, 0x5c554a, 7, x, y, z) : k === 3 ? box(0.5, 0.5, 0.5, 0x6e4a2a, x, y, z) : cyl(0.4, 0.4, 0.06, 0x8a8a7a, 6, x, y, z);
+    piece.rotation.set(r() * 3, r() * 3, r() * 3);
+    g.add(piece);
+  }
+  // giant glowing toadstools
+  for (let i = 0; i < 7; i++) {
+    const a = r() * Math.PI * 2, d = 5 + r() * 4;
+    const x = cx + Math.cos(a) * d - 3, z = cz + Math.sin(a) * d, s2 = 0.9 + r() * 1.1;
+    if (Math.hypot(x - hx, z - hz) < 4.5) continue;
+    g.add(cyl(0.22 * s2, 0.3 * s2, 1.6 * s2, 0xe8e0c8, 6, x, at(x, z), z));
+    g.add(mesh(new THREE.SphereGeometry(0.9 * s2, 9, 5, 0, Math.PI * 2, 0, Math.PI / 2), i % 2 ? 0x9ac040 : 0x6ab020, { emissive: 0x2a5a08 }).translateX(x).translateY(at(x, z) + 1.55 * s2).translateZ(z));
+  }
+}
+
 function addSwamp(g: THREE.Group, r: () => number): void {
   const reed = (x: number, z: number, y: number) => {
     const clump = new THREE.Group();
@@ -982,6 +1085,24 @@ export function buildWall(level: number, color: number): THREE.Group {
         fire.material = mat(0x5cff9a, { emissive: 0x1f9a4a });
         seg.add(fire);
       }
+    }
+    if (getTheme() === 'druid') {
+      // ivy grown over both faces, moss along the top, wildflowers here and there
+      for (const side of [-1, 1]) for (let k = 0; k < 2; k++) {
+        seg.add(blob(0.9 + (i % 3) * 0.2, k ? 0x4f7a2e : 0x5e8c34, -len / 4 + k * len / 2, h * (0.45 + ((i + k) % 3) * 0.12), side * (thick / 2 + 0.05), 1.1, 0.9, 0.25));
+      }
+      seg.add(box(len, 0.16, thick + 0.1, 0x5e7d32, 0, h + 0.3, 0));
+      if (i % 3 === 0) for (let k = 0; k < 4; k++) seg.add(blob(0.14, [0xf2e46a, 0xf4f1e6, 0xb58cd8, 0xe88aa6][k], -len / 2 + (k + 0.5) * len / 4, h + 1.05, (k % 2 ? 1 : -1) * thick * 0.25));
+    }
+    if (getTheme() === 'goblin') {
+      // rusty plates hammered over the holes, and a skull on a stake now and then
+      if (i % 2 === 0) { const pl = box(1.1, 1.0, 0.08, i % 4 ? 0x8a4b24 : 0x5f3218, (i % 3 - 1) * 0.6, h * 0.35, -thick / 2 - 0.05); pl.rotation.z = (i % 5 - 2) * 0.08; seg.add(pl); }
+      if (i % 4 === 1) {
+        seg.add(cyl(0.06, 0.07, 1.6, C.timber, 4, 0, h + 0.3, 0));
+        seg.add(blob(0.28, 0xe6dfcc, 0, h + 2.0, 0, 1, 0.9, 1));
+        for (const x of [-0.1, 0.1]) seg.add(box(0.09, 0.09, 0.05, 0x141010, x, h + 2.0, -0.26));
+      }
+      if (i % 5 === 3) { const l = mesh(new THREE.IcosahedronGeometry(0.22, 0), 0x9aff3a, { emissive: 0x4a9a10 }); l.position.set(0, h + 0.8, 0); seg.add(l); }
     }
     if (getTheme() === 'goblin') {
       // sharpened stakes bristling outward from the battlements (local -z faces out of the village)

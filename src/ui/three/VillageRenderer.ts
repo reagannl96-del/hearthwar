@@ -1016,6 +1016,8 @@ export class VillageRenderer {
       const bob = isRider(p.kind) ? Math.abs(Math.sin(t * 7 + p.speed * 10)) * 0.2 : Math.abs(Math.sin(t * 8 + p.speed * 10)) * 0.1;
       p.g.position.set(pos.x, pos.y + bob, pos.z);
       p.g.rotation.y = Math.atan2(dir.x, dir.z);
+      // owls, hawks and bats beat their wings
+      if (p.g.userData.flapping || p.g.children[0]?.userData.flapping) p.g.traverse((o) => { if (o.userData.flap) o.rotation.z = Math.sin(t * 13 + p.speed * 20) * 0.7 * (o.userData.flap as number); });
     }
     if (this.guards) for (const gd of this.guards.children) gd.rotation.y += Math.sin(t * 0.6 + (gd.userData.guard as number) * 1.7) * 0.004;
     for (const b of this.builders.values()) b.arms.forEach((a, i) => { a.rotation.x = hammerSwing(t * 1.4 + i * 0.47); });
@@ -1035,7 +1037,7 @@ export class VillageRenderer {
     // smoke puffs
     for (const s of this.smoke) {
       if (s.puffs.length < 7 && Math.random() < dt * 2.2) {
-        const m = new THREE.Mesh(PUFF_GEO, new THREE.MeshLambertMaterial({ color: this.opts.theme === 'necromancer' ? 0x1a171c : 0xcfc6b8, transparent: true, opacity: this.opts.theme === 'necromancer' ? 0.78 : 0.6, flatShading: true }));
+        const m = new THREE.Mesh(PUFF_GEO, new THREE.MeshLambertMaterial({ color: this.opts.theme === 'necromancer' ? 0x1a171c : this.opts.theme === 'goblin' ? 0x8a9a6a : 0xcfc6b8, transparent: true, opacity: this.opts.theme === 'necromancer' ? 0.78 : 0.6, flatShading: true }));
         s.src.getWorldPosition(m.position);
         this.scene.add(m);
         s.puffs.push({ m, age: 0, life: 3 + Math.random() * 1.5 });
