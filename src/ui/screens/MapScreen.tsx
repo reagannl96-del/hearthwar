@@ -271,8 +271,9 @@ export function MapScreen({ focus }: { focus?: number }) {
         if (z >= 10) {
           const ground = snow[y * data.size + x];
           const look = v.ownerId === me ? myLooks.get(v.id) ?? 'generic' : 'generic';
-          sprite = villageSprite(villageStage(v.points), look, { barb: v.ownerId === null, ground: ground === 1 ? 'snow' : ground === 2 ? 'ash' : 'grass' });
-          k = islandFit(grid, data.size, x, y, spriteBox(sprite));
+          const stage = villageStage(v.points);
+          sprite = villageSprite(stage, look, { barb: v.ownerId === null, ground: ground === 1 ? 'snow' : ground === 2 ? 'ash' : 'grass' });
+          k = stageFit(stage, spriteBox(sprite));
         }
         // the island's ground centre: rings, glows and markers are laid out around it
         const gx = px + z / 2, gy = py + z * (z < 10 ? 0.5 : 0.5 + 0.12 * k);
@@ -290,8 +291,8 @@ export function MapScreen({ focus }: { focus?: number }) {
         ctx.fillStyle = fill;
         ctx.fillRect(px + (z - s) / 2, py + (z - s) / 2, s, s);
       } else if (sprite) {
-        // the painted island stands on its field, centred, its walls and towers rising above it;
-        // crowded in by neighbours it shrinks about its ground centre so it never paints over them
+        // the painted island stands on its field, centred, its walls and towers rising above it,
+        // as wide as every other village of its size
         const S = zk * ISLAND;
         ctx.drawImage(sprite, gx - S / 2, gy + zk * ISLAND_FOOT - S, S, S);
       }
@@ -642,35 +643,20 @@ const BONUS_RING_ZOOM = 16;
 const ISLAND = 1.95;
 /** How far (in fields, at full size) the sprite's bottom edge sits below the island's ground centre. */
 const ISLAND_FOOT = 0.38;
-/** The ground plan every island must keep inside, as height over width (the art is seen from above at an angle). */
-const FOOT_RATIO = 0.75;
-/** Tops of towers and trees may rise a little past that plan: only this much of the art's height counts. */
-const FOOT_TALL = 0.85;
-/** A sliver of grass left between two crowded islands. */
-const FOOT_GAP = 0.94;
-
 /**
- * How much a village's island must shrink (1 = full size) so it never paints over a
- * neighbour. Every island keeps inside an ellipse centred on its field; two equal ellipses
- * centred (dx, dy) fields apart just touch when (dx / 2a)^2 + (dy / 2a*r)^2 = 1, so each
- * nearby village caps the ellipse's half-width a at half of that, and the island (its opaque
- * width and height, from spriteBox) is scaled down to fit. Villages two fields apart or
- * more keep the full-size art; only the eight fields around (and the next ring) are checked.
+ * How wide a village's island is drawn, in fields, by its size (villageStage): a hamlet
+ * well inside its field, a great stronghold filling most of it. Every village of the same
+ * size is drawn the same wherever it stands, and even the biggest stays inside its own
+ * field (its height too), so two villages side by side never touch.
  */
-function islandFit(grid: Map<number, MapVillage>, size: number, x: number, y: number, box: { w: number; h: number }): number {
-  const w = ISLAND * box.w, h = ISLAND * box.h * FOOT_TALL;
-  let k = 1;
-  for (let dy = -2; dy <= 2; dy++) {
-    const ny = y + dy;
-    if (ny < 0 || ny >= size) continue;
-    for (let dx = -2; dx <= 2; dx++) {
-      const nx = x + dx;
-      if ((dx === 0 && dy === 0) || nx < 0 || nx >= size || !grid.has(ny * size + nx)) continue;
-      const a = 0.5 * Math.hypot(dx, dy / FOOT_RATIO) * FOOT_GAP;
-      k = Math.min(k, (2 * a) / w, (2 * a * FOOT_RATIO) / h);
-    }
-  }
-  return k;
+const STAGE_WIDTH = [0.62, 0.66, 0.7, 0.74, 0.78, 0.82, 0.86, 0.9];
+/** No island is drawn taller than this (fields), towers and all. */
+const MAX_HEIGHT = 0.9;
+
+/** The scale (1 = the full-size sprite) that gives this village's island its size, inside its field. */
+function stageFit(stage: number, box: { w: number; h: number }): number {
+  const want = STAGE_WIDTH[Math.max(0, Math.min(STAGE_WIDTH.length - 1, stage))];
+  return Math.min(1, want / (ISLAND * Math.max(0.2, box.w)), MAX_HEIGHT / (ISLAND * Math.max(0.2, box.h)));
 }
 /** How far (in screen pixels) the touch crosshair reaches for a village when none sits right under it. */
 const AIM_RADIUS_PX = 18;

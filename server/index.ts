@@ -62,8 +62,10 @@ async function verify(token: string): Promise<{ id: string; name: string } | nul
 // ---------- world ----------
 
 let world: World;
-/** AI rulers the online realm keeps: 70 unless the environment says otherwise (a running realm is topped up on start). */
+/** AI rulers a new online realm opens with (a running realm is topped up to this on start). */
 const AI_RULERS = Math.max(Number(env.WORLD_AI || 0), 70);
+/** The realm's usual size: newcomers keep arriving (faster while it is well short) until about this many rulers live in it. */
+const AI_TARGET = Math.max(Number(env.WORLD_AI_TARGET || 0), 150);
 let clockBase = 0; // world.now = Date.now() - clockBase
 
 async function loadWorld(): Promise<World> {
@@ -73,6 +75,7 @@ async function loadWorld(): Promise<World> {
       recomputeCounters(w);
       migrateWorld(w);
       const came = reinforceRulers(w, AI_RULERS);
+      w.config.aiCount = Math.max(w.config.aiCount, AI_TARGET);
       if (came > 0) console.log(`${came} AI rulers joined, for ${AI_RULERS} in all.`);
       recomputePlayerPoints(w);
       w.accounts ??= {};
@@ -102,6 +105,8 @@ function freshWorld(pastRounds: RoundResult[] = []): World {
     },
   });
   w.accounts = {};
+  // it opens with AI_RULERS; newcomers fill it up to its usual size over the first days
+  w.config.aiCount = AI_TARGET;
   w.pastRounds = pastRounds;
   if (pastRounds.length > 0) w.name = `${env.WORLD_NAME || 'The Ashen Marches'} (round ${pastRounds.length + 1})`;
   console.log(`Created a new world "${w.name}".`);

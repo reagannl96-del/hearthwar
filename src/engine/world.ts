@@ -472,7 +472,9 @@ export function realmGrowth(w: World): void {
   // realms), thinning out to nothing once it is about 15% over
   const usual = w.config.aiCount;
   const room = rulers <= usual ? 1 : Math.max(0, 1 - (rulers - usual) / Math.max(1, usual * 0.15));
-  const arriveGap = ARRIVE_GAP * Math.max(1, Math.sqrt(150 / w.config.speed));
+  // (well under its usual size, newcomers come faster: twice as often at half)
+  const short = Math.max(0, (usual - rulers) / Math.max(1, usual));
+  const arriveGap = (ARRIVE_GAP * Math.max(1, Math.sqrt(150 / w.config.speed))) / (1 + 2 * short);
   if (usual > 0 && nextRandom(w) < (tick / arriveGap) * room) {
     // a late arrival comes with a start that fits the realm's age, so it is not simply eaten
     const head = w.now < DAY_MS / 2 ? 0 : Math.min(14, 4 + Math.floor(w.now / DAY_MS) * 2);
