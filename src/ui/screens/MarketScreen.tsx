@@ -44,6 +44,41 @@ function horseCount(v: VillageView): { home: number; out: number; training: numb
   return { home: v.units.trader ?? 0, out, training };
 }
 
+/**
+ * One of your own villages as a destination: its warehouse, what it holds, what is already
+ * on the way and how much room is left, so a shipment doesn't spill over.
+ */
+function DestStores({ tid, amt }: { tid: number; amt: Record<ResKey, number | ''> }) {
+  const pv = view.value!;
+  const d = pv.villages.find((x) => x.id === tid);
+  if (!d) return null;
+  const have = liveRes(d);
+  const coming: Record<ResKey, number> = { wood: 0, clay: 0, iron: 0 };
+  for (const c of pv.commands) if (c.kind === 'trade' && c.toVid === tid && c.res) for (const k of KEYS) coming[k] += c.res[k];
+  return (
+    <div class="dest-stores">
+      <div class="small muted">Warehouse holds <b class="num">{fmt(d.storage)}</b> of each</div>
+      <table class="dest-table">
+        <thead><tr><th /><th class="right">Stored</th><th class="right">On the way</th><th class="right">Room</th></tr></thead>
+        <tbody>
+          {KEYS.map((k) => {
+            const room = Math.max(0, d.storage - Math.floor(have[k]) - coming[k]);
+            const spill = Number(amt[k] || 0) - room;
+            return (
+              <tr class={spill > 0 ? 'is-spill' : ''}>
+                <td><Icon name={k} size={16} /></td>
+                <td class="right num">{fmt(Math.floor(have[k]))}</td>
+                <td class="right num">{coming[k] ? fmt(coming[k]) : '–'}</td>
+                <td class="right num">{fmt(room)}{spill > 0 && <span class="reason small" title="More than the warehouse can take: the rest is lost"> ({fmt(spill)} too much)</span>}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function SendRes() {
   const pane = usePane();
   const v = pane.village.value!;
@@ -134,6 +169,7 @@ function SendRes() {
             {horse && slow > dur && <span class="muted small"> (on foot: {fmtDur(slow / warp.value)})</span>}
           </p>
         )}
+        {info?.own && tid !== undefined && <DestStores tid={tid} amt={amt} />}
         <p class="muted small">Shipments between your own villages are slow: merchants travel at {Math.round(OWN_SHIPMENT_SPEED * 100)}% speed{horse ? `, though ${horseName.toLowerCase()} still ride ${TRADER_SPEEDUP}× faster than that` : ''}.</p>
         <Btn
           disabled={tid === undefined || total <= 0 || need > free}

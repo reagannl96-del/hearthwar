@@ -2177,3 +2177,10 @@ button.realm-row:hover { background: var(--surface-2); border-color: var(--line)
 .right-icon.is-on { filter: drop-shadow(0 1px 0 rgba(255, 245, 210, 0.7)); }
 .founder-tag { margin-left: 6px; font-size: 0.7rem; padding: 1px 7px; }
 .rights-edit .check { display: inline-flex; align-items: center; gap: 5px; }
+
+/* market: the warehouse of one of your own villages you're sending to */
+.dest-stores { margin: 4px 0 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: rgba(255, 250, 235, 0.5); }
+.dest-table { width: 100%; border-collapse: collapse; margin-top: 4px; font-size: 0.9rem; }
+.dest-table th { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.7; font-weight: 700; padding: 2px 4px; }
+.dest-table td { padding: 2px 4px; }
+.dest-table tr.is-spill td { background: rgba(200, 60, 40, 0.08); }
