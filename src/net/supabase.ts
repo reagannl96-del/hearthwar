@@ -18,8 +18,38 @@ export interface SessionLite {
 let client: SupabaseClient | null = null;
 export function supabase(): SupabaseClient | null {
   if (!url || !anon || !GAME_SERVER_URL) return null;
-  client ??= createClient(url, anon, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
+  // PKCE: Google sends back a one-time code (useless without this browser's secret), never the tokens themselves
+  client ??= createClient(url, anon, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: 'pkce' } });
   return client;
+}
+
+const AUTH_PARAMS = ['access_token', 'refresh_token', 'provider_token', 'provider_refresh_token', 'expires_at', 'expires_in', 'token_type', 'code', 'sb', 'error', 'error_code', 'error_description', 'type'];
+const hasAuthParams = () => /(?:^|[#?&])(access_token|refresh_token|provider_token|code|error_description)=/.test(window.location.hash + window.location.search);
+
+/**
+ * Once sign-in has read what it needs from the address, take it out again: a copied
+ * link (to a report, say) must never carry anyone's login with it.
+ */
+function scrubAuthFromUrl(): void {
+  if (!hasAuthParams()) return;
+  const clean = (raw: string) => {
+    const q = new URLSearchParams(raw);
+    for (const k of AUTH_PARAMS) q.delete(k);
+    return q.toString();
+  };
+  const search = clean(window.location.search.slice(1));
+  const hash = clean(window.location.hash.slice(1));
+  try {
+    history.replaceState(history.state, '', window.location.pathname + (search ? `?${search}` : '') + (hash ? `#${hash}` : ''));
+  } catch { /* history unavailable */ }
+}
+
+/** On load: if we've just come back from signing in, finish it and clean the address. */
+export async function finishSignInFromUrl(): Promise<void> {
+  if (!hasAuthParams()) return;
+  const sb = supabase();
+  if (sb) await sb.auth.getSession().catch(() => null);
+  scrubAuthFromUrl();
 }
 
 const DEV_KEY = 'hw-dev-user';
@@ -32,6 +62,7 @@ export async function currentSession(): Promise<SessionLite | null> {
   const sb = supabase();
   if (!sb) return null;
   const { data } = await sb.auth.getSession();
+  scrubAuthFromUrl();
   const s = data.session;
   if (!s) return null;
   const meta = s.user.user_metadata as Record<string, string | undefined>;
@@ -39,7 +70,7 @@ export async function currentSession(): Promise<SessionLite | null> {
 }
 
 export function onSessionChange(fn: () => void): () => void {
-  const sub = supabase()?.auth.onAuthStateChange(() => fn());
+  const sub = supabase()?.auth.onAuthStateChange(() => { scrubAuthFromUrl(); fn(); });
   return () => sub?.data.subscription.unsubscribe();
 }
 
