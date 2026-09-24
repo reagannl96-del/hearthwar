@@ -134,6 +134,8 @@ export function go(r: Route) {
     // each screen is a step in the browser's history, so Back and Forward move around the game
     if (!same) try { history.pushState({ hw: r, world: host.value?.world.id }, ''); } catch { /* history unavailable */ }
     window.scrollTo({ top: 0 });
+    // on phones the page itself holds still and the main view scrolls inside it
+    document.getElementById('main')?.scrollTo?.({ top: 0 });
   }
 }
 

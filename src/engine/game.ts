@@ -15,7 +15,7 @@ import { replenishExchange } from './market';
 import { dropFromTribe } from './tribes';
 import { runManager } from './manager';
 import { nextRandom, pick } from './rng';
-import type { Command, GameEvent, Player, UnitId, Village, World } from './types';
+import type { BuildingId, Command, GameEvent, Player, UnitId, Village, World } from './types';
 import { RES_KEYS } from './types';
 import { refreshPoints, storageOf, updateVillage } from './village';
 import { BARB_BUILDINGS, ITEM_FIND_CHANCE, aiThinkInterval, barbInterval, itemInterval, realmGrowth, sampleInterval } from './world';
@@ -112,7 +112,9 @@ function barbGrowth(w: World): void {
   for (let i = 0; i < n && barbs.length > 0; i++) {
     const v = barbs[Math.floor(nextRandom(w) * barbs.length)];
     if (v.points >= cap) continue;
-    const b = pick(w, BARB_BUILDINGS);
+    // a bonus village grows the mine its bonus feeds, and the warehouse to hold it, more than anything else
+    const favour: BuildingId[] = v.bonus === 'wood' ? ['timber', 'warehouse'] : v.bonus === 'clay' ? ['claypit', 'warehouse'] : v.bonus === 'iron' ? ['ironmine', 'warehouse'] : v.bonus === 'all' ? ['timber', 'claypit', 'ironmine', 'warehouse'] : [];
+    const b = favour.length && nextRandom(w) < 0.6 ? pick(w, favour) : pick(w, BARB_BUILDINGS);
     if (b === 'wall' && nextRandom(w) < 0.5) continue;
     if (v.buildings[b] >= Math.min(BUILDINGS[b].max, b === 'wall' ? 8 : 25)) continue;
     updateVillage(w, v, w.now);

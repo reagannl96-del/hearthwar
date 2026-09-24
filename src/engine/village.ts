@@ -73,8 +73,14 @@ export function productionRates(w: World, v: Village, t = w.now): Res {
 }
 
 export function storageOf(v: Village): number {
-  return storageCap(v.buildings.warehouse, v.bonus);
+  const cap = storageCap(v.buildings.warehouse, v.bonus);
+  // a barbarian village with a resource bonus hoards: its stores run three times as deep, so
+  // what the bonus produces piles up for raiders to find (it keeps a normal warehouse once taken)
+  return v.ownerId === null && resourceBonus(v) ? cap * 3 : cap;
 }
+
+/** Does this village's bonus make more of a resource (not storage, farm or recruiting)? */
+export const resourceBonus = (v: Village) => v.bonus === 'wood' || v.bonus === 'clay' || v.bonus === 'iron' || v.bonus === 'all';
 
 export function hideOf(v: Village): number {
   return hideCap(v.buildings.hiding);

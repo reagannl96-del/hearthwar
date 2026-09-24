@@ -484,3 +484,24 @@ describe('a human player', () => {
     expect(buildView(w, p.id).villages.length).toBe(1);
   });
 });
+
+describe('bonus villages', () => {
+  it('a barbarian village with a resource bonus hoards far more of it than a plain one', () => {
+    const w = createWorld({ worldName: 'B', playerName: 'P', villageName: 'H', seed: 3, config: { ...defaultConfig(), aiCount: 0, size: 60 } });
+    removeEvents(w, (e) => e.type === 'barb');
+    const barbs = Object.values(w.villages).filter((v) => v.ownerId === null).slice(0, 2);
+    const [plain, rich] = barbs;
+    for (const v of barbs) {
+      Object.assign(v.buildings, { timber: 5, claypit: 5, ironmine: 5, warehouse: 3 });
+      v.res = { wood: 0, clay: 0, iron: 0 };
+      v.resAt = w.now;
+    }
+    plain.bonus = undefined;
+    rich.bonus = 'iron';
+    updateVillage(w, plain, w.now + 12 * HOUR);
+    updateVillage(w, rich, w.now + 12 * HOUR);
+    // the plain village fills its little warehouse; the bonus one piles up well past it
+    expect(rich.res.iron).toBeGreaterThan(plain.res.iron * 2);
+    expect(rich.res.wood).toBeGreaterThan(plain.res.wood);
+  });
+});

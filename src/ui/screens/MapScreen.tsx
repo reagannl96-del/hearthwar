@@ -4,7 +4,7 @@ import { hasUnits } from '../../engine/formulas';
 import type { BonusType, UnitId, Units } from '../../engine/types';
 import type { MapData, MapVillage } from '../../engine/view';
 import { lsGet } from '../../host/storage';
-import { forestSprite, lookOfHero, onVillageArt, villageSprite, villageStage } from '../mapSprites';
+import { forestSprite, lookOfHero, onVillageArt, spriteBox, villageSprite, villageStage } from '../mapSprites';
 import { isVolcanic, isWinter } from '../../engine/world';
 import { Icon } from '../art/icons';
 import { Btn, UnitList, UnitIcon, unitName } from '../components/common';
@@ -252,7 +252,8 @@ export function MapScreen({ focus }: { focus?: number }) {
     // big island never hides its neighbour's flag, tribe ring or selection
     const me = pv.me.id;
     const myTribe = pv.me.tribeId;
-    const shown: { v: (typeof data.villages)[number]; x: number; y: number; px: number; py: number; owner: (typeof data.players)[number] | null; fill: string; mark: string | undefined }[] = [];
+    const shown: { v: (typeof data.villages)[number]; px: number; py: number; gx: number; gy: number; k: number; sprite: HTMLCanvasElement | null; owner: (typeof data.players)[number] | null; fill: string; mark: string | undefined }[] = [];
+    // rows top to bottom, so a nearer (lower) island is always painted over a farther one
     for (let y = fy0; y <= fy1; y++) {
       for (let x = fx0; x <= fx1; x++) {
         const v = grid.get(y * data.size + x);
@@ -265,56 +266,64 @@ export function MapScreen({ focus }: { focus?: number }) {
         else if (mark) fill = mark;
         else if (rel) fill = rel;
         else if (owner) fill = owner.color;
-        shown.push({ v, x, y, px: sx(x), py: sy(y), owner, fill, mark });
+        const px = sx(x), py = sy(y);
+        let k = 1, sprite: HTMLCanvasElement | null = null;
+        if (z >= 10) {
+          const ground = snow[y * data.size + x];
+          const look = v.ownerId === me ? myLooks.get(v.id) ?? 'generic' : 'generic';
+          sprite = villageSprite(villageStage(v.points), look, { barb: v.ownerId === null, ground: ground === 1 ? 'snow' : ground === 2 ? 'ash' : 'grass' });
+          k = islandFit(grid, data.size, x, y, spriteBox(sprite));
+        }
+        // the island's ground centre: rings, glows and markers are laid out around it
+        const gx = px + z / 2, gy = py + z * (z < 10 ? 0.5 : 0.5 + 0.12 * k);
+        shown.push({ v, px, py, gx, gy, k, sprite, owner, fill, mark });
       }
     }
-    for (const { v, x, y, px, py, fill, mark } of shown) {
-      const gx = px + z / 2, gy = py + z * (z < 10 ? 0.5 : 0.62);
+    for (const { v, px, py, gx, gy, k, sprite, fill, mark } of shown) {
+      const zk = z * k;
       // bonus villages wear a brass ring, but only up close: from afar it would only be noise
-      if (v.bonus && z >= BONUS_RING_ZOOM) bonusRing(ctx, gx, gy, z, 'back');
-      if (v.ownerId === me) glow(ctx, gx, gy, Math.max(z * (v.id === cur.id ? 1.35 : 1.1), 10), v.id === cur.id, v.id === pv.me.homeVid ? '#ffffff' : '#ffc43c');
-      else if (mark) glow(ctx, gx, gy, Math.max(z * 1.1, 10), false, mark);
+      if (v.bonus && z >= BONUS_RING_ZOOM) bonusRing(ctx, gx, gy, zk, 'back');
+      if (v.ownerId === me) glow(ctx, gx, gy, Math.max(zk * (v.id === cur.id ? 1.35 : 1.1), 10), v.id === cur.id, v.id === pv.me.homeVid ? '#ffffff' : '#ffc43c');
+      else if (mark) glow(ctx, gx, gy, Math.max(zk * 1.1, 10), false, mark);
       if (z < 10) {
         const s = Math.max(2, z - 1);
         ctx.fillStyle = fill;
         ctx.fillRect(px + (z - s) / 2, py + (z - s) / 2, s, s);
-      } else {
-        const ground = snow[y * data.size + x];
-        const look = v.ownerId === me ? myLooks.get(v.id) ?? 'generic' : 'generic';
-        const sprite = villageSprite(villageStage(v.points), look, { barb: v.ownerId === null, ground: ground === 1 ? 'snow' : ground === 2 ? 'ash' : 'grass' });
-        // the painted island stands on its field, centred, its walls and towers rising above it
-        const S = z * 1.95;
-        if (sprite) ctx.drawImage(sprite, px + z / 2 - S / 2, py + z - S, S, S);
+      } else if (sprite) {
+        // the painted island stands on its field, centred, its walls and towers rising above it;
+        // crowded in by neighbours it shrinks about its ground centre so it never paints over them
+        const S = zk * ISLAND;
+        ctx.drawImage(sprite, gx - S / 2, gy + zk * ISLAND_FOOT - S, S, S);
       }
     }
-    for (const { v, px, py, owner, fill } of shown) {
+    for (const { v, gx, gy, k, owner, fill } of shown) {
+      const zk = z * k;
       if (z >= 10) {
-        // owner marker, Tribal Wars style
-        const d = Math.max(4, z * 0.16);
+        // owner marker, Tribal Wars style, at the island's back-left corner
+        const d = Math.max(4, z * 0.16 * Math.max(k, 0.7));
         ctx.fillStyle = fill;
         ctx.strokeStyle = 'rgba(30,15,5,0.8)';
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.arc(px + d * 0.8, py + d * 0.8, d / 2, 0, Math.PI * 2);
+        ctx.arc(gx - zk * 0.372, gy - zk * 0.492, d / 2, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
         if (owner) {
           ctx.fillStyle = '#3a2614';
-          ctx.fillRect(px + z * 0.78, py + z * 0.02, 1.5, z * 0.3);
+          ctx.fillRect(gx + zk * 0.28, gy - zk * 0.6, 1.5, zk * 0.3);
           ctx.fillStyle = fill;
-          ctx.fillRect(px + z * 0.78 + 1.5, py + z * 0.03, z * 0.16, z * 0.1);
+          ctx.fillRect(gx + zk * 0.28 + 1.5, gy - zk * 0.59, zk * 0.16, zk * 0.1);
         }
         if (v.bonus && z >= BONUS_RING_ZOOM) {
           // the front of the ring passes before the island, with a medallion naming the bonus
-          const gx = px + z / 2, gy = py + z * 0.62;
-          bonusRing(ctx, gx, gy, z, 'front');
-          bonusBadge(ctx, gx + z * 0.6, gy + z * 0.3, Math.max(6, z * 0.15), v.bonus);
+          bonusRing(ctx, gx, gy, zk, 'front');
+          bonusBadge(ctx, gx + zk * 0.6, gy + zk * 0.3, Math.max(6, zk * 0.15), v.bonus);
         }
         if (owner && myTribe !== null && owner.tribeId === myTribe && v.ownerId !== me) {
           ctx.strokeStyle = '#3a73c0';
           ctx.lineWidth = 2;
           ctx.beginPath();
-          ctx.ellipse(px + z / 2, py + z * 0.6, z * 0.5, z * 0.32, 0, 0, Math.PI * 2);
+          ctx.ellipse(gx, gy - zk * 0.02, zk * 0.5, zk * 0.32, 0, 0, Math.PI * 2);
           ctx.stroke();
         }
       }
@@ -323,7 +332,7 @@ export function MapScreen({ focus }: { focus?: number }) {
         ctx.lineWidth = v.id === sel ? 2.5 : 1.8;
         ctx.setLineDash(v.id === sel ? [] : [4, 3]);
         ctx.beginPath();
-        ctx.ellipse(px + z / 2, py + z * (z < 10 ? 0.5 : 0.62), Math.max(z * 0.62, 6), Math.max(z * 0.42, 6), 0, 0, Math.PI * 2);
+        ctx.ellipse(gx, gy, Math.max(zk * 0.62, 6), Math.max(zk * 0.42, 6), 0, 0, Math.PI * 2);
         ctx.stroke();
         ctx.setLineDash([]);
       }
@@ -629,6 +638,40 @@ const ASH = { g: '#5d534c', g2: '#5a504a', rock: '#3d3533', rock2: '#2b2422', la
 
 /** Bonus rings only appear once you are looking closely (fields drawn at least this many pixels wide). */
 const BONUS_RING_ZOOM = 16;
+/** A village sprite's side at full size, in fields: roomy islands spill a little past their own field. */
+const ISLAND = 1.95;
+/** How far (in fields, at full size) the sprite's bottom edge sits below the island's ground centre. */
+const ISLAND_FOOT = 0.38;
+/** The ground plan every island must keep inside, as height over width (the art is seen from above at an angle). */
+const FOOT_RATIO = 0.75;
+/** Tops of towers and trees may rise a little past that plan: only this much of the art's height counts. */
+const FOOT_TALL = 0.85;
+/** A sliver of grass left between two crowded islands. */
+const FOOT_GAP = 0.94;
+
+/**
+ * How much a village's island must shrink (1 = full size) so it never paints over a
+ * neighbour. Every island keeps inside an ellipse centred on its field; two equal ellipses
+ * centred (dx, dy) fields apart just touch when (dx / 2a)^2 + (dy / 2a*r)^2 = 1, so each
+ * nearby village caps the ellipse's half-width a at half of that, and the island (its opaque
+ * width and height, from spriteBox) is scaled down to fit. Villages two fields apart or
+ * more keep the full-size art; only the eight fields around (and the next ring) are checked.
+ */
+function islandFit(grid: Map<number, MapVillage>, size: number, x: number, y: number, box: { w: number; h: number }): number {
+  const w = ISLAND * box.w, h = ISLAND * box.h * FOOT_TALL;
+  let k = 1;
+  for (let dy = -2; dy <= 2; dy++) {
+    const ny = y + dy;
+    if (ny < 0 || ny >= size) continue;
+    for (let dx = -2; dx <= 2; dx++) {
+      const nx = x + dx;
+      if ((dx === 0 && dy === 0) || nx < 0 || nx >= size || !grid.has(ny * size + nx)) continue;
+      const a = 0.5 * Math.hypot(dx, dy / FOOT_RATIO) * FOOT_GAP;
+      k = Math.min(k, (2 * a) / w, (2 * a * FOOT_RATIO) / h);
+    }
+  }
+  return k;
+}
 /** How far (in screen pixels) the touch crosshair reaches for a village when none sits right under it. */
 const AIM_RADIUS_PX = 18;
 /** The medallion's enamel, one per kind of bonus. */
@@ -844,6 +887,19 @@ function bonusLabel(b: BonusType): string {
   return b === 'all' ? '+30% all resources' : b === 'farm' ? '+10% population' : b === 'storage' ? '+50% storage' : b === 'recruit' ? 'faster recruitment' : `+100% ${b}`;
 }
 
+/** The game icon that stands for each kind of bonus (the map medallion's glyph, in the top bar's art). */
+const BONUS_ICON: Record<BonusType, string> = { wood: 'wood', clay: 'clay', iron: 'iron', farm: 'pop', storage: 'storage', recruit: 'attack', all: 'star' };
+
+/** A bonus spelled out: its icon in a brass medallion, the bonus beside it. */
+function BonusChip({ type }: { type: BonusType }) {
+  return (
+    <span class="bonus-chip" style={{ '--bonus-tint': BONUS_TINT[type] }}>
+      <span class="bonus-chip-medal" aria-hidden="true"><Icon name={BONUS_ICON[type]} size={20} /></span>
+      <span class="bonus-chip-text">{bonusLabel(type)}</span>
+    </span>
+  );
+}
+
 /** The village read-out: floats over the village under the cursor, or sits docked atop the map for the touch crosshair. */
 function HoverCard({ v, data, x, y, mine, home, docked }: { v: MapVillage; data: MapData; x?: number; y?: number; mine: boolean; home: boolean; docked?: boolean }) {
   const owner = v.ownerId !== null ? data.players[v.ownerId] : null;
@@ -858,10 +914,10 @@ function HoverCard({ v, data, x, y, mine, home, docked }: { v: MapVillage; data:
         {owner ? owner.name : 'Barbarians'}{tribe && <span class="mh-tribe"> [{tribe.tag}]</span>}
         {home && <span class="mh-tag">Home</span>}
       </div>
+      {v.bonus && <div class="mh-bonus"><BonusChip type={v.bonus} /></div>}
       <div class="mh-meta">
         <span><Icon name="points" size={12} /> <b class="num">{fmt(v.points)}</b></span>
         <span class="num">{coords(v.x, v.y)} · {quadrant(v.x, v.y, view.value!.config.size)}</span>
-        {v.bonus && <span class="mh-bonus">{bonusLabel(v.bonus)}</span>}
       </div>
     </div>
   );
@@ -925,12 +981,12 @@ function VillagePanel({ v, data, onClose }: { v: MapVillage; data: MapData; onCl
       <header>
         <button type="button" class="icon-btn map-info-close" aria-label="Close" onClick={onClose}><Icon name="close" size={14} /></button>
         <h3>{v.name}</h3>
+        {info.bonus && <div class="map-info-bonus"><BonusChip type={info.bonus} /></div>}
         <div class="muted small">{coords(v.x, v.y)} · {quadrant(v.x, v.y, view.value!.config.size)} · <span class="num">{fmt(v.points)}</span> points</div>
       </header>
       <dl class="facts">
         <dt>Ruler</dt>
         <dd>{owner ? <button type="button" class="link" onClick={() => pane.go({ name: 'ranking', player: owner.id })}>{owner.name}</button> : 'Barbarians'}{owner?.tribeId != null && data.tribes[owner.tribeId] && <> <TribeTag id={owner.tribeId} tag={data.tribes[owner.tribeId].tag} /></>}</dd>
-        {info.bonus && <><dt>Bonus</dt><dd>{bonusLabel(info.bonus)}</dd></>}
         {!own && <><dt>Distance</dt><dd class="num">{info.distanceFrom?.toFixed(1)} fields</dd></>}
         {info.protected && <><dt>Status</dt><dd>Beginner protection</dd></>}
         {own && info.loyalty !== undefined && <><dt>Loyalty</dt><dd class="num">{Math.floor(info.loyalty)}</dd></>}

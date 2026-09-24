@@ -75,6 +75,33 @@ export function villageSprite(stage: number, look: VillageLook, opts: { barb?: b
   return c;
 }
 
+const boxes = new WeakMap<HTMLCanvasElement, { w: number; h: number }>();
+
+/**
+ * How much of its square a village sprite's island really fills: the width and height of
+ * its opaque pixels, as fractions of the side (measured once per sprite). The map uses it
+ * to shrink an island just enough that it never paints over a close neighbour.
+ */
+export function spriteBox(sprite: HTMLCanvasElement | null): { w: number; h: number } {
+  if (!sprite) return { w: 0.93, h: 0.8 };
+  const hit = boxes.get(sprite);
+  if (hit) return hit;
+  const n = sprite.width;
+  const d = sprite.getContext('2d', { willReadFrequently: true })!.getImageData(0, 0, n, n).data;
+  let x0 = n, x1 = -1, y0 = n, y1 = -1;
+  for (let y = 0; y < n; y++)
+    for (let x = 0; x < n; x++)
+      if (d[(y * n + x) * 4 + 3] > 40) {
+        if (x < x0) x0 = x;
+        if (x > x1) x1 = x;
+        if (y < y0) y0 = y;
+        if (y > y1) y1 = y;
+      }
+  const box = x1 < 0 ? { w: 0.93, h: 0.8 } : { w: (x1 - x0 + 1) / n, h: (y1 - y0 + 1) / n };
+  boxes.set(sprite, box);
+  return box;
+}
+
 /**
  * Weather and neglect, pixel by pixel: grass and leaves (anything clearly green,
  * but not a bright magical glow) turn to snow or ash; a barbarian village loses
