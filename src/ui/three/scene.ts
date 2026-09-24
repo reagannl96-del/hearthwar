@@ -43,6 +43,10 @@ export const buildingScale = (id: BuildingId) => (OUTSIDE.includes(id) ? 1.25 : 
 
 /** The ring road just inside the wall. */
 export const RING_R = WALL_R - 4;
+/** Where visiting armies pitch their tents: west of the road outside the gate, clear of every path. */
+export const CAMP: [number, number] = [-24, 57];
+/** How far round the camp nothing else is put. */
+export const CAMP_R = 8.5;
 
 // x1, z1, x2, z2, width
 const ROADS: [number, number, number, number, number][] = [
@@ -186,6 +190,7 @@ function freeForTree(x: number, z: number): boolean {
   if (onRoad(x, z)) return false;
   if (distToPaths(x, z) < 3) return false;
   if (Math.abs(x - streamX(z)) < 6) return false;
+  if (Math.hypot(x - CAMP[0], z - CAMP[1]) < CAMP_R) return false;
   for (const id of ['timber', 'claypit', 'ironmine', 'farm'] as BuildingId[]) {
     const [bx, bz] = LAYOUT[id];
     const rad = id === 'farm' ? 27 : id === 'ironmine' ? 19 : id === 'timber' ? 16 : 15;

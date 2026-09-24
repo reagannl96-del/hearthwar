@@ -66,6 +66,7 @@ export function VillageScreen() {
             volcanic={prefs.value.season === 'auto' && isVolcanic(v.x, v.y, pv.config.size)}
             night={night}
             units={v.units}
+            support={v.support.map((s) => ({ theme: s.theme, units: s.units }))}
             marches={[
               ...pv.commands.filter((c) => c.fromVid === v.id && (c.kind === 'attack' || c.kind === 'support')).map((c) => ({ id: c.id, kind: 'out' as const, units: c.units ?? {}, at: c.depart })),
               ...pv.commands.filter((c) => c.fromVid === v.id && c.kind === 'return').map((c) => ({ id: c.id, kind: 'home' as const, units: c.units ?? {}, at: c.arrive })),

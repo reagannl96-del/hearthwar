@@ -9,6 +9,8 @@ import { buildModel, visualTier } from '../src/ui/three/buildings';
 import { LAYOUT, OUTSIDE, WALL_R, buildingScale, heightAt, sceneryPlan } from '../src/ui/three/scene';
 import { WALK_PATHS } from '../src/ui/three/paths';
 import { setTheme } from '../src/ui/three/kit';
+import { campSlots } from '../src/ui/three/camp';
+import { CAMP } from '../src/ui/three/scene';
 
 type P = [number, number];
 
@@ -204,5 +206,26 @@ describe('village layout', () => {
       }
     }
     expect([...bad]).toEqual([]);
+  });
+
+  it('the support camp stands clear of the wall, the paths, the buildings and the trees', () => {
+    const bad: string[] = [];
+    const spots = [...campSlots().map((t) => ({ x: t.x, z: t.z, r: 1.9 })), { x: CAMP[0], z: CAMP[1], r: 0.9 }];
+    for (const t of spots) {
+      const at = `${t.x.toFixed(0)},${t.z.toFixed(0)}`;
+      if (Math.hypot(t.x, t.z) < WALL_R + 4 + t.r) bad.push(`tent at ${at} by the wall`);
+      for (const id of IDS) for (const sh of shapes.get(id)!) if (inside(sh, [t.x, t.z], t.r)) bad.push(`tent at ${at} in the ${id}`);
+      for (const it of sceneryPlan()) if (Math.hypot(it.x - t.x, it.z - t.z) < it.r + t.r) bad.push(`tent at ${at} on a ${it.kind}`);
+      for (const [name, path] of Object.entries(WALK_PATHS)) {
+        const closed = [...path, path[0]];
+        for (let i = 0; i < closed.length - 1; i++) {
+          const [x1, z1] = closed[i], [x2, z2] = closed[i + 1];
+          const dx = x2 - x1, dz = z2 - z1, l2 = dx * dx + dz * dz || 1;
+          const k = Math.max(0, Math.min(1, ((t.x - x1) * dx + (t.z - z1) * dz) / l2));
+          if (Math.hypot(t.x - x1 - dx * k, t.z - z1 - dz * k) < t.r + 1) { bad.push(`${name} runs through the tent at ${at}`); break; }
+        }
+      }
+    }
+    expect(bad).toEqual([]);
   });
 });

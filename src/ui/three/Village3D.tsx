@@ -21,6 +21,8 @@ interface Props {
   units?: Units;
   /** the village hero's look */
   theme?: Theme;
+  /** armies stationed here from other villages: each pitches a tent in its own style */
+  support?: { theme: Theme; units: Units }[];
   /** armies leaving and coming home, and the game clock */
   marches?: MarchInfo[];
   now?: number;
@@ -60,6 +62,7 @@ export function Village3D(p: Props) {
       });
       r.current.update(p.buildings, p.building, p.color, p.points);
       r.current.setTroops(p.units ?? {});
+      r.current.setSupport(p.support ?? []);
       if (import.meta.env.DEV) (window as unknown as { __vr: VillageRenderer }).__vr = r.current;
     } catch {
       setFailed(true);
@@ -92,6 +95,10 @@ export function Village3D(p: Props) {
   useEffect(() => {
     r.current?.setTroops(p.units ?? {});
   }, [p.units]);
+
+  useEffect(() => {
+    r.current?.setSupport(p.support ?? []);
+  }, [p.support]);
 
   useEffect(() => {
     if (p.marches && p.now !== undefined) r.current?.setMarches(p.marches, p.now);

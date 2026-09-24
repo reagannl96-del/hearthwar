@@ -14,7 +14,8 @@ import { C, bake, box, disposeTree, mat, rng, setSeason, setTheme, type Season, 
 import { isRider, militiaman, person, plot, scaffold, troop, type TroopModel } from './props';
 import { heroAura, type Aura, type AuraHero } from './heroAura';
 import { FOOT_LOOPS, PEOPLE_LOOPS, RIDE_LOOPS } from './paths';
-import { wallGuardPosts } from './scene';
+import { CAMP, wallGuardPosts } from './scene';
+import { buildCamp, mainUnit } from './camp';
 import { LAYOUT, OUTSIDE, WALL_R, buildScenery, buildTerrain, buildWall, buildingScale, heightAt } from './scene';
 import { BattleTheatre, type TheatreInput, type TheatreReport } from './battle/theatre';
 import { battleSfx } from '../sound';
@@ -138,6 +139,10 @@ export class VillageRenderer {
   private troops: { kind: TroopModel; g: THREE.Group; path: THREE.Vector3[]; t: number; speed: number; len: number }[] = [];
   private troopKey = '';
   private guards: THREE.Group | null = null;
+  /** the tents of armies stationed here from other villages */
+  private camp: THREE.Group | null = null;
+  private campKey = '';
+  private campLight: THREE.PointLight;
   private guardKey = '';
   private units: Units = {};
   /** what the hero at home does to the village (pillar of light, brambles, gold, souls, runes) */
@@ -210,6 +215,10 @@ export class VillageRenderer {
     this.scene.add(fill);
     this.fireLight = new THREE.PointLight(0xff8a2a, 0, 22, 1.6);
     this.scene.add(this.fireLight);
+    // the support camp's fire (kept in the scene at zero so pitching a camp never recompiles the shaders)
+    this.campLight = new THREE.PointLight(0xff9a3a, 0, 14, 1.6);
+    this.campLight.position.set(CAMP[0], heightAt(CAMP[0], CAMP[1]) + 2, CAMP[1]);
+    this.scene.add(this.campLight);
     for (let i = 0; i < 6; i++) {
       const l = new THREE.PointLight(0xffb45a, 0, 20, 1.6);
       this.nightLights.push(l);
@@ -757,6 +766,20 @@ export class VillageRenderer {
   }
 
   /** Archers and spearmen keeping watch from the wall, once it is big enough to stand on. */
+  /** Pitch a tent for each army stationed here, in the style of the village it came from. */
+  setSupport(armies: { theme: Theme; units: Units }[]): void {
+    const total = (u: Units) => Object.values(u).reduce((a, b) => a + (b ?? 0), 0);
+    const list = armies.filter((a) => total(a.units) > 0).sort((a, b) => total(b.units) - total(a.units));
+    const key = list.map((a) => `${a.theme}:${mainUnit(a.units)}`).join('|');
+    if (key === this.campKey) return;
+    this.campKey = key;
+    if (this.camp) { this.scene.remove(this.camp); disposeTree(this.camp); this.camp = null; }
+    if (!list.length) return;
+    this.camp = buildCamp(list);
+    this.camp.traverse((o) => { o.castShadow = true; o.receiveShadow = true; });
+    this.scene.add(this.camp);
+  }
+
   private updateGuards(): void {
     const level = this.lastBuildings?.wall ?? 0;
     const posts = wallGuardPosts(level);
@@ -1089,8 +1112,9 @@ export class VillageRenderer {
 
   private animate(dt: number, t: number): void {
     // spinning, waving, flickering bits
-    for (const s of this.slots.values()) {
-      s.group.traverse((o) => {
+    const roots: THREE.Object3D[] = [...[...this.slots.values()].map((s) => s.group), ...(this.camp ? [this.camp] : [])];
+    for (const root of roots) {
+      root.traverse((o) => {
         if (o.userData.orbit || o.userData.bob) float(o, dt, t);
         if (o.userData.spin) o.rotation.z += dt * 0.9;
         else if (o.userData.flap) o.rotation.z = Math.sin(t * 15 + o.parent!.id) * 0.75 * o.userData.flap;
@@ -1103,6 +1127,7 @@ export class VillageRenderer {
       });
     }
     this.fireLight.intensity = this.lastBuildings && this.lastBuildings.rally > 0 ? (18 + Math.sin(t * 13) * 4 + Math.sin(t * 5.1) * 3) * (this.night ? 1.8 : 1) : 0;
+    this.campLight.intensity = this.camp && this.night ? 9 + Math.sin(t * 11) * 1.5 + Math.sin(t * 4.3) * 1 : 0;
     if (this.night) for (const l of this.lanterns) l.children[2].scale.setScalar(2.4 + Math.sin(t * 9 + l.id) * 0.25);
     // hover ring pulse
     if (this.ring.visible) (this.ring.material as THREE.MeshBasicMaterial).opacity = 0.55 + Math.sin(t * 5) * 0.3;
