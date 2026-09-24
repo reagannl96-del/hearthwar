@@ -151,6 +151,11 @@ describe('a human player', () => {
     act({ type: 'send', vid: v.id, target: barb.id, kind: 'attack', units: { light: 10 }, repeat: true });
     advance(w, w.now + 3 * HOUR);
     expect(Object.values(w.commands).some((c) => c.ownerId === p.id && c.repeat)).toBe(true);
+    // ... until they are stopped: every repeat from this village, whether out or on its way home
+    act({ type: 'stopRepeats', vid: v.id });
+    expect(Object.values(w.commands).some((c) => c.ownerId === p.id && c.repeat)).toBe(false);
+    advance(w, w.now + 3 * HOUR);
+    expect(Object.values(w.commands).some((c) => c.ownerId === p.id && c.toVid === barb.id && c.kind === 'attack')).toBe(false);
 
     // --- scavenging ---
     act({ type: 'scavengeUnlock', vid: v.id, tier: 0 });

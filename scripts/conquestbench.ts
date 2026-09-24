@@ -122,3 +122,19 @@ for (let h = 1; h <= days * 24; h++) {
   }
 }
 void finished;
+
+// how the round ended: the biggest rulers, and how each temperament fared
+{
+  const list = ais().filter((p) => !p.eliminated).sort((a, b) => b.points - a.points);
+  console.log('== top rulers: ' + list.slice(0, 6).map((p) => `${p.name} (${p.ai!.personality}, ${p.ai!.hero ?? '-'}) ${p.villages.length}v ${Math.round(p.points / 1000)}k`).join(' | '));
+  const by: Record<string, { n: number; v: number; pts: number; dead: number }> = {};
+  for (const p of ais()) {
+    const k = p.ai!.personality;
+    const b = (by[k] ??= { n: 0, v: 0, pts: 0, dead: 0 });
+    b.n++; b.v += p.villages.length; b.pts += p.points; if (p.eliminated || p.villages.length === 0) b.dead++;
+  }
+  console.log('== by temperament: ' + Object.entries(by).map(([k, b]) => `${k} x${b.n}: ${(b.v / b.n).toFixed(1)}v ${Math.round(b.pts / b.n / 1000)}k, ${b.dead} out`).join(' | '));
+  const tribes = Object.values(w.tribes).map((t) => ({ tag: t.tag, n: t.members.length, v: t.members.reduce((a, m) => a + (w.players[m]?.villages.length ?? 0), 0) })).sort((a, b) => b.v - a.v);
+  const all = Object.values(w.villages).filter((v) => v.ownerId !== null).length;
+  console.log('== top tribes: ' + tribes.slice(0, 5).map((t) => `[${t.tag}] ${t.n}m ${t.v}v (${Math.round((t.v / all) * 100)}%)`).join(' | '));
+}

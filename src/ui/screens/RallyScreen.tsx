@@ -440,7 +440,7 @@ export function CommandRow({ c, compact }: { c: CommandView; compact?: boolean }
         {!compact && <div class="muted small"><Clock t={c.arrive} /></div>}
       </div>
       {!compact && canCancel && <Btn small variant="ghost" onClick={() => act({ type: 'cancelCommand', id: c.id }, 'Troops recalled.')}>Cancel</Btn>}
-      {!compact && c.repeat && <Btn small variant="quiet" onClick={() => act({ type: 'stopRepeat', id: c.id }, 'Repeat stopped.')}>Stop repeat</Btn>}
+      {c.repeat && <Btn small variant="quiet" onClick={() => act({ type: 'stopRepeat', id: c.id }, 'Repeat stopped. The troops come home and stay.')} title="Stop repeating this raid">{compact ? '■ ↻' : 'Stop repeat'}</Btn>}
     </li>
   );
 }
@@ -495,6 +495,14 @@ function FarmAssistant({ v }: { v: VillageView }) {
   const busy = new Set(pv.commands.filter((c) => c.kind === 'attack').map((c) => c.toVid));
   const returning = new Map<number, CommandView>();
   for (const c of pv.commands) if (c.kind === 'return' && c.origin !== undefined) returning.set(c.origin, c);
+  // raids from this village that go out again by themselves, by target
+  const repeating = new Set<number>();
+  for (const c of pv.commands) {
+    if (!c.repeat || c.fromVid !== v.id) continue;
+    const t = c.kind === 'return' ? c.origin : c.toVid;
+    if (t !== undefined) repeating.add(t);
+  }
+  const stopRepeats = (target?: number) => act({ type: 'stopRepeats', vid: v.id, target }, target === undefined ? 'Every repeating raid from here is stopped. The troops come home and stay.' : 'Repeat stopped. The troops come home and stay.');
   const rows = map.villages
     .filter((m) => m.ownerId === null)
     .map((m) => ({ m, d: distance(v.x, v.y, m.x, m.y) }))
@@ -562,6 +570,12 @@ function FarmAssistant({ v }: { v: VillageView }) {
           {tpls.length > 1 && ' Use ↑ First in Edit to change which one that is.'}
         </p>
       </Section>
+      {repeating.size > 0 && (
+        <div class="farm-repeating">
+          <span>↻ <b>{repeating.size}</b> {repeating.size === 1 ? 'raid is' : 'raids are'} repeating from this village.</span>
+          <Btn small variant="ghost" onClick={() => stopRepeats()}>Stop all repeats</Btn>
+        </div>
+      )}
       <Section
         title="Barbarian villages nearby"
         actions={
@@ -591,6 +605,7 @@ function FarmAssistant({ v }: { v: VillageView }) {
                         {m.bonus && <span class="pill" title="Bonus village">bonus</span>}
                         {onWay && <span class="pill" title="Troops are on the way">en route</span>}
                         {returning.has(m.id) && <span class="pill">returning</span>}
+                        {repeating.has(m.id) && <span class="pill" title="Raids here go out again by themselves">↻ repeating</span>}
                       </td>
                       <td class="right num">{d.toFixed(1)}</td>
                       <td class="right num">{fmt(m.points)}</td>
@@ -602,7 +617,9 @@ function FarmAssistant({ v }: { v: VillageView }) {
                           {tpls.map((t, i) => (
                             <Btn small disabled={!canSend(t.units)} onClick={() => send(m.id, t.units)} title={`Send template ${tplName(t, i)}`}><span class="trunc">{tplName(t, i)}</span></Btn>
                           ))}
-                          <Btn small variant="ghost" disabled={!canSend(first.units)} onClick={() => send(m.id, first.units, true)} title={`Send ${firstName} and keep repeating`}><span class="trunc">{firstName}</span>↻</Btn>
+                          {repeating.has(m.id)
+                            ? <Btn small variant="ghost" onClick={() => stopRepeats(m.id)} title="Stop repeating raids on this village">■ ↻</Btn>
+                            : <Btn small variant="ghost" disabled={!canSend(first.units)} onClick={() => send(m.id, first.units, true)} title={`Send ${firstName} and keep repeating`}><span class="trunc">{firstName}</span>↻</Btn>}
                         </div>
                       </td>
                     </tr>

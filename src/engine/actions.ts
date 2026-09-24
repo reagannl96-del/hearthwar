@@ -38,6 +38,8 @@ export type Action =
   | { type: 'train'; vid: number; target: number; waves: Units[]; catTarget?: BuildingId }
   | { type: 'cancelCommand'; id: number }
   | { type: 'stopRepeat'; id: number }
+  /** stop every repeating raid, or only those from one village and/or on one target */
+  | { type: 'stopRepeats'; vid?: number; target?: number }
   | { type: 'withdraw'; host: number; from: number; units?: Units }
   | { type: 'trade'; vid: number; target: number; res: Res }
   | { type: 'exchange'; vid: number; give: keyof Res; get: keyof Res; amount: number }
@@ -490,6 +492,19 @@ export function applyAction(w: World, pid: number, a: Action): ActionResult {
       if (!c || c.ownerId !== pid) return fail('Command not found.');
       c.repeat = false;
       return { ok: true };
+    }
+    case 'stopRepeats': {
+      // a repeating raid is either on its way out (to the target) or on its way home (from it)
+      let n = 0;
+      for (const c of commandsOf(w, pid)) {
+        if (!c.repeat) continue;
+        if (a.vid !== undefined && c.fromVid !== a.vid) continue;
+        const target = c.kind === 'return' ? c.origin : c.toVid;
+        if (a.target !== undefined && target !== a.target) continue;
+        c.repeat = false;
+        n++;
+      }
+      return n > 0 ? { ok: true, data: n } : fail('No raids are repeating.');
     }
     case 'withdraw': return withdrawSupport(w, pid, a.host, a.from, a.units);
     case 'trade': return sendResources(w, pid, a.vid, a.target, a.res);
