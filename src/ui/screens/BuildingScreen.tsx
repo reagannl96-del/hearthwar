@@ -12,20 +12,21 @@ import type { VillageView } from '../../engine/view';
 import { Icon } from '../art/icons';
 import { Btn, Cost, Countdown, Empty, NumInput, Progress, Section, UnitList, UnitIcon, unitName } from '../components/common';
 import { fmt, fmtDur } from '../format';
-import { act, go, host, liveRes, now, view, village, warp } from '../store';
+import { act, host, liveRes, now, view, warp, usePane } from '../store';
 import { MarketPanel } from './MarketScreen';
 import { buildingThumb } from '../three/thumbs';
 import { RallyScreen } from './RallyScreen';
 
 export function BuildingScreen({ id, tab }: { id: BuildingId; tab?: string }) {
-  const v = village.value!;
+  const pane = usePane();
+  const v = pane.village.value!;
   const d = BUILDINGS[id];
   const level = v.buildings[id];
   const thumb = buildingThumb(id, level);
   return (
     <div class="building-screen">
       <div class="crumbs">
-        <button type="button" class="link" onClick={() => go({ name: 'village' })}>{v.name}</button>
+        <button type="button" class="link" onClick={() => pane.go({ name: 'village' })}>{v.name}</button>
         <span aria-hidden="true">›</span>
         <span>{d.name}</span>
       </div>
@@ -100,6 +101,7 @@ function BuildingBody({ v, id, tab }: { v: VillageView; id: BuildingId; tab?: st
 // ---------- Headquarters ----------
 
 function HQPanel({ v }: { v: VillageView }) {
+  const pane = usePane();
   const h = host.value!;
   const have = liveRes(v);
   const [name, setName] = useState(v.name);
@@ -139,7 +141,7 @@ function HQPanel({ v }: { v: VillageView }) {
                 return (
                   <tr class={locked ? 'is-locked' : ''}>
                     <td>
-                      <button type="button" class="bname link" onClick={() => go({ name: 'building', id: b })}>
+                      <button type="button" class="bname link" onClick={() => pane.go({ name: 'building', id: b })}>
                         <Icon name={`b_${b}`} size={20} />
                         <span>{BUILDINGS[b].name}</span>
                       </button>

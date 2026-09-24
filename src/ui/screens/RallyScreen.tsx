@@ -10,7 +10,7 @@ import { lsGet, lsSet } from '../../host/storage';
 import { Icon } from '../art/icons';
 import { Btn, Clock, Cost, Countdown, Empty, NumInput, Progress, Section, Tabs, UnitList, UnitTable, VillageLink, UnitIcon, unitName } from '../components/common';
 import { coords, fmt, fmtAgo, fmtDur, parseCoords } from '../format';
-import { act, go, host, now, rallyTarget, view, village, warp } from '../store';
+import { act, host, now, rallyTarget, view, warp, usePane } from '../store';
 import { Simulator } from './Simulator';
 
 type Tab = 'send' | 'train' | 'troops' | 'commands' | 'farm' | 'scavenge' | 'sim';
@@ -24,10 +24,11 @@ const SEND_GROUPS: { label: string; units: UnitId[] }[] = [
 ];
 
 export function RallyScreen({ tab }: { tab?: string }) {
+  const pane = usePane();
   const [t, setT] = useState<Tab>((tab as Tab) || 'send');
   useEffect(() => { if (tab) setT(tab as Tab); }, [tab]);
   const pv = view.value!;
-  const v = village.value!;
+  const v = pane.village.value!;
   const incoming = pv.incoming.filter((c) => c.kind === 'attack').length;
   return (
     <div class="stack">
@@ -60,6 +61,7 @@ export function RallyScreen({ tab }: { tab?: string }) {
 const sendable = (u: UnitId) => u !== 'militia';
 
 function SendTroops({ v }: { v: VillageView }) {
+  const pane = usePane();
   const h = host.value!;
   const pv = view.value!;
   const pre = rallyTarget.value;
@@ -130,7 +132,7 @@ function SendTroops({ v }: { v: VillageView }) {
             <span>Coordinates</span>
             <input id="send-target" placeholder="e.g. 512|498" value={target} onInput={(e) => setTarget(e.currentTarget.value)} />
           </label>
-          <Btn small variant="ghost" onClick={() => go({ name: 'map', focus: tid ?? v.id })}>Pick on map</Btn>
+          <Btn small variant="ghost" onClick={() => pane.go({ name: 'map', focus: tid ?? v.id })}>Pick on map</Btn>
         </div>
         {recent.length > 0 && (
           <div class="chips">
@@ -444,9 +446,10 @@ export function CommandRow({ c, compact }: { c: CommandView; compact?: boolean }
 }
 
 function CommandsTab() {
+  const pane = usePane();
   const pv = view.value!;
   const [scope, setScope] = useState<'village' | 'all'>('all');
-  const v = village.value!;
+  const v = pane.village.value!;
   const inc = pv.incoming.filter((c) => scope === 'all' || c.toVid === v.id);
   const out = pv.commands.filter((c) => scope === 'all' || c.fromVid === v.id);
   return (
@@ -481,6 +484,7 @@ function loadTemplates(v: VillageView): FarmTemplates {
 }
 
 function FarmAssistant({ v }: { v: VillageView }) {
+  const pane = usePane();
   const h = host.value!;
   const pv = view.value!;
   const [tpl, setTpl] = useState<FarmTemplates>(() => loadTemplates(v));
@@ -567,7 +571,7 @@ function FarmAssistant({ v }: { v: VillageView }) {
                     <tr key={m.id}>
                       <td>{it?.lastColor ? <span class={`dot dot-${it.lastColor}`} title={`last report ${it.lastColor}`} /> : <span class="dot" />}</td>
                       <td class="nowrap">
-                        <button type="button" class="link" onClick={() => go({ name: 'map', focus: m.id })}>{coords(m.x, m.y)}</button>
+                        <button type="button" class="link" onClick={() => pane.go({ name: 'map', focus: m.id })}>{coords(m.x, m.y)}</button>
                         {m.bonus && <span class="pill" title="Bonus village">bonus</span>}
                         {onWay && <span class="pill" title="Troops are on the way">en route</span>}
                         {returning.has(m.id) && <span class="pill">returning</span>}

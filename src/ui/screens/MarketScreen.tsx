@@ -4,14 +4,15 @@ import type { ResKey } from '../../engine/types';
 import { Icon } from '../art/icons';
 import { Btn, Clock, Countdown, Empty, NumInput, Section, Tabs } from '../components/common';
 import { coords, fmt, fmtDur, parseCoords } from '../format';
-import { act, host, liveRes, marketTarget, now, view, village, warp } from '../store';
+import { act, host, liveRes, marketTarget, now, view, warp, usePane } from '../store';
 
 type Tab = 'send' | 'exchange' | 'transports';
 const KEYS: ResKey[] = ['wood', 'clay', 'iron'];
 
 export function MarketPanel({ tab }: { tab?: string }) {
+  const pane = usePane();
   const [t, setT] = useState<Tab>((tab as Tab) || 'send');
-  const v = village.value!;
+  const v = pane.village.value!;
   return (
     <div class="stack">
       <p class="muted">
@@ -26,7 +27,8 @@ export function MarketPanel({ tab }: { tab?: string }) {
 }
 
 function SendRes() {
-  const v = village.value!;
+  const pane = usePane();
+  const v = pane.village.value!;
   const pv = view.value!;
   const h = host.value!;
   const pre = marketTarget.value;
@@ -82,7 +84,8 @@ function SendRes() {
 }
 
 function Exchange() {
-  const v = village.value!;
+  const pane = usePane();
+  const v = pane.village.value!;
   const h = host.value!;
   const [give, setGive] = useState<ResKey>('iron');
   const [get, setGet] = useState<ResKey>('wood');

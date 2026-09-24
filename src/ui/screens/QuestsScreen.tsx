@@ -1,11 +1,12 @@
 import { Icon } from '../art/icons';
 import { Bar, Btn, Cost, Empty, Section } from '../components/common';
 import { fmt } from '../format';
-import { act, host, view, vid } from '../store';
+import { act, host, view, usePane } from '../store';
 
 const MEDALS = ['Bronze', 'Silver', 'Gold', 'Legend'];
 
 export function QuestsScreen() {
+  const pane = usePane();
   const pv = view.value!;
   const ach = host.value!.achievements();
   const quests = [...pv.quests].sort((a, b) => Number(b.done) - Number(a.done));
@@ -28,7 +29,7 @@ export function QuestsScreen() {
                 <div class="quest-reward">
                   <span class="muted small">Reward</span>
                   <Cost cost={q.reward} compact />
-                  <Btn small disabled={!q.done} onClick={() => act({ type: 'claimQuest', quest: q.id, vid: vid.value }, `Reward claimed: ${q.title}.`)}>Claim</Btn>
+                  <Btn small disabled={!q.done} onClick={() => act({ type: 'claimQuest', quest: q.id, vid: pane.vid.value }, `Reward claimed: ${q.title}.`)}>Claim</Btn>
                 </div>
               </li>
             ))}

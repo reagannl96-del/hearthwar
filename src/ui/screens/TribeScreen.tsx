@@ -6,7 +6,7 @@ import type { MyTribeView, TribeProfileView } from '../../engine/view';
 import { Icon } from '../art/icons';
 import { Btn, Countdown, Empty, Section, Tabs } from '../components/common';
 import { coords, fmt, fmtAgo } from '../format';
-import { act, go, host, now, view } from '../store';
+import { act, host, now, view, usePane } from '../store';
 
 type Tab = 'overview' | 'members' | 'invites' | 'diplomacy' | 'forum' | 'settings';
 type Home = ReturnType<NonNullable<typeof host.value>['tribeHome']>;
@@ -24,8 +24,9 @@ export function TribeScreen({ id, tab }: { id?: number; tab?: string }) {
 
 /** The tag, as Tribal Wars shows it: [TAG], clickable to the tribe's profile. */
 export function TribeTag({ id, tag }: { id: number; tag: string }) {
+  const pane = usePane();
   return (
-    <button type="button" class="link tribe-tag" onClick={() => go({ name: 'tribe', id })} title="Show this tribe">
+    <button type="button" class="link tribe-tag" onClick={() => pane.go({ name: 'tribe', id })} title="Show this tribe">
       [{tag}]
     </button>
   );
@@ -57,6 +58,7 @@ export function JoinButton({ t, small = true }: { t: { id: number; tag: string; 
 }
 
 function NoTribe({ home }: { home: Home }) {
+  const pane = usePane();
   const { invitations, recruiting } = home;
   const [name, setName] = useState('');
   const [tag, setTag] = useState('');
@@ -106,7 +108,7 @@ function NoTribe({ home }: { home: Home }) {
           </form>
         </Section>
       </div>
-      <Section title="Tribes of the realm" actions={<Btn small variant="ghost" onClick={() => go({ name: 'ranking' })}>Rankings</Btn>}>
+      <Section title="Tribes of the realm" actions={<Btn small variant="ghost" onClick={() => pane.go({ name: 'ranking' })}>Rankings</Btn>}>
         <TribeList />
       </Section>
     </div>
@@ -114,6 +116,7 @@ function NoTribe({ home }: { home: Home }) {
 }
 
 function TribeList() {
+  const pane = usePane();
   const tribes = host.value!.tribes().sort((a, b) => b.points - a.points);
   if (tribes.length === 0) return <Empty>No tribes yet.</Empty>;
   return (
@@ -121,7 +124,7 @@ function TribeList() {
       <thead><tr><th>#</th><th>Tribe</th><th class="right">Members</th><th class="right">Points</th></tr></thead>
       <tbody>
         {tribes.map((t, i) => (
-          <tr class="clickable" onClick={() => go({ name: 'tribe', id: t.id })}>
+          <tr class="clickable" onClick={() => pane.go({ name: 'tribe', id: t.id })}>
             <td class="num">{i + 1}</td>
             <td><span class="tribe-dot" style={{ background: t.color }} /> <b>[{t.tag}]</b> {t.name}{t.recruiting && !t.full && <RecruitingPill />}</td>
             <td class="right num">{t.members.length} <Growth n={t.joinedThisWeek} /></td>
@@ -140,6 +143,7 @@ function RightsBadges({ rights, founder }: { rights: TribeRight[]; founder: bool
 }
 
 function MembersTable({ t, manage }: { t: TribeProfileView; manage?: MyTribeView }) {
+  const pane = usePane();
   const me = view.value!.me.id;
   const canKick = manage && (manage.myRights.includes('invite') || manage.myRights.includes('lead'));
   const canRights = manage && manage.myRights.includes('lead');
@@ -152,7 +156,7 @@ function MembersTable({ t, manage }: { t: TribeProfileView; manage?: MyTribeView
           <>
             <tr>
               <td class="num">{i + 1}</td>
-              <td><button type="button" class="link" onClick={() => go({ name: 'ranking', player: m.id })}>{m.name}</button>{m.kind === 'ai' && <span class="muted small"> (ruler)</span>}</td>
+              <td><button type="button" class="link" onClick={() => pane.go({ name: 'ranking', player: m.id })}>{m.name}</button>{m.kind === 'ai' && <span class="muted small"> (ruler)</span>}</td>
               <td class="right num">{m.rank}</td>
               <td class="right num">{fmt(m.points)}</td>
               <td class="right num">{m.villages}</td>
@@ -221,12 +225,13 @@ function Relations({ t }: { t: TribeProfileView }) {
 
 /** Another tribe's public page: who is in it, its profile and its diplomacy. */
 function TribeProfile({ id }: { id: number }) {
+  const pane = usePane();
   const t = host.value!.tribeProfile(id);
   if (!t) return <Section><Empty>That tribe no longer exists.</Empty></Section>;
   return (
     <div class="stack">
       <div class="crumbs">
-        <button type="button" class="link" onClick={() => go({ name: 'tribe' })}>Tribe</button>
+        <button type="button" class="link" onClick={() => pane.go({ name: 'tribe' })}>Tribe</button>
         <span aria-hidden="true">›</span>
         <span>[{t.tag}] {t.name}</span>
       </div>
@@ -254,6 +259,7 @@ function TribeProfile({ id }: { id: number }) {
 }
 
 function MyTribe({ t, tab }: { t: MyTribeView; tab: Tab }) {
+  const pane = usePane();
   const can = (r: TribeRight) => t.myRights.includes(r) || t.myRights.includes('lead');
   const tabs: { id: Tab; label: string; badge?: number }[] = [
     { id: 'overview', label: 'Overview', badge: t.alerts.length || undefined },
@@ -266,7 +272,7 @@ function MyTribe({ t, tab }: { t: MyTribeView; tab: Tab }) {
   return (
     <div class="stack">
       <Section><ProfileHead t={t} /></Section>
-      <Tabs<Tab> tabs={tabs} active={tab} onChange={(x) => go({ name: 'tribe', tab: x })} />
+      <Tabs<Tab> tabs={tabs} active={tab} onChange={(x) => pane.go({ name: 'tribe', tab: x })} />
       {tab === 'overview' && <Overview t={t} />}
       {tab === 'members' && <Section title={`Members (${t.members.length}/${TRIBE_MAX_MEMBERS})`}><MembersTable t={t} manage={t} /></Section>}
       {tab === 'invites' && <Invites t={t} />}
@@ -278,6 +284,7 @@ function MyTribe({ t, tab }: { t: MyTribeView; tab: Tab }) {
 }
 
 function Overview({ t }: { t: MyTribeView }) {
+  const pane = usePane();
   return (
     <div class="grid-2">
       <div class="stack">
@@ -307,7 +314,7 @@ function Overview({ t }: { t: MyTribeView }) {
             )}
           </Section>
         )}
-        <Section title="Latest in the forum" actions={<Btn small variant="ghost" onClick={() => go({ name: 'tribe', tab: 'forum' })}>Forum</Btn>}>
+        <Section title="Latest in the forum" actions={<Btn small variant="ghost" onClick={() => pane.go({ name: 'tribe', tab: 'forum' })}>Forum</Btn>}>
           {t.forum.length === 0 ? <Empty>The forum is quiet.</Empty> : (
             <ul class="forum-mini">
               {t.forum.slice(0, 5).map((th) => {
@@ -323,6 +330,7 @@ function Overview({ t }: { t: MyTribeView }) {
 }
 
 function Invites({ t }: { t: MyTribeView }) {
+  const pane = usePane();
   const [name, setName] = useState('');
   const everyone = Object.values(host.value!.map().players).filter((p) => p.tribeId !== t.id).sort((a, b) => a.name.localeCompare(b.name));
   return (
@@ -337,7 +345,7 @@ function Invites({ t }: { t: MyTribeView }) {
           {t.applications.map((a) => (
             <li>
               <div class="grow">
-                <button type="button" class="link" onClick={() => go({ name: 'ranking', player: a.pid })}><b>{a.name}</b></button>{a.kind === 'ai' && <span class="muted small"> (ruler)</span>}
+                <button type="button" class="link" onClick={() => pane.go({ name: 'ranking', player: a.pid })}><b>{a.name}</b></button>{a.kind === 'ai' && <span class="muted small"> (ruler)</span>}
                 <div class="muted small"><span class="num">{fmt(a.points)}</span> points · {a.villages} village{a.villages === 1 ? '' : 's'} · asked {fmtAgo(a.t, now.value)}</div>
               </div>
               <Btn small onClick={() => act({ type: 'tribeAnswer', pid: a.pid, accept: true }, `${a.name} joined the tribe.`)}>Accept</Btn>

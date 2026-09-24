@@ -1,6 +1,8 @@
 // Client state: the current player view, routing, toasts and settings.
 
-import { computed, signal } from '@preact/signals';
+import { computed, signal, type ReadonlySignal, type Signal } from '@preact/signals';
+import { createContext } from 'preact';
+import { useContext } from 'preact/hooks';
 import type { Action } from '../engine/actions';
 import { BUILDINGS } from '../engine/data/buildings';
 import type { BuildingId, Res, Report } from '../engine/types';
@@ -112,6 +114,62 @@ export function go(r: Route) {
     if (!same) try { history.pushState({ hw: r, world: host.value?.world.id }, ''); } catch { /* history unavailable */ }
     window.scrollTo({ top: 0 });
   }
+}
+
+// ---------- panes: the page, and a second view beside it in split screen ----------
+
+/**
+ * One view of the game: the screen it shows and which of your villages it is
+ * looking at. The page itself is the main pane; split screen opens a second one
+ * beside it, with its own screen and its own village.
+ */
+export interface Pane {
+  id: 0 | 1;
+  route: Signal<Route>;
+  vid: Signal<number>;
+  village: ReadonlySignal<VillageView | undefined>;
+  go(r: Route): void;
+}
+
+export const mainPane: Pane = { id: 0, route, vid, village, go };
+
+const sideRoute = signal<Route>({ name: 'quests' });
+const sideVid = signal(0);
+export const sidePane: Pane = {
+  id: 1,
+  route: sideRoute,
+  vid: sideVid,
+  village: computed<VillageView | undefined>(() => {
+    const v = view.value;
+    if (!v) return undefined;
+    return v.villages.find((x) => x.id === sideVid.value) ?? v.villages.find((x) => x.id === vid.value) ?? v.villages[0];
+  }),
+  go: (r: Route) => { sideRoute.value = r; },
+};
+
+/** Split screen: two panes side by side (wide screens only). */
+export const split = signal<boolean>(lsGet('hw-split') === '1');
+export function setSplit(on: boolean, r?: Route) {
+  if (on && (!split.value || r)) {
+    sideVid.value = vid.value;
+    if (r) sideRoute.value = r;
+  }
+  split.value = on;
+  lsSet('hw-split', on ? '1' : '0');
+}
+/** Put what each pane shows the other way round. */
+export function swapPanes() {
+  const r = route.value, v = vid.value;
+  route.value = sideRoute.value;
+  vid.value = sideVid.value || v;
+  sideRoute.value = r;
+  sideVid.value = v;
+}
+
+export const PaneCtx = createContext<Pane>(mainPane);
+/** The pane this component is drawn in: its screen, its village, and how to move it about. */
+export function usePane(): Pane {
+  return useContext(PaneCtx);
 }
 
 if (typeof window !== 'undefined') {

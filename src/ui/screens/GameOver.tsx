@@ -1,8 +1,9 @@
 import { useState } from 'preact/hooks';
 import { Btn } from '../components/common';
-import { host, leaveRealm, view, vid } from '../store';
+import { host, leaveRealm, view, usePane } from '../store';
 
 export function GameOver() {
+  const pane = usePane();
   const [name, setName] = useState('New Hope');
   const v = view.value!;
   return (
@@ -24,7 +25,7 @@ export function GameOver() {
             onClick={() => {
               if (host.value?.respawn(name.trim() || 'New Hope')) {
                 const nv = host.value.view();
-                vid.value = nv.villages[0]?.id ?? 0;
+                pane.vid.value = nv.villages[0]?.id ?? 0;
               }
             }}
           >

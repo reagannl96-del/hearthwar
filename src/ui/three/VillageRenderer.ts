@@ -986,6 +986,7 @@ export class VillageRenderer {
         if (o.userData.orbit || o.userData.bob) float(o, dt, t);
         if (o.userData.spin) o.rotation.z += dt * 0.9;
         else if (o.userData.flap) o.rotation.z = Math.sin(t * 15 + o.parent!.id) * 0.75 * o.userData.flap;
+        else if (o.userData.wing) o.rotation.z = (o.userData.wing as number) * ((o.userData.wingBase as number) + Math.sin(t * 1.1 + o.id * 0.3) * (o.userData.wingAmp as number));
         else if (o.userData.flag) o.rotation.y = Math.sin(t * 2.2 + o.id) * 0.35;
         else if (o.userData.fire) {
           const k = 1 + Math.sin(t * 17 + o.id) * 0.12 + Math.sin(t * 7.3) * 0.08;
@@ -1034,7 +1035,7 @@ export class VillageRenderer {
     // smoke puffs
     for (const s of this.smoke) {
       if (s.puffs.length < 7 && Math.random() < dt * 2.2) {
-        const m = new THREE.Mesh(PUFF_GEO, new THREE.MeshLambertMaterial({ color: 0xcfc6b8, transparent: true, opacity: 0.6, flatShading: true }));
+        const m = new THREE.Mesh(PUFF_GEO, new THREE.MeshLambertMaterial({ color: this.opts.theme === 'necromancer' ? 0x1a171c : 0xcfc6b8, transparent: true, opacity: this.opts.theme === 'necromancer' ? 0.78 : 0.6, flatShading: true }));
         s.src.getWorldPosition(m.position);
         this.scene.add(m);
         s.puffs.push({ m, age: 0, life: 3 + Math.random() * 1.5 });

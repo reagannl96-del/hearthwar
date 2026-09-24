@@ -247,7 +247,7 @@ export function buildScenery(seed = 11): THREE.Group {
     const y = inside ? 0 : heightAt(it.x, it.z);
     const theme = getTheme();
     // the tournament ground (paladin) and the stone circle (sorcerer) outside the gate are kept clear
-    if ((theme === 'paladin' || theme === 'sorcerer') && Math.hypot(it.x - 21, it.z - 57.5) < 13) continue;
+    if ((theme === 'paladin' || theme === 'sorcerer' || theme === 'necromancer') && Math.hypot(it.x - 21, it.z - 57.5) < 13) continue;
     if (inside && theme !== 'classic' && (it.kind === 'oak' || it.kind === 'birch')) {
       const lm = theme === 'paladin' ? sunShrine(r) : theme === 'sorcerer' ? crystalSpire() : theme === 'druid' ? greatTree(r) : theme === 'necromancer' ? necroObelisk(r) : skullTotem();
       if (theme === 'goblin') lm.scale.setScalar(1.5);
@@ -448,6 +448,97 @@ function addGraveyard(g: THREE.Group, r: () => number): void {
     const x = Math.cos(a) * d, z = Math.sin(a) * d;
     return [x, (Math.hypot(x, z) > WALL_R ? heightAt(x, z) : 0) + 1 + r() * 3, z];
   });
+  addBoneField(g);
+}
+
+/** A bone from a to b (for the great skeleton outside the gate). */
+function bigBone(a: THREE.Vector3, b: THREE.Vector3, rad: number, color = 0xe6dfcc): THREE.Mesh {
+  const d = b.clone().sub(a);
+  const m = mesh(new THREE.CylinderGeometry(rad * 0.8, rad, d.length(), 6), color);
+  m.position.copy(a).addScaledVector(d, 0.5);
+  m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize());
+  return m;
+}
+
+/**
+ * The necromancers' field outside the gate: the bones of some enormous beast half
+ * sunk in the earth, its ribs arching out of the grass and its skull lying at the
+ * end, green light in its eyes; and over the road, a gate of stacked skulls.
+ */
+function addBoneField(g: THREE.Group): void {
+  const cx = 21, cz = 57.5;
+  const at = (x: number, z: number) => heightAt(x, z);
+  const BONE = 0xe6dfcc, BONE_DK = 0xb9b19c;
+  // the backbone, running along the field, sinking into the ground at the tail
+  const n = 16;
+  const spine: THREE.Vector3[] = [];
+  for (let i = 0; i <= n; i++) {
+    const k = i / n;
+    const x = cx - 11 + k * 20, z = cz + Math.sin(k * 2.2) * 1.6;
+    spine.push(new THREE.Vector3(x, at(x, z) + 0.2 + Math.sin(k * Math.PI) * 1.2, z));
+  }
+  for (let i = 0; i < n; i++) {
+    g.add(bigBone(spine[i], spine[i + 1], 0.42));
+    g.add(blob(0.55, BONE_DK, spine[i].x, spine[i].y, spine[i].z));
+    g.add(cone(0.18, 1.1, BONE_DK, 4, spine[i].x, spine[i].y + 0.35, spine[i].z));
+  }
+  // the ribs arching up out of the earth
+  for (let i = 3; i < 12; i++) {
+    const p = spine[i];
+    const R = 3.6 + Math.sin(((i - 3) / 8) * Math.PI) * 2.2;
+    for (const side of [-1, 1]) {
+      let prev = p.clone();
+      for (let j = 1; j <= 5; j++) {
+        const a = j * 0.5;
+        const q = new THREE.Vector3(p.x + (i % 2 ? 0.3 : -0.3), p.y + Math.sin(a) * R * 0.95 - j * 0.35, p.z + side * (1 - Math.cos(a)) * R * 0.8);
+        q.y = Math.max(q.y, at(q.x, q.z) - 0.4);
+        g.add(bigBone(prev, q, 0.22 - j * 0.02));
+        prev = q;
+      }
+    }
+  }
+  // the skull, lying where the neck ends, eyes burning
+  const head = spine[n];
+  const sk = new THREE.Group();
+  sk.add(blob(2.0, BONE, 0, 0, 0, 1.15, 0.8, 1.2));
+  sk.add(box(2.0, 1.1, 3.4, BONE, 0, -0.5, 2.6));
+  const jaw = box(1.8, 0.4, 3.4, BONE_DK, 0, -1.2, 2.4);
+  jaw.rotation.x = 0.25;
+  sk.add(jaw);
+  for (const x of [-1, 1]) {
+    sk.add(mesh(new THREE.IcosahedronGeometry(0.42, 0), 0x5cff9a, { emissive: 0x1f9a4a }).translateX(x * 0.95).translateY(0.2).translateZ(1.5));
+    const horn = cone(0.4, 3.6, BONE_DK, 6, x * 1.1, 0.8, -0.8);
+    horn.rotation.set(-1.9, 0, -x * 0.4);
+    sk.add(horn);
+  }
+  sk.position.set(head.x + 2.6, at(head.x + 2.6, head.z) + 0.6, head.z);
+  sk.rotation.set(0.1, Math.PI / 2 + 0.3, 0.25);
+  g.add(sk);
+  // a gate of skulls over the road out of the village
+  const gz = 60;
+  for (const x of [-4.6, 4.6]) {
+    const col = new THREE.Group();
+    col.add(box(1.4, 0.5, 1.4, 0x2e2a33));
+    for (let i = 0; i < 6; i++) {
+      const s2 = new THREE.Group();
+      s2.add(blob(0.36, BONE, 0, 0, 0, 1, 0.9, 1));
+      s2.add(box(0.26, 0.18, 0.2, BONE, 0, -0.36, 0.08));
+      for (const ex of [-0.12, 0.12]) s2.add(box(0.11, 0.11, 0.06, 0x141214, ex, 0.02, 0.32));
+      s2.position.set(0, 0.85 + i * 0.66, 0);
+      s2.rotation.y = i % 2 ? 0.4 : -0.4;
+      col.add(s2);
+    }
+    col.position.set(x, at(x, gz), gz);
+    g.add(col);
+  }
+  const arch: THREE.Vector3[] = [];
+  for (let i = 0; i <= 8; i++) { const a = Math.PI * (i / 8); arch.push(new THREE.Vector3(-Math.cos(a) * 4.6, at(0, gz) + 4.6 + Math.sin(a) * 2.6, gz)); }
+  for (let i = 0; i < 8; i++) g.add(bigBone(arch[i], arch[i + 1], 0.26));
+  const key = new THREE.Group();
+  key.add(blob(0.7, BONE, 0, 0, 0, 1, 0.9, 1));
+  for (const ex of [-0.24, 0.24]) key.add(mesh(new THREE.BoxGeometry(0.2, 0.2, 0.1), 0x5cff9a, { emissive: 0x1f9a4a }).translateX(ex).translateZ(0.62));
+  key.position.set(0, at(0, gz) + 7.4, gz + 0.2);
+  g.add(key);
 }
 
 /** The volcanic west: basalt columns, black boulders, smoking vents and drifting embers. */
@@ -872,6 +963,24 @@ export function buildWall(level: number, color: number): THREE.Group {
         const c = floatingCrystal(0.5);
         c.position.set(0, h + 1.9, 0);
         seg.add(c);
+      }
+    }
+    if (getTheme() === 'necromancer') {
+      // skulls set on the outer merlons, staring out, and green soul-fire burning in iron baskets
+      for (let k = 0; k < merlons; k += 2) {
+        const sk = new THREE.Group();
+        sk.add(blob(0.26, 0xe6dfcc, 0, 0, 0, 1, 0.9, 1));
+        sk.add(box(0.2, 0.14, 0.14, 0xe6dfcc, 0, -0.26, 0.06));
+        for (const x of [-0.09, 0.09]) sk.add(mesh(new THREE.BoxGeometry(0.09, 0.09, 0.05), 0x5cff9a, { emissive: 0x1f9a4a }).translateX(x).translateZ(0.23));
+        sk.position.set(-len / 2 + (k + 0.5) * (len / merlons), h + 1.25, -thick / 2 + 0.1);
+        sk.rotation.y = Math.PI;
+        seg.add(sk);
+      }
+      if (i % 4 === 2) {
+        seg.add(cyl(0.34, 0.22, 0.42, 0x2e2a33, 7, 0, h + 0.3, 0));
+        const fire = cone(0.28, 0.8, 0x5cff9a, 6, 0, h + 0.7, 0);
+        fire.material = mat(0x5cff9a, { emissive: 0x1f9a4a });
+        seg.add(fire);
       }
     }
     if (getTheme() === 'goblin') {

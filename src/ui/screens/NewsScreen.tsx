@@ -1,8 +1,9 @@
 import { Empty, Section } from '../components/common';
 import { fmtAgo } from '../format';
-import { go, now, view } from '../store';
+import { now, view, usePane } from '../store';
 
 export function NewsScreen() {
+  const pane = usePane();
   const pv = view.value!;
   return (
     <div class="stack">
@@ -13,7 +14,7 @@ export function NewsScreen() {
             {pv.news.map((n) => (
               <li class={`news-item news-${n.kind}`}>
                 <span class="grow">{n.text}</span>
-                {n.vid !== undefined && <button type="button" class="link small" onClick={() => go({ name: 'map', focus: n.vid })}>map</button>}
+                {n.vid !== undefined && <button type="button" class="link small" onClick={() => pane.go({ name: 'map', focus: n.vid })}>map</button>}
                 <span class="muted small">{fmtAgo(n.t, now.value)}</span>
               </li>
             ))}

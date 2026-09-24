@@ -5,12 +5,13 @@ import type { BattleData, Report, ResKey, SideInfo, UnitId, Units, SharedReport 
 import { Icon } from '../art/icons';
 import { Btn, Empty, PlayerLink, Res, Section, VillageLink, UnitIcon, unitName } from '../components/common';
 import { fmt, fmtAgo, fmtClock } from '../format';
-import { act, battleReplay, go, host, now, rallyTarget, vid, view, warp } from '../store';
+import { act, battleReplay, host, now, rallyTarget, view, warp, usePane } from '../store';
 import { AttackViewer } from './AttackViewer';
 
 type Filter = 'all' | 'attack' | 'defense' | 'support' | 'trade' | 'other';
 
 export function ReportsScreen({ id }: { id?: number }) {
+  const pane = usePane();
   const h = host.value!;
   view.value; // re-render on updates
   const reports = h.reports();
@@ -47,7 +48,7 @@ export function ReportsScreen({ id }: { id?: number }) {
             {list.slice(0, 200).map((r) => (
               <li class={`report-item ${r.read ? '' : 'is-unread'}`}>
                 <span class={`dot dot-${r.color}`} />
-                <button type="button" class="link grow" onClick={() => go({ name: 'reports', id: r.id })}>{r.title}</button>
+                <button type="button" class="link grow" onClick={() => pane.go({ name: 'reports', id: r.id })}>{r.title}</button>
                 {r.battle?.loot && <Haul loot={r.battle.loot.wood + r.battle.loot.clay + r.battle.loot.iron} capacity={r.battle.capacity} />}
                 <span class="muted small">{fmtAgo(r.t, now.value)}</span>
                 <button type="button" class="icon-btn" aria-label="Delete report" onClick={() => act({ type: 'deleteReport', id: r.id })}>
@@ -63,13 +64,14 @@ export function ReportsScreen({ id }: { id?: number }) {
 }
 
 function ReportView({ r }: { r: Report }) {
+  const pane = usePane();
   const reports = host.value!.reports();
   const [watching, setWatching] = useState(false);
   const idx = reports.findIndex((x) => x.id === r.id);
   return (
     <div class="stack report">
       <div class="crumbs">
-        <button type="button" class="link" onClick={() => go({ name: 'reports' })}>Reports</button>
+        <button type="button" class="link" onClick={() => pane.go({ name: 'reports' })}>Reports</button>
         <span aria-hidden="true">›</span>
         <span>{r.title}</span>
       </div>
@@ -81,14 +83,14 @@ function ReportView({ r }: { r: Report }) {
             <div class="rep-time">{fmtClock(r.t, now.value, warp.value)}</div>
           </div>
           <div class="row gap">
-            <Btn small variant="ghost" disabled={idx <= 0} onClick={() => go({ name: 'reports', id: reports[idx - 1].id })}>‹ Newer</Btn>
-            <Btn small variant="ghost" disabled={idx >= reports.length - 1} onClick={() => go({ name: 'reports', id: reports[idx + 1].id })}>Older ›</Btn>
-            <Btn small variant="quiet" onClick={() => { act({ type: 'deleteReport', id: r.id }); go({ name: 'reports' }); }}>Delete</Btn>
+            <Btn small variant="ghost" disabled={idx <= 0} onClick={() => pane.go({ name: 'reports', id: reports[idx - 1].id })}>‹ Newer</Btn>
+            <Btn small variant="ghost" disabled={idx >= reports.length - 1} onClick={() => pane.go({ name: 'reports', id: reports[idx + 1].id })}>Older ›</Btn>
+            <Btn small variant="quiet" onClick={() => { act({ type: 'deleteReport', id: r.id }); pane.go({ name: 'reports' }); }}>Delete</Btn>
           </div>
         </header>
         {r.kind === 'defense' && r.battle && view.value!.villages.some((x) => x.id === r.vid) && (
           <div class="rep-watch">
-            <Btn small onClick={() => { vid.value = r.vid!; battleReplay.value = { report: r, at: Date.now() }; go({ name: 'village' }); }}>
+            <Btn small onClick={() => { pane.vid.value = r.vid!; battleReplay.value = { report: r, at: Date.now() }; pane.go({ name: 'village' }); }}>
               ⚔ Watch it in the village
             </Btn>
           </div>
@@ -261,6 +263,7 @@ const EFFECTS: Record<string, { hero: string; text: string }> = {
 };
 
 function Battle({ b, kind, shared }: { b: BattleData; kind: Report['kind']; shared?: boolean }) {
+  const pane = usePane();
   const pv = view.value!;
   const myTribe = pv.me.tribeId;
   const friendly = (pid: number | null) => pid === pv.me.id || (shared && myTribe != null && pid != null && host.value!.world.players[pid]?.tribeId === myTribe);
@@ -393,8 +396,8 @@ function Battle({ b, kind, shared }: { b: BattleData; kind: Report['kind']; shar
 
       {kind === 'attack' && mine && !shared && (
         <div class="row gap rep-actions">
-          <Btn onClick={() => { rallyTarget.value = { x: b.defender.x, y: b.defender.y, kind: 'attack', units: b.attUnits as Record<string, number> }; go({ name: 'building', id: 'rally', tab: 'send' }); }}><Icon name="attack" size={16} /> Attack again with the same troops</Btn>
-          <Btn variant="ghost" onClick={() => go({ name: 'map', focus: b.defender.vid })}><Icon name="map" size={16} /> Show on map</Btn>
+          <Btn onClick={() => { rallyTarget.value = { x: b.defender.x, y: b.defender.y, kind: 'attack', units: b.attUnits as Record<string, number> }; pane.go({ name: 'building', id: 'rally', tab: 'send' }); }}><Icon name="attack" size={16} /> Attack again with the same troops</Btn>
+          <Btn variant="ghost" onClick={() => pane.go({ name: 'map', focus: b.defender.vid })}><Icon name="map" size={16} /> Show on map</Btn>
         </div>
       )}
     </>

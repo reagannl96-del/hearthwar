@@ -1411,3 +1411,13 @@ button.realm-row:hover { background: var(--surface-2); border-color: var(--line)
 .battle-viewer-bar .grow { flex: 1; min-width: 160px; }
 .battle-viewer-scene { flex: 1; position: relative; min-height: 0; border-radius: 0; }
 .battle-viewer-none { flex: 1; display: grid; place-items: center; color: #e8dcc4; }
+
+/* ---------- split screen ---------- */
+.split { flex: 1; width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: start; }
+.split > .main { min-width: 0; max-width: none; margin: 0; }
+.pane-side { border-left: 2px solid var(--line-strong); padding-left: 12px; position: sticky; top: 0; max-height: 100vh; overflow-y: auto; }
+.pane-bar { display: flex; align-items: center; gap: 8px; padding: 6px 8px; margin-bottom: 8px; background: var(--parch-hi); border: 1px solid var(--line-strong); border-radius: 4px; }
+.pane-bar .grow { flex: 1; }
+.nav-split { margin-left: auto; }
+.split-glyph { font-size: 17px; line-height: 1; }
+.shell.is-split { max-width: none; }

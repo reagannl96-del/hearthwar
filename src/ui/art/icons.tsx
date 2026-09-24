@@ -438,6 +438,12 @@ const UNIT_ART: Partial<Record<UnitId, Art>> = {
       ) : t === 'druid' ? (
         // an elder's crown of antler and leaf
         <path d="M2.8 17.8 3.4 9 6 11.6 5.4 6.8 8.6 11 12 4.4l3.4 6.6 3.2-4.2-.6 4.8 2.6-2.6.6 8.8Z" fill={P.woodLt} />
+      ) : t === 'goblin' ? (
+        // a goblin chief's crown: bent, dented, one spike snapped off
+        <path d="M2.6 18.2 3.4 8.6 7.4 12.6 9.8 5.6 12.8 11 14.6 9.4l3.4 3.2 3.6-5.2-.4 10.8Z" fill={P.trim} transform="rotate(-6 12 12)" />
+      ) : t === 'paladin' ? (
+        // the Order's crown: a circlet rising to a cross, a sun at its heart
+        <><path d="M2.8 17.8 4.2 9.4l3.6 3.4L12 7l4.2 5.8 3.6-3.4 1.4 8.4Z" fill={P.trim} /><path d="M11 2.2h2v6h-2Z M9.2 4h5.6v1.8H9.2Z" fill={P.trimLt} /><circle cx="12" cy="13.4" r="1.9" fill="#ffd35a" /></>
       ) : (
         <path d="M2.8 17.8 4.6 7l4.3 5.1L12 5.2l3.1 6.9L19.4 7l1.8 10.8Z" fill={P.trim} />
       )}
@@ -449,6 +455,8 @@ const UNIT_ART: Partial<Record<UnitId, Art>> = {
         <><Leaf x={7} y={17.4} r={-60} c={P.trimLt} /><Leaf x={15.4} y={16.6} r={-120} c={P.trimLt} /></>
       ) : t === 'necromancer' ? (
         <Skull x={12} y={14.2} r={2} />
+      ) : t === 'paladin' ? (
+        <><circle cx="4.2" cy="9.4" r="1.1" fill={P.trimLt} /><circle cx="19.8" cy="9.4" r="1.1" fill={P.trimLt} /></>
       ) : t === 'sorcerer' ? (
         <><Sparkle x={12} y={3.6} /><circle cx="4.6" cy="6.4" r="1.3" fill={P.gem} /><circle cx="19.4" cy="6.4" r="1.3" fill={P.gem} /></>
       ) : (

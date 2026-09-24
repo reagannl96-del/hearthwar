@@ -4,13 +4,14 @@ import { Btn, Empty, Modal, Section, Tabs } from '../components/common';
 import { Sparkline } from '../components/Sparkline';
 import { coords, fmt } from '../format';
 import { Growth, JoinButton, RecruitingPill } from './TribeScreen';
-import { go, host, view } from '../store';
+import { host, view, usePane } from '../store';
 
 type Tab = 'players' | 'tribes' | 'oda' | 'odd';
 
 const PERSONA: Record<string, string> = { farmer: 'Raider', warlord: 'Warlord', turtle: 'Defender', expander: 'Conqueror' };
 
 export function RankingScreen({ player }: { player?: number }) {
+  const pane = usePane();
   const h = host.value!;
   view.value;
   const [tab, setTab] = useState<Tab>('players');
@@ -31,7 +32,7 @@ export function RankingScreen({ player }: { player?: number }) {
                 <thead><tr><th>#</th><th>Tribe</th><th class="right">Members</th><th class="right">Villages</th><th class="right">Points</th><th /></tr></thead>
                 <tbody>
                   {tribes.map((t, i) => (
-                    <tr class="clickable" onClick={() => go({ name: 'tribe', id: t.id })} title="Show the tribe and its members">
+                    <tr class="clickable" onClick={() => pane.go({ name: 'tribe', id: t.id })} title="Show the tribe and its members">
                       <td class="num">{i + 1}</td>
                       <td><i class="sw" style={{ background: t.color }} /> <b>[{t.tag}]</b> {t.name}{t.recruiting && !t.full && <RecruitingPill />}</td>
                       <td class="right nowrap" title={t.memberNames.join(', ')}><span class="num">{t.members.length}</span> <Growth n={t.joinedThisWeek} /></td>
@@ -57,12 +58,12 @@ export function RankingScreen({ player }: { player?: number }) {
                   <tr class={p.id === me ? 'is-me' : ''}>
                     <td class="num">{i + 1}</td>
                     <td>
-                      <button type="button" class="link" onClick={() => go({ name: 'ranking', player: p.id })}>
+                      <button type="button" class="link" onClick={() => pane.go({ name: 'ranking', player: p.id })}>
                         <i class="sw" style={{ background: p.id === me ? 'var(--me)' : p.color }} /> {p.name}
                       </button>
                       {p.personality && <span class="muted small"> · {PERSONA[p.personality]}</span>}
                     </td>
-                    <td>{p.tribe && p.tribeId != null && <button type="button" class="pill link" onClick={(e) => { e.stopPropagation(); go({ name: 'tribe', id: p.tribeId! }); }}>{p.tribe}</button>}</td>
+                    <td>{p.tribe && p.tribeId != null && <button type="button" class="pill link" onClick={(e) => { e.stopPropagation(); pane.go({ name: 'tribe', id: p.tribeId! }); }}>{p.tribe}</button>}</td>
                     <td class="right num">{p.villages}</td>
                     <td class="right num">{fmt(tab === 'oda' ? p.killsAtt : tab === 'odd' ? p.killsDef : p.points)}</td>
                   </tr>
@@ -77,6 +78,7 @@ export function RankingScreen({ player }: { player?: number }) {
 }
 
 function Profile({ pid }: { pid: number }) {
+  const pane = usePane();
   const h = host.value!;
   const p = h.profile(pid);
   const me = view.value!.me.id;
@@ -84,13 +86,13 @@ function Profile({ pid }: { pid: number }) {
   return (
     <div class="stack">
       <div class="crumbs">
-        <button type="button" class="link" onClick={() => go({ name: 'ranking' })}>Rankings</button>
+        <button type="button" class="link" onClick={() => pane.go({ name: 'ranking' })}>Rankings</button>
         <span aria-hidden="true">›</span>
         <span>{p.name}</span>
       </div>
       <div class="page-head">
         <h1><i class="sw lg" style={{ background: p.id === me ? 'var(--me)' : p.color }} /> {p.name}</h1>
-        {p.tribe && <button type="button" class="pill link" onClick={() => go({ name: 'tribe', id: p.tribe!.id })}>[{p.tribe.tag}] {p.tribe.name}</button>}
+        {p.tribe && <button type="button" class="pill link" onClick={() => pane.go({ name: 'tribe', id: p.tribe!.id })}>[{p.tribe.tag}] {p.tribe.name}</button>}
       </div>
       <div class="grid-2">
         <Section title="Standing">
@@ -119,7 +121,7 @@ function Profile({ pid }: { pid: number }) {
                   <td>{v.name}</td>
                   <td class="num">{coords(v.x, v.y)}</td>
                   <td class="right num">{fmt(v.points)}</td>
-                  <td class="right"><Btn small variant="ghost" onClick={() => go({ name: 'map', focus: v.id })}><Icon name="map" size={14} /> Map</Btn></td>
+                  <td class="right"><Btn small variant="ghost" onClick={() => pane.go({ name: 'map', focus: v.id })}><Icon name="map" size={14} /> Map</Btn></td>
                 </tr>
               ))}
             </tbody>

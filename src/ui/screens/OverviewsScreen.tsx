@@ -5,14 +5,15 @@ import type { UnitId } from '../../engine/types';
 import { Icon } from '../art/icons';
 import { Countdown, Section, Tabs, UnitIcon, unitName } from '../components/common';
 import { coords, fmt, fmtShort } from '../format';
-import { go, liveRes, view, vid } from '../store';
+import { liveRes, view, usePane } from '../store';
 
 type Tab = 'production' | 'troops' | 'buildings';
 
 export function OverviewsScreen() {
+  const pane = usePane();
   const pv = view.value!;
   const [tab, setTab] = useState<Tab>('production');
-  const open = (id: number) => { vid.value = id; go({ name: 'village' }); };
+  const open = (id: number) => { pane.vid.value = id; pane.go({ name: 'village' }); };
   const totals = pv.villages.reduce((s, v) => {
     const r = liveRes(v);
     return { wood: s.wood + r.wood, clay: s.clay + r.clay, iron: s.iron + r.iron, rate: s.rate + v.rates.wood + v.rates.clay + v.rates.iron };
@@ -41,7 +42,7 @@ export function OverviewsScreen() {
                   const r = liveRes(v);
                   const job = v.buildQueue[0];
                   return (
-                    <tr class={v.id === vid.value ? 'is-me' : ''}>
+                    <tr class={v.id === pane.vid.value ? 'is-me' : ''}>
                       <td><button type="button" class="link" onClick={() => open(v.id)}>{v.name}</button> <span class="muted small">({coords(v.x, v.y)})</span></td>
                       <td class="right num">{fmt(v.points)}</td>
                       {(['wood', 'clay', 'iron'] as const).map((k) => <td class={`right num ${r[k] >= v.storage ? 'bad-text' : ''}`}>{fmt(r[k])}</td>)}

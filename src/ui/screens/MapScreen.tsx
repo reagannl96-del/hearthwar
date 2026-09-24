@@ -11,7 +11,7 @@ import { Btn, UnitList, UnitIcon, unitName } from '../components/common';
 import { coords, continent, fmt, fmtAgo, fmtDur, parseCoords } from '../format';
 import { TribeTag } from './TribeScreen';
 import { MARK_COLORS, markFor, marks, setMark, useWorldMarks, type Marks } from '../mapMarks';
-import { act, go, host, marketTarget, now, rallyTarget, view, vid, village, warp } from '../store';
+import { act, host, marketTarget, now, rallyTarget, view, warp, usePane } from '../store';
 
 const TERRAIN_COLORS: Record<string, [string, string]> = {
   '.': ['--map-grass', '--map-grass-2'],
@@ -25,9 +25,10 @@ function cssVar(name: string): string {
 }
 
 export function MapScreen({ focus }: { focus?: number }) {
+  const pane = usePane();
   const h = host.value!;
   const pv = view.value!;
-  const cur = village.value!;
+  const cur = pane.village.value!;
   const data: MapData = h.map();
   const byId = useMemo(() => new Map(data.villages.map((v) => [v.id, v])), [data.rev]);
   const grid = useMemo(() => {
@@ -649,6 +650,7 @@ function HoverCard({ v, data, x, y, mine, home }: { v: MapVillage; data: MapData
 }
 
 function Legend({ data }: { data: MapData }) {
+  const pane = usePane();
   const pv = view.value!;
   const near = Object.values(data.players).filter((p) => p.id !== pv.me.id).sort((a, b) => b.points - a.points).slice(0, 8);
   return (
@@ -664,7 +666,7 @@ function Legend({ data }: { data: MapData }) {
         <span><i class="sw" style={{ background: TRIBE_COLORS.enemy }} /> Enemies</span>
       </>}
       {near.map((p) => (
-        <button type="button" class="link" onClick={() => go({ name: 'ranking', player: p.id })}>
+        <button type="button" class="link" onClick={() => pane.go({ name: 'ranking', player: p.id })}>
           <i class="sw" style={{ background: p.color }} /> {p.name}
         </button>
       ))}
@@ -695,9 +697,10 @@ function loadTpl(): { a: Units; b: Units } {
 }
 
 function VillagePanel({ v, data, onClose }: { v: MapVillage; data: MapData; onClose: () => void }) {
+  const pane = usePane();
   const h = host.value!;
   const pv = view.value!;
-  const cur = village.value!;
+  const cur = pane.village.value!;
   const info = h.villageInfo(v.id, cur.id)!;
   const [note, setNote] = useState(info.note ?? '');
   useEffect(() => setNote(info.note ?? ''), [v.id]);
@@ -716,7 +719,7 @@ function VillagePanel({ v, data, onClose }: { v: MapVillage; data: MapData; onCl
       </header>
       <dl class="facts">
         <dt>Ruler</dt>
-        <dd>{owner ? <button type="button" class="link" onClick={() => go({ name: 'ranking', player: owner.id })}>{owner.name}</button> : 'Barbarians'}{owner?.tribeId != null && data.tribes[owner.tribeId] && <> <TribeTag id={owner.tribeId} tag={data.tribes[owner.tribeId].tag} /></>}</dd>
+        <dd>{owner ? <button type="button" class="link" onClick={() => pane.go({ name: 'ranking', player: owner.id })}>{owner.name}</button> : 'Barbarians'}{owner?.tribeId != null && data.tribes[owner.tribeId] && <> <TribeTag id={owner.tribeId} tag={data.tribes[owner.tribeId].tag} /></>}</dd>
         {info.bonus && <><dt>Bonus</dt><dd>{info.bonus === 'all' ? '+30% all resources' : info.bonus === 'farm' ? '+10% population' : info.bonus === 'storage' ? '+50% storage' : info.bonus === 'recruit' ? 'faster recruitment' : `+100% ${info.bonus}`}</dd></>}
         {!own && <><dt>Distance</dt><dd class="num">{info.distanceFrom?.toFixed(1)} fields</dd></>}
         {info.protected && <><dt>Status</dt><dd>Beginner protection</dd></>}
@@ -724,15 +727,15 @@ function VillagePanel({ v, data, onClose }: { v: MapVillage; data: MapData; onCl
       </dl>
       {own ? (
         <div class="row gap wrap">
-          <Btn small onClick={() => { vid.value = v.id; go({ name: 'village' }); }}>Open village</Btn>
-          {v.id !== cur.id && <Btn small variant="ghost" onClick={() => { rallyTarget.value = { x: v.x, y: v.y, kind: 'support' }; go({ name: 'building', id: 'rally', tab: 'send' }); }}>Send troops</Btn>}
-          {v.id !== cur.id && <Btn small variant="ghost" onClick={() => { marketTarget.value = { x: v.x, y: v.y }; go({ name: 'building', id: 'market', tab: 'send' }); }}>Send resources</Btn>}
+          <Btn small onClick={() => { pane.vid.value = v.id; pane.go({ name: 'village' }); }}>Open village</Btn>
+          {v.id !== cur.id && <Btn small variant="ghost" onClick={() => { rallyTarget.value = { x: v.x, y: v.y, kind: 'support' }; pane.go({ name: 'building', id: 'rally', tab: 'send' }); }}>Send troops</Btn>}
+          {v.id !== cur.id && <Btn small variant="ghost" onClick={() => { marketTarget.value = { x: v.x, y: v.y }; pane.go({ name: 'building', id: 'market', tab: 'send' }); }}>Send resources</Btn>}
         </div>
       ) : (
         <>
           <div class="row gap wrap">
-            <Btn small variant="danger" onClick={() => { rallyTarget.value = { x: v.x, y: v.y, kind: 'attack' }; go({ name: 'building', id: 'rally', tab: 'send' }); }}><Icon name="attack" size={14} /> Attack</Btn>
-            {owner && <Btn small variant="ghost" onClick={() => { rallyTarget.value = { x: v.x, y: v.y, kind: 'support' }; go({ name: 'building', id: 'rally', tab: 'send' }); }}><Icon name="support" size={14} /> Support</Btn>}
+            <Btn small variant="danger" onClick={() => { rallyTarget.value = { x: v.x, y: v.y, kind: 'attack' }; pane.go({ name: 'building', id: 'rally', tab: 'send' }); }}><Icon name="attack" size={14} /> Attack</Btn>
+            {owner && <Btn small variant="ghost" onClick={() => { rallyTarget.value = { x: v.x, y: v.y, kind: 'support' }; pane.go({ name: 'building', id: 'rally', tab: 'send' }); }}><Icon name="support" size={14} /> Support</Btn>}
             <Btn small variant="ghost" disabled={(cur.units.scout ?? 0) < 1} onClick={() => act({ type: 'send', vid: cur.id, target: v.id, kind: 'attack', units: { scout: Math.min(cur.units.scout ?? 0, owner ? 5 : 1) } }, 'Scouts are riding out.')}>
               <Icon name="scout" size={14} /> Scout
             </Btn>
@@ -744,7 +747,7 @@ function VillagePanel({ v, data, onClose }: { v: MapVillage; data: MapData; onCl
               <Btn small variant="ghost" disabled={!canSend(tpl.a)} onClick={() => act({ type: 'send', vid: cur.id, target: v.id, kind: 'attack', units: tpl.a, repeat: true }, 'Repeating raid sent.')}>A ↻ repeat</Btn>
             </div>
           )}
-          {owner && <Btn small variant="quiet" onClick={() => { marketTarget.value = { x: v.x, y: v.y }; go({ name: 'building', id: 'market', tab: 'send' }); }}>Send resources</Btn>}
+          {owner && <Btn small variant="quiet" onClick={() => { marketTarget.value = { x: v.x, y: v.y }; pane.go({ name: 'building', id: 'market', tab: 'send' }); }}>Send resources</Btn>}
           {owner && owner.kind === 'human' && <TribeInvite pid={owner.id} name={owner.name} tribeId={owner.tribeId} />}
         </>
       )}

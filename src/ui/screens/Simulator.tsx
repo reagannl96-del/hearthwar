@@ -4,14 +4,15 @@ import type { UnitId, Units } from '../../engine/types';
 import { Icon } from '../art/icons';
 import { Btn, NumInput, Section, UnitTable, UnitIcon, unitName } from '../components/common';
 import { fmt } from '../format';
-import { host, view, village } from '../store';
+import { host, view, usePane } from '../store';
 
 const ATT_UNITS: UnitId[] = UNIT_ORDER;
 const DEF_UNITS: UnitId[] = [...UNIT_ORDER, 'militia'];
 
 export function Simulator() {
+  const pane = usePane();
   const pv = view.value!;
-  const v = village.value!;
+  const v = pane.village.value!;
   const [att, setAtt] = useState<Units>({});
   const [def, setDef] = useState<Units>({});
   const [wall, setWall] = useState<number | ''>(0);

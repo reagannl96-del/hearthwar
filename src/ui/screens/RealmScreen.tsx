@@ -5,12 +5,13 @@
 import { Icon } from '../art/icons';
 import { Countdown, Empty, Section } from '../components/common';
 import { fmt } from '../format';
-import { go, host, now, view } from '../store';
+import { host, now, view, usePane } from '../store';
 
 const DAY = 86_400_000;
 const pct = (x: number) => `${Math.round(x * 1000) / 10}%`;
 
 export function RealmScreen() {
+  const pane = usePane();
   const h = host.value!;
   view.value;
   const r = h.realm();
@@ -70,7 +71,7 @@ export function RealmScreen() {
         {rows.length === 0 && r.tribeless.villages === 0 ? <Empty>No one rules any villages yet.</Empty> : (
           <div class="realm-bars" aria-label="Share of ruled villages by tribe">
             {rows.map((t, i) => (
-              <button type="button" class={`realm-row ${t.id === r.myTribeId ? 'is-mine' : ''}`} onClick={() => go({ name: 'tribe', id: t.id })} title={`${t.name}: ${t.villages} villages, ${t.members} members, ${fmt(t.points)} points`}>
+              <button type="button" class={`realm-row ${t.id === r.myTribeId ? 'is-mine' : ''}`} onClick={() => pane.go({ name: 'tribe', id: t.id })} title={`${t.name}: ${t.villages} villages, ${t.members} members, ${fmt(t.points)} points`}>
                 <span class="realm-rank num">{i + 1}</span>
                 <span class="realm-name"><i class="sw" style={{ background: t.color }} /> <b>[{t.tag}]</b> {t.name}</span>
                 <span class="realm-track">
@@ -107,9 +108,9 @@ export function RealmScreen() {
             <thead><tr><th>#</th><th>Ruler</th><th class="right">Villages</th><th class="right">Points</th></tr></thead>
             <tbody>
               {r.rulers.map((p, i) => (
-                <tr class={`clickable ${p.id === r.meId ? 'is-me' : ''}`} onClick={() => go({ name: 'ranking', player: p.id })}>
+                <tr class={`clickable ${p.id === r.meId ? 'is-me' : ''}`} onClick={() => pane.go({ name: 'ranking', player: p.id })}>
                   <td class="num">{i + 1}</td>
-                  <td><button type="button" class="link" onClick={(e) => { e.stopPropagation(); go({ name: 'ranking', player: p.id }); }}>{p.name}</button>{p.tag && <span class="muted"> [{p.tag}]</span>}</td>
+                  <td><button type="button" class="link" onClick={(e) => { e.stopPropagation(); pane.go({ name: 'ranking', player: p.id }); }}>{p.name}</button>{p.tag && <span class="muted"> [{p.tag}]</span>}</td>
                   <td class="right num">{fmt(p.villages)}</td>
                   <td class="right num">{fmt(p.points)}</td>
                 </tr>

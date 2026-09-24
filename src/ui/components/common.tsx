@@ -5,7 +5,7 @@ import type { Res, ResKey, UnitId, Units } from '../../engine/types';
 import { themeOfHero, themedUnitName, type VillageTheme } from '../../engine/data/themes';
 import { Icon, themedUnitIcon } from '../art/icons';
 import { coords, fmt, fmtClock, fmtDur, fmtShort } from '../format';
-import { go, now, village, warp } from '../store';
+import { now, village, warp, usePane } from '../store';
 
 export const RES_LABEL: Record<ResKey, string> = { wood: 'Wood', clay: 'Clay', iron: 'Iron' };
 
@@ -197,17 +197,19 @@ export function NumInput({ value, onInput, max, id, placeholder }: { value: numb
 }
 
 export function VillageLink({ vid, name, x, y }: { vid: number; name: string; x: number; y: number }) {
+  const pane = usePane();
   return (
-    <button type="button" class="link" onClick={() => go({ name: 'map', focus: vid })} title="Show on the map">
+    <button type="button" class="link" onClick={() => pane.go({ name: 'map', focus: vid })} title="Show on the map">
       {name} <span class="coords">({coords(x, y)})</span>
     </button>
   );
 }
 
 export function PlayerLink({ id, name }: { id: number | null; name: string }) {
+  const pane = usePane();
   if (id === null) return <span class="muted">{name}</span>;
   return (
-    <button type="button" class="link" onClick={() => go({ name: 'ranking', player: id })}>
+    <button type="button" class="link" onClick={() => pane.go({ name: 'ranking', player: id })}>
       {name}
     </button>
   );

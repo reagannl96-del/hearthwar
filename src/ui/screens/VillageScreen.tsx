@@ -5,7 +5,7 @@ import { Icon } from '../art/icons';
 import { Village3D } from '../three/Village3D';
 import { Btn, Countdown, Empty, Progress, Section, UnitList } from '../components/common';
 import { fmt } from '../format';
-import { act, battleReplay, go, host, isNightNow, liveRes, now, paused, prefs, setPrefs, view, village, warp } from '../store';
+import { act, battleReplay, host, isNightNow, liveRes, now, paused, prefs, setPrefs, view, warp, usePane } from '../store';
 import type { TheatreInput } from '../three/battle/theatre';
 import { isVolcanic, isWinter } from '../../engine/world';
 import { CommandRow } from './RallyScreen';
@@ -16,7 +16,8 @@ const BONUS_TEXT: Record<string, string> = {
 };
 
 export function VillageScreen() {
-  const v = village.value!;
+  const pane = usePane();
+  const v = pane.village.value!;
   const pv = view.value!;
   const upgrading: Partial<Record<BuildingId, number>> = {};
   for (const j of v.buildQueue) upgrading[j.building] = j.level;
@@ -57,7 +58,7 @@ export function VillageScreen() {
           <Village3D
             buildings={v.buildings}
             building={upgrading}
-            onPick={(b) => go({ name: 'building', id: b })}
+            onPick={(b) => pane.go({ name: 'building', id: b })}
             color={0xe0a526}
             points={v.points}
             villageId={v.id}
@@ -79,7 +80,7 @@ export function VillageScreen() {
           />
         </div>
         {quest && (
-          <button type="button" class={`quest-strip ${quest.done ? 'is-done' : ''}`} onClick={() => go({ name: 'quests' })}>
+          <button type="button" class={`quest-strip ${quest.done ? 'is-done' : ''}`} onClick={() => pane.go({ name: 'quests' })}>
             <Icon name="quest" size={18} />
             <span>
               <b>{quest.title}</b> — {quest.done ? 'complete! Claim your reward.' : quest.text}
@@ -90,7 +91,7 @@ export function VillageScreen() {
         <TroopMovements vid={v.id} />
       </div>
       <aside class="side-col">
-        <Section title="Construction" actions={<Btn small variant="ghost" onClick={() => go({ name: 'building', id: 'main' })}>Headquarters</Btn>}>
+        <Section title="Construction" actions={<Btn small variant="ghost" onClick={() => pane.go({ name: 'building', id: 'main' })}>Headquarters</Btn>}>
           {v.buildQueue.length === 0 ? (
             <Empty>Nothing is being built. Pick a building in the village or open the headquarters.</Empty>
           ) : (
@@ -125,7 +126,7 @@ export function VillageScreen() {
                 return (
                   <li class="queue-item">
                     <Icon name={first.unit} size={18} />
-                    <button type="button" class="link grow" onClick={() => go({ name: 'building', id: b })}>
+                    <button type="button" class="link grow" onClick={() => pane.go({ name: 'building', id: b })}>
                       {q.reduce((s, j) => s + j.count - j.done, 0)} in the {BUILDINGS[b].name.toLowerCase()}
                     </button>
                     <Countdown until={end} />
@@ -136,7 +137,7 @@ export function VillageScreen() {
           </Section>
         )}
 
-        <Section title="Troops at home" actions={<Btn small variant="ghost" onClick={() => go({ name: 'building', id: 'rally', tab: 'send' })}>Send</Btn>}>
+        <Section title="Troops at home" actions={<Btn small variant="ghost" onClick={() => pane.go({ name: 'building', id: 'rally', tab: 'send' })}>Send</Btn>}>
           <UnitList units={v.units} empty="No troops at home." />
           {supportTotal > 0 && (
             <div class="sub">
@@ -154,7 +155,7 @@ export function VillageScreen() {
           )}
         </Section>
 
-        <Section title="Movements" actions={<Btn small variant="ghost" onClick={() => go({ name: 'building', id: 'rally', tab: 'commands' })}>All</Btn>}>
+        <Section title="Movements" actions={<Btn small variant="ghost" onClick={() => pane.go({ name: 'building', id: 'rally', tab: 'commands' })}>All</Btn>}>
           {moves.length === 0 ? <Empty>No troops on the move.</Empty> : (
             <ul class="cmd-list compact">
               {moves.map((c) => <CommandRow c={c} compact />)}
@@ -187,6 +188,7 @@ export function VillageScreen() {
 
 /** Every army leaving, coming home to, or marching on the selected village. */
 function TroopMovements({ vid }: { vid: number }) {
+  const pane = usePane();
   const pv = view.value!;
   const out = pv.commands.filter((c) => c.fromVid === vid && (c.kind === 'attack' || c.kind === 'support')).sort((a, b) => a.arrive - b.arrive);
   const back = pv.commands.filter((c) => c.fromVid === vid && c.kind === 'return').sort((a, b) => a.arrive - b.arrive);
@@ -194,7 +196,7 @@ function TroopMovements({ vid }: { vid: number }) {
   const groups: [string, typeof out][] = [['Incoming', inc], ['Attacks & support', out], ['Returning', back]];
   const total = out.length + back.length + inc.length;
   return (
-    <Section title="Troop movements" actions={<Btn small variant="ghost" onClick={() => go({ name: 'building', id: 'rally', tab: 'commands' })}>Rally point</Btn>}>
+    <Section title="Troop movements" actions={<Btn small variant="ghost" onClick={() => pane.go({ name: 'building', id: 'rally', tab: 'commands' })}>Rally point</Btn>}>
       {total === 0 ? <Empty>No armies are on the road from this village.</Empty> : groups.filter(([, list]) => list.length > 0).map(([title, list]) => (
         <div class="move-group">
           <h4>{title} <span class="muted small">({list.length})</span></h4>

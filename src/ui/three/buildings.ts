@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import type { BuildingId } from '../../engine/types';
 import {
   ARC, ARC_EMIT, C, GLASS, STAR, STAR_EMIT, VIO, VIO_EMIT, arcaneLamp, blob, box, cone, cyl, darker, extrude, floatingCrystal, floatingIsle,
-  getTheme, heraldry, house, lancet, mesh, orbitRing, rng, roundTower, runeRing, witchHat, type Theme,
+  getTheme, heraldry, house, lancet, mat, merlonRing, mesh, orbitRing, rng, roundTower, runeRing, witchHat, type Theme,
 } from './kit';
 import {
   anvil, banner, barrel, hqCrown, campfire, cart, catapult, crate, dummy, fence, hayBale, horse, logPile, pumpkin, ram, rock,
@@ -51,6 +51,7 @@ function baseModel(id: BuildingId, t: number, color: number): Built {
       const th = getTheme();
       if (th === 'paladin') return paladinHall(t);
       if (th === 'sorcerer') return sorcererHall(t);
+      if (th === 'necromancer') return necroHall(t);
       if (th === 'druid') return druidHall(t);
       if (th === 'goblin') return goblinHall(t);
       return crowned(mainHall(t, color), t);
@@ -398,130 +399,672 @@ function watchtower(t: number, color: number): Built {
   return { obj: g, h: h + 7, w: 4, d: 4 };
 }
 
+// ---------- the workplaces out on the land: they grow with every level, in the village's colours ----------
+
+const GHOST = 0x5cff9a, GHOST_EMIT = 0x1f9a4a;
+
+/** The village's mark on a post by the path: how a workplace shows whose it is. */
+function themePost(h: number): THREE.Group {
+  switch (getTheme()) {
+    case 'paladin': return shieldPost(h);
+    case 'sorcerer': return arcaneLamp(h);
+    case 'druid': return antlerPole(h);
+    case 'goblin': return skullOnPole(h);
+    case 'necromancer': return gravePost(h);
+    default: {
+      const g = new THREE.Group();
+      g.add(cyl(0.07, 0.09, h, C.woodDark, 5));
+      g.add(box(0.5, 0.06, 0.06, C.woodDark, 0.2, h - 0.2, 0));
+      const l = glowBit(new THREE.BoxGeometry(0.24, 0.32, 0.24), 0xffd27a, 0xb0701a);
+      l.position.set(0.4, h - 0.6, 0);
+      g.add(l);
+      return g;
+    }
+  }
+}
+
+/** What burns in a kiln or a furnace, by theme. */
+function themeFire(): { c: number; e: number } {
+  switch (getTheme()) {
+    case 'sorcerer': return { c: VIO, e: VIO_EMIT };
+    case 'necromancer': return { c: GHOST, e: GHOST_EMIT };
+    case 'paladin': return { c: 0xffd35a, e: 0xb07a10 };
+    default: return { c: 0xff8a3a, e: 0xd0501a };
+  }
+}
+
+/** A plume of smoke rising from here. */
+function smokeAt(x: number, y: number, z: number): THREE.Object3D {
+  const o = new THREE.Object3D();
+  o.userData.dynamic = true;
+  o.userData.smoke = true;
+  o.position.set(x, y, z);
+  return o;
+}
+
+/** A beehive kiln: a dome of brick (or white stone, or bone), a chimney, and a glowing mouth. */
+function kiln(): THREE.Group {
+  const g = new THREE.Group();
+  const th = getTheme();
+  const wall = th === 'paladin' ? 0xe4ddcb : th === 'necromancer' ? 0xd8d0bc : th === 'sorcerer' ? 0x77779c : C.brick;
+  g.add(cyl(1.75, 1.8, 0.4, darker(wall, 1.15), 10));
+  g.add(mesh(new THREE.SphereGeometry(1.6, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), wall).translateY(0.35));
+  g.add(cyl(0.3, 0.36, 1.6, darker(wall, 1.1), 6, 0.5, 1.4, -0.4));
+  const fire = themeFire();
+  const mouth = glowBit(new THREE.BoxGeometry(0.8, 0.6, 0.2), fire.c, fire.e);
+  mouth.position.set(0, 0.35, 1.52);
+  g.add(mouth);
+  g.add(smokeAt(0.5, 3.1, -0.4));
+  if (th === 'necromancer') { const sk = skull(0.5); sk.position.set(0, 2.05, 0.6); g.add(sk); }
+  if (th === 'sorcerer') g.add(runeRing(1.62, 0.9));
+  return g;
+}
+
+/** A shed of posts under a roof, open on every side. */
+function openShed(w: number, d: number, h: number, roof: number): THREE.Group {
+  const g = new THREE.Group();
+  for (const x of [-w / 2 + 0.2, w / 2 - 0.2]) for (const z of [-d / 2 + 0.2, d / 2 - 0.2]) g.add(box(0.22, h, 0.22, C.timber, x, 0, z));
+  const roofL = box(w + 0.6, 0.18, d / 2 + 0.5, roof, 0, 0, 0);
+  roofL.rotation.x = 0.35;
+  roofL.position.set(0, h + 0.25, -d / 4 - 0.05);
+  const roofR = box(w + 0.6, 0.18, d / 2 + 0.5, roof, 0, 0, 0);
+  roofR.rotation.x = -0.35;
+  roofR.position.set(0, h + 0.25, d / 4 + 0.05);
+  g.add(roofL, roofR);
+  return g;
+}
+
+/** Sawn planks stacked in a crib. */
+function planks(n: number): THREE.Group {
+  const g = new THREE.Group();
+  for (let i = 0; i < n; i++) g.add(box(2.6, 0.14, 0.7, i % 2 ? C.wood : C.logEnd, 0, i * 0.15, (i % 3) * 0.02));
+  for (const x of [-1.1, 1.1]) g.add(box(0.12, 0.2, 0.9, C.woodDark, x, -0.05, 0));
+  return g;
+}
+
 function timberCamp(t: number, r: () => number): Built {
   const g = new THREE.Group();
-  const n = 14 - Math.min(6, t);
+  const th = getTheme();
+  // the wood behind the camp thins as it is felled; the stumps are left
+  const n = 13 - t;
   for (let i = 0; i < n; i++) {
-    const a = r() * Math.PI * 2;
-    const d = 5 + r() * 6;
+    const a = -Math.PI * 0.3 - r() * Math.PI * 0.65, d = 7 + r() * 4;
     const tr = tree(r() < 0.35 ? 'pine' : r() < 0.2 ? 'birch' : 'oak', r, 1.05);
-    tr.position.set(Math.cos(a) * d, 0, Math.sin(a) * d - 2);
+    tr.position.set(Math.cos(a) * d, 0, Math.sin(a) * d);
     g.add(tr);
   }
-  const piles = Math.min(4, 1 + Math.floor(t / 2));
+  for (let i = 0; i < 2 + t; i++) {
+    const a = -Math.PI * 0.1 - r() * Math.PI * 0.8, d = 3.5 + r() * 4;
+    const st = cyl(0.36, 0.44, 0.45, C.trunk, 7, Math.cos(a) * d, 0, Math.sin(a) * d);
+    g.add(st, cyl(0.35, 0.35, 0.02, C.logEnd, 7, Math.cos(a) * d, 0.45, Math.sin(a) * d));
+  }
+  // logs piled up by the track, more with every level
+  const piles = Math.min(5, 1 + Math.floor(t * 0.7));
   for (let i = 0; i < piles; i++) {
-    const p = logPile(3 + Math.min(3, t));
-    p.position.set(-2 + i * 2.2, 0, 2 + (i % 2) * 1.4);
-    p.rotation.y = 0.2 * i;
+    const p = logPile(3 + Math.min(4, t));
+    p.position.set(-3.6 + i * 2.2, 0, 3.4 + (i % 2) * 1.3);
+    p.rotation.y = 0.15 * i;
     g.add(p);
   }
-  const s = stump();
-  s.position.set(2.8, 0, -0.5);
-  g.add(s);
+  const s0 = stump();
+  s0.position.set(2.8, 0, 0.6);
+  g.add(s0);
+  if (t === 1) {
+    // a lean-to of poles and bark
+    g.add(box(0.14, 1.9, 0.14, C.timber, -5, 0, -0.6), box(0.14, 1.9, 0.14, C.timber, -3, 0, -0.6));
+    const lean = box(2.6, 0.12, 2.2, C.thatch, -4, 1.2, 0.2);
+    lean.rotation.x = 0.55;
+    g.add(lean);
+  }
   if (t >= 2) {
-    const hut = house({ w: 4.5, d: 3.6, h: 2.3, roofH: 1.8, roof: C.thatch, windows: 1 });
-    hut.position.set(-4, 0, -2.6);
-    hut.rotation.y = 0.4;
+    const hut = house({ w: 4.4, d: 3.6, h: 2.3, roofH: 1.8, roof: C.thatch, windows: 1 });
+    hut.position.set(-6.3, 0, -1.4);
+    hut.rotation.y = 0.5;
     g.add(hut);
   }
-  if (t >= 4) g.add(cart().translateX(4.5).translateZ(3));
-  return { obj: g, h: 6, w: 10, d: 10 };
+  if (t >= 3) {
+    // a sawpit: a log on trestles and the long saw
+    const pit = new THREE.Group();
+    for (const x of [-0.9, 0.9]) { const tr = box(0.14, 1.0, 0.9, C.woodDark, x, 0, 0); pit.add(tr); }
+    const lg = cyl(0.3, 0.3, 3.2, C.wood, 7);
+    lg.rotation.z = Math.PI / 2;
+    lg.position.set(1.6, 1.25, 0);
+    pit.add(lg);
+    pit.add(box(0.06, 1.6, 0.3, C.iron, 0.3, 0.6, 0.35));
+    pit.position.set(2.2, 0, 3.8);
+    g.add(pit);
+  }
+  if (t >= 4) {
+    const c = cart();
+    for (let i = 0; i < 3; i++) { const lg = cyl(0.18, 0.18, 1.9, C.wood, 6); lg.rotation.z = Math.PI / 2; lg.position.set(0, 1.0 + (i % 2) * 0.3, -0.25 + i * 0.25); c.add(lg); }
+    c.position.set(5.0, 0, 2.6);
+    c.rotation.y = 0.3;
+    g.add(c);
+    const pl = planks(4 + t);
+    pl.position.set(5.6, 0.1, 0.4);
+    g.add(pl);
+  }
+  if (t >= 5) {
+    // a crane of poles for lifting the big trunks, one hanging from it
+    const cr = new THREE.Group();
+    for (const s2 of [-1, 1]) { const leg = box(0.18, 5.2, 0.18, C.timber, s2 * 1.2, 0, 0); leg.rotation.z = s2 * 0.22; cr.add(leg); }
+    cr.add(box(3.4, 0.2, 0.2, C.timber, 0, 5.0, 0));
+    cr.add(box(0.04, 1.6, 0.04, 0x8a7a5a, 0, 3.4, 0));
+    const hang = cyl(0.32, 0.32, 3.0, C.wood, 7);
+    hang.rotation.z = Math.PI / 2;
+    hang.position.set(1.5, 3.2, 0);
+    cr.add(hang);
+    cr.position.set(5.8, 0, -3.8);
+    cr.rotation.y = -0.5;
+    g.add(cr);
+  }
+  if (t >= 6) {
+    // the sawmill: a great saw turning under a shed, plank cribs beside it
+    const mill = openShed(5.2, 3.6, 2.6, C.thatch);
+    mill.add(box(3.6, 0.9, 1.0, C.woodDark, 0, 0, 0));
+    const saw = new THREE.Group();
+    const blade = mesh(new THREE.CylinderGeometry(0.85, 0.85, 0.05, 16).rotateX(Math.PI / 2), 0xb9c2c8);
+    saw.add(blade);
+    for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2; saw.add(box(0.16, 0.12, 0.06, 0x8a959c, Math.cos(a) * 0.86, Math.sin(a) * 0.86 - 0.06, 0)); }
+    saw.userData.dynamic = true;
+    saw.userData.spin = true;
+    saw.position.set(0.4, 1.2, 0);
+    mill.add(saw);
+    const lg = cyl(0.3, 0.3, 3.4, C.wood, 7);
+    lg.rotation.z = Math.PI / 2;
+    lg.position.set(-0.6, 1.25, 0);
+    mill.add(lg);
+    mill.position.set(0.4, 0, -4.4);
+    g.add(mill);
+    const pl = planks(6);
+    pl.position.set(-3.2, 0.1, -4.2);
+    pl.rotation.y = Math.PI / 2;
+    g.add(pl);
+  }
+  if (t >= 7) {
+    // the woodcutters' lodge
+    const lodge = house({ w: 5.6, d: 4.4, h: 3.2, roofH: 2.3, roof: C.thatch, windows: 2, stone: true });
+    lodge.position.set(-7.6, 0, 4.2);
+    lodge.rotation.y = 1.1;
+    g.add(lodge);
+  }
+  // whose camp it is
+  const post = themePost(2.6);
+  post.position.set(4.2, 0, 6.2);
+  g.add(post);
+  if (th === 'paladin' && t >= 3) {
+    // the logs kept dry under a striped awning of the Order
+    for (let i = 0; i < 4; i++) g.add(box(0.12, 2.2, 0.12, C.stoneLight, -4.2 + (i % 2) * 4.6, 0, 2.6 + Math.floor(i / 2) * 2.4));
+    for (let i = 0; i < 6; i++) g.add(box(0.8, 0.1, 2.9, i % 2 ? 0x2c56b0 : 0xf3eee2, -4.2 + 0.4 + i * 0.77, 2.2, 3.8));
+  }
+  if (th === 'sorcerer' && t >= 2) {
+    // a log lifted by a spell, turning slowly over the pile, runes glowing on it
+    const lift = new THREE.Group();
+    const lg = cyl(0.32, 0.32, 2.6, C.wood, 7);
+    lg.rotation.z = Math.PI / 2;
+    lift.add(lg);
+    lift.add(runeRing(0.33, -0.1).rotateZ(Math.PI / 2));
+    lift.userData.dynamic = true;
+    lift.userData.orbit = 0.4;
+    lift.userData.bob = 0.35;
+    lift.position.set(-1.4, 3.4, 3.8);
+    g.add(lift);
+  }
+  if (th === 'druid') {
+    // saplings planted in rows where the old trees came down
+    for (let i = 0; i < 3 + t; i++) {
+      const sp = tree('oak', r, 0.28 + r() * 0.08);
+      sp.position.set(-5 + (i % 5) * 1.6, 0, -3.8 - Math.floor(i / 5) * 1.5);
+      g.add(sp);
+    }
+  }
+  if (th === 'goblin') {
+    // rusty saw blades bitten into the stumps, and a line of sharpened stakes
+    for (let i = 0; i < Math.min(4, t); i++) {
+      const b = mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.04, 9).rotateX(Math.PI / 2), 0x7a4a2a);
+      b.position.set(-2 + i * 1.8, 0.7, 6.4);
+      b.rotation.y = r();
+      g.add(b);
+    }
+    for (let i = 0; i < 6; i++) { const st = cone(0.12, 1.2, C.timber, 4, -6 + i * 1.3, 0, 7.4); st.rotation.x = -0.4; g.add(st); }
+  }
+  if (th === 'necromancer') {
+    // bones in the woodpile and a ghost-lit lantern
+    for (let i = 0; i < 3; i++) { const b = box(0.9, 0.12, 0.12, 0xd8d0bc, -2 + i * 0.9, 0.08, 6.2); b.rotation.y = r() * 3; g.add(b); }
+    const sk = skull(0.5);
+    sk.position.set(-0.4, 0.3, 6.1);
+    g.add(sk);
+  }
+  return { obj: g, h: 6 + (t >= 5 ? 1.5 : 0), w: 10, d: 10 };
 }
 
 function clayPit(t: number, r: () => number): Built {
   const g = new THREE.Group();
-  const pit = cyl(4.6, 3.6, 0.35, C.clay, 10, 0, -0.2);
-  pit.scale.set(1.3, 1, 1);
+  const th = getTheme();
+  // the pit is dug wider and deeper each level, in terraces, water gathering in the bottom
+  const pr = 2.4 + t * 0.4;
+  const pit = cyl(pr + 0.8, pr, 0.35, C.clay, 12, 0, -0.2);
+  pit.scale.set(1.25, 1, 1);
   g.add(pit);
-  g.add(cyl(3.4, 2.8, 0.2, C.clayDark, 10, 0, 0.05).translateY(0));
-  const stacks = Math.min(6, t + 1);
+  const steps = Math.min(3, Math.floor((t + 1) / 2));
+  for (let k = 1; k <= steps; k++) {
+    const ring = cyl(pr - k * 0.8 + 0.3, pr - k * 0.8, 0.1, k % 2 ? C.clayDark : C.clay, 12, 0, 0.04 + k * 0.03);
+    ring.scale.set(1.25, 1, 1);
+    g.add(ring);
+  }
+  if (t >= 3) {
+    const water = cyl(pr * 0.35, pr * 0.35, 0.06, C.water, 10, 0, 0.16);
+    water.scale.set(1.25, 1, 1);
+    g.add(water);
+  }
+  if (t >= 2) {
+    // a ladder down into it
+    const lad = new THREE.Group();
+    for (const x of [-0.3, 0.3]) lad.add(box(0.08, 2.2, 0.08, C.woodDark, x, 0, 0));
+    for (let y = 0.3; y < 2.1; y += 0.45) lad.add(box(0.6, 0.06, 0.06, C.woodDark, 0, y, 0));
+    lad.rotation.x = -1.0;
+    lad.position.set(-pr * 0.9, 0.05, 1.2);
+    g.add(lad);
+  }
+  // bricks stacked by the track, more each level
+  const stacks = Math.min(8, t + 1);
   for (let i = 0; i < stacks; i++) {
     const st = new THREE.Group();
     for (let y = 0; y < 3; y++) for (let x = 0; x < 3; x++) st.add(box(0.5, 0.26, 0.9, i % 2 ? C.brick : darker(C.brick, 1.1), x * 0.55 - 0.55, y * 0.27, 0));
-    st.position.set(6.4 + (i % 2) * 1.8, 0, -2 + Math.floor(i / 2) * 1.6);
+    st.position.set(6.6 + (i % 2) * 1.8, 0, -3.4 + Math.floor(i / 2) * 1.6);
     g.add(st);
   }
-  for (let i = 0; i < 3; i++) g.add(rock(r, 0.7, C.clayDark).translateX(-5 + r() * 2).translateZ(-3 + i * 2.5));
-  if (t >= 3) {
-    const hut = house({ w: 4.2, d: 3.4, h: 2.2, roofH: 1.7, roof: C.tileWarm, windows: 1 });
-    hut.position.set(-6.5, 0, 3.4);
-    hut.rotation.y = 0.8;
-    g.add(hut);
+  if (t >= 2) {
+    // fresh bricks laid out to dry
+    const rows = Math.min(4, t - 1);
+    for (let rr = 0; rr < rows; rr++) for (let i = 0; i < 7; i++) g.add(box(0.42, 0.18, 0.24, C.clay, -2.2 + i * 0.6, 0, 5.2 + rr * 0.55));
   }
+  for (let i = 0; i < 3; i++) g.add(rock(r, 0.7, C.clayDark).translateX(-6 + r() * 1.5).translateZ(-4 + i * 1.6));
   if (t >= 2) {
     const c = cart();
-    c.position.set(3.2, 0, 4.4);
+    c.position.set(3.4, 0, 5.2);
     c.rotation.y = 0.6;
     g.add(c);
   }
-  return { obj: g, h: 4, w: 12, d: 10 };
+  if (t >= 3) {
+    const hut = house({ w: 4.2, d: 3.4, h: 2.2, roofH: 1.7, roof: C.tileWarm, windows: 1 });
+    hut.position.set(-7, 0, 3.2);
+    hut.rotation.y = 0.8;
+    g.add(hut);
+  }
+  if (t >= 4) { const k = kiln(); k.position.set(4.6, 0, -5.8); g.add(k); }
+  if (t >= 5) {
+    // the brickworks: a long open shed with the moulding tables
+    const shed = openShed(5.6, 3.2, 2.4, C.tileWarm);
+    shed.add(box(4.2, 0.9, 1.0, C.woodDark, 0, 0, 0));
+    for (let i = 0; i < 6; i++) shed.add(box(0.4, 0.16, 0.24, C.clay, -1.6 + i * 0.64, 0.9, 0));
+    shed.position.set(-3.2, 0, -6.4);
+    g.add(shed);
+  }
+  if (t >= 6) { const k = kiln(); k.position.set(8.4, 0, 2.6); k.rotation.y = -1.2; g.add(k); }
+  if (t >= 7) {
+    // a tall brick chimney, smoking
+    g.add(cyl(0.55, 0.8, 7.5, C.brick, 8, 1.2, 0, -8.4));
+    g.add(cyl(0.65, 0.65, 0.3, darker(C.brick, 1.2), 8, 1.2, 7.4, -8.4));
+    g.add(smokeAt(1.2, 7.9, -8.4));
+  }
+  const post = themePost(2.6);
+  post.position.set(1.4, 0, 6.8);
+  g.add(post);
+  if (th === 'sorcerer') {
+    // the clay is shaped by spells: glowing runes stamped in the drying bricks
+    for (let i = 0; i < 3; i++) { const rn = glowBit(new THREE.BoxGeometry(0.3, 0.04, 0.3)); rn.position.set(-1.6 + i * 1.6, 0.2, 5.3); rn.rotation.y = Math.PI / 4; g.add(rn); }
+  }
+  if (th === 'druid') g.add(mushrooms(5, r, 2).translateX(-5).translateZ(-2));
+  if (th === 'goblin') { g.add(barrel(-4.4, 5.8), barrel(-3.8, 6.6)); for (let i = 0; i < 3; i++) g.add(blob(0.7, C.clayDark, -1 + i * 1.3, 0.1, -pr - 1.4, 1, 0.3, 1)); }
+  if (th === 'paladin') { const b = banner(0x2c56b0, 3.2); b.position.set(-2.6, 0, 7); g.add(b); }
+  if (th === 'necromancer') for (let i = 0; i < 3; i++) { const sk = skull(0.42); sk.position.set(6.6 + i * 0.5, 0.82, -3.4 + (i % 2) * 0.4); g.add(sk); }
+  return { obj: g, h: 4 + (t >= 7 ? 5 : t >= 4 ? 2 : 0), w: 12, d: 10 };
 }
 
 function ironMine(t: number, r: () => number): Built {
   const g = new THREE.Group();
+  const th = getTheme();
+  // the hill the mine is dug into grows craggier as the workings spread
+  const grow = 0.75 + t * 0.06;
   const hill = [
-    [0, 0, -3, 5.5, 4.2], [-5, 0, -1.5, 4, 3], [5, 0, -2, 4.5, 3.4], [-2, 0, -6, 5, 5.5], [3.5, 0, -6.5, 4.5, 4.6],
-  ];
-  for (const [x, , z, s, h] of hill) {
-    const m = blob(s, r() < 0.5 ? C.rock : C.rockDark, x, h * 0.35, z, 1.1, h / s, 1.0);
+    [0, -3, 5.5, 4.2], [-5, -1.5, 4, 3], [5, -2, 4.5, 3.4], [-2, -6, 5, 5.5], [3.5, -6.5, 4.5, 4.6], [-6.5, -5.5, 3.6, 3.8], [7, -5.8, 3.4, 3.2],
+  ].slice(0, 4 + Math.min(3, Math.floor(t / 2)));
+  const rockC = th === 'druid' ? 0x6c775f : undefined;
+  hill.forEach(([x, z, sc, h], i) => {
+    // the hill grows up and back, never over the mouth of the mine
+    const k = i === 0 ? 1 : grow;
+    const m = blob(sc * k, rockC ?? (r() < 0.5 ? C.rock : C.rockDark), x, h * k * 0.35, z - (k - 1) * 5, 1.1, h / sc, 1.0);
     m.rotation.y = r() * 3;
     g.add(m);
-  }
-  if (t >= 1) {
-    const ent = new THREE.Group();
-    ent.add(box(2.6, 2.8, 0.6, C.dark));
-    ent.add(box(0.35, 3.0, 0.35, C.timber, -1.4, 0, 0.3), box(0.35, 3.0, 0.35, C.timber, 1.4, 0, 0.3));
-    ent.add(box(3.4, 0.4, 0.4, C.timber, 0, 3.0, 0.3));
-    ent.position.set(0, 0, 1.5);
-    g.add(ent);
-    for (const x of [-0.5, 0.5]) g.add(box(0.1, 0.08, 6, C.iron, x, 0.05, 4.6));
-    const cartG = new THREE.Group();
-    cartG.add(box(1.2, 0.7, 1.4, C.woodDark, 0, 0.25, 0));
-    cartG.add(blob(0.5, C.iron, 0, 1.0, 0, 1.2, 0.6, 1.2));
-    cartG.position.set(0, 0, 5.4);
-    g.add(cartG);
-  }
-  if (t >= 3) {
+  });
+  // the adit, timbered, with rails running out of it and a cart of ore
+  const ent = new THREE.Group();
+  ent.add(box(2.6, 2.8, 0.6, C.dark));
+  ent.add(box(0.35, 3.0, 0.35, C.timber, -1.4, 0, 0.3), box(0.35, 3.0, 0.35, C.timber, 1.4, 0, 0.3));
+  ent.add(box(3.4, 0.4, 0.4, C.timber, 0, 3.0, 0.3));
+  ent.position.set(0, 0, 1.5);
+  g.add(ent);
+  const railLen = 3 + Math.min(4, t) * 0.8;
+  for (const x of [-0.5, 0.5]) g.add(box(0.1, 0.08, railLen, C.iron, x, 0.05, 1.8 + railLen / 2));
+  const oreCart = (x: number, z: number) => {
+    const c = new THREE.Group();
+    c.add(box(1.2, 0.7, 1.4, C.woodDark, 0, 0.25, 0));
+    c.add(blob(0.5, C.iron, 0, 1.0, 0, 1.2, 0.6, 1.2));
+    c.position.set(x, 0, z);
+    g.add(c);
+  };
+  oreCart(0, 1.8 + railLen - 0.8);
+  // heaps of ore, more each level
+  for (let i = 0; i < Math.min(5, t); i++) g.add(blob(0.8 + r() * 0.3, C.iron, -4.6 + i * 1.5, 0.2, 4.2 + (i % 2) * 0.9, 1.2, 0.55, 1.1));
+  if (t >= 2) {
     const lamp = new THREE.Group();
     lamp.add(box(0.1, 2, 0.1, C.woodDark));
-    const l = box(0.3, 0.4, 0.3, C.flame, 0, 2, 0);
-    l.material = new THREE.MeshBasicMaterial({ color: C.flame });
-    lamp.add(l);
+    const fire = themeFire();
+    lamp.add(glowBit(new THREE.BoxGeometry(0.3, 0.4, 0.3), fire.c, fire.e).translateY(2));
     lamp.position.set(-2, 0, 2.4);
     g.add(lamp);
+  }
+  if (t >= 3) {
     const hut = house({ w: 4, d: 3.2, h: 2.2, roofH: 1.6, roof: C.slate, windows: 1 });
-    hut.position.set(4.6, 0, 3.4);
+    hut.position.set(5, 0, 3.8);
     hut.rotation.y = -0.5;
     g.add(hut);
   }
+  if (t >= 4) {
+    // a headframe over a shaft, its wheel turning
+    const hf = new THREE.Group();
+    for (const s2 of [-1, 1]) for (const z of [-0.8, 0.8]) { const leg = box(0.2, 5.4, 0.2, C.timber, s2 * 1.0, 0, z); leg.rotation.z = s2 * 0.12; hf.add(leg); }
+    hf.add(box(2.6, 0.25, 2.0, C.timber, 0, 5.2, 0));
+    const wheel = new THREE.Group();
+    wheel.add(mesh(new THREE.TorusGeometry(0.9, 0.08, 5, 14), C.iron));
+    for (let i = 0; i < 4; i++) { const sp = box(0.06, 1.8, 0.06, C.iron, 0, -0.9, 0); sp.rotation.z = (i / 4) * Math.PI; wheel.add(sp); }
+    wheel.userData.dynamic = true;
+    wheel.userData.spin = true;
+    wheel.position.set(0, 5.9, 0);
+    hf.add(wheel);
+    hf.add(cyl(1.0, 1.0, 0.3, C.dark, 8, 0, 0, 0));
+    hf.position.set(-5.8, 0, 1.6);
+    g.add(hf);
+  }
+  if (t >= 5) {
+    // a bloomery furnace: a squat stone stack glowing at the foot, smoke rising
+    const fu = new THREE.Group();
+    fu.add(cyl(1.1, 1.5, 3.4, C.stoneDark, 8));
+    fu.add(cyl(0.7, 0.9, 1.2, C.stoneDark, 8, 0, 3.4));
+    const fire = themeFire();
+    fu.add(glowBit(new THREE.BoxGeometry(0.7, 0.6, 0.2), fire.c, fire.e).translateY(0.5).translateZ(1.38));
+    fu.add(smokeAt(0, 4.8, 0));
+    fu.position.set(7.2, 0, -0.6);
+    g.add(fu);
+    g.add(blob(1.1, 0x3a3432, 8.8, 0.2, 2.6, 1.2, 0.45, 1.1)); // slag
+  }
+  if (t >= 6) {
+    // a second adit, and more carts on the rails
+    const e2 = ent.clone();
+    e2.position.set(-3.2, 0, -1.4);
+    e2.rotation.y = 0.4;
+    e2.scale.setScalar(0.8);
+    g.add(e2);
+    oreCart(0, 2.6);
+  }
+  if (t >= 7) {
+    const lodge = house({ w: 5, d: 3.8, h: 2.8, roofH: 1.9, roof: C.slate, windows: 2, stone: true });
+    lodge.position.set(-7.5, 0, 7.2);
+    lodge.rotation.y = 0.4;
+    g.add(lodge);
+  }
   for (let i = 0; i < 5; i++) g.add(rock(r, 0.8).translateX(-6 + r() * 12).translateZ(2 + r() * 4));
-  return { obj: g, h: 8, w: 12, d: 12 };
+  const post = themePost(2.6);
+  post.position.set(2.4, 0, 6.6);
+  g.add(post);
+  // whose mine it is
+  if (th === 'sorcerer') {
+    // veins of crystal break out of the rock
+    for (let i = 0; i < 3 + t; i++) {
+      const a = -Math.PI * 0.1 - r() * Math.PI * 0.8, d = 3 + r() * 4;
+      const c = mesh(new THREE.OctahedronGeometry(0.3, 0), i % 2 ? VIO : ARC, { emissive: i % 2 ? VIO_EMIT : ARC_EMIT });
+      c.scale.set(1, 2.2, 1);
+      c.position.set(Math.cos(a) * d, 1.2 + r() * 2.2, Math.sin(a) * d - 2);
+      c.rotation.z = (r() - 0.5) * 1.2;
+      g.add(c);
+    }
+  }
+  if (th === 'paladin') {
+    // a golden sun over the adit
+    const sun = mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.08, 12).rotateX(Math.PI / 2), 0xffd35a, { emissive: 0x8a5a10 });
+    sun.position.set(0, 3.6, 1.95);
+    g.add(sun);
+  }
+  if (th === 'druid') {
+    // roots and moss overgrow the workings
+    for (let i = 0; i < 6; i++) g.add(blob(0.8, i % 2 ? 0x5e7d32 : 0x6f9a3a, -5 + i * 2, 2.4 + r() * 1.2, -3 - r() * 3, 1.3, 0.4, 1.1));
+    for (const s2 of [-1, 1]) { const root = cyl(0.12, 0.2, 3.2, 0x5a3f28, 5, s2 * 1.6, 0, 1.2); root.rotation.z = s2 * 0.2; g.add(root); }
+  }
+  if (th === 'goblin') { const sk = skull(0.8); sk.position.set(0, 3.3, 1.95); g.add(sk); g.add(box(1.2, 0.6, 0.05, 0x6f9a2a, 1.6, 2.4, 1.9)); }
+  if (th === 'necromancer') {
+    // the adit is the mouth of a great skull, green light within
+    const sk = skull(2.2);
+    sk.position.set(0, 3.6, 1.2);
+    g.add(sk);
+    g.add(glowBit(new THREE.BoxGeometry(2.2, 2.2, 0.1), GHOST, GHOST_EMIT).translateY(1.2).translateZ(1.78));
+  }
+  return { obj: g, h: 8 + (t >= 4 ? 1 : 0), w: 12, d: 12 };
+}
+
+/** A big barn: a gambrel roof over plank walls, the doors open. */
+function barn(w: number, d: number, h: number): THREE.Group {
+  const g = new THREE.Group();
+  const th = getTheme();
+  const wall = th === 'paladin' ? 0xf3eee2 : th === 'necromancer' ? 0x4a4450 : th === 'sorcerer' ? 0x5a4a7a : 0x9a3a28;
+  const roof = C.tile;
+  g.add(extrude([[-w / 2, 0], [w / 2, 0], [w / 2, h], [w * 0.3, h + h * 0.45], [0, h + h * 0.62], [-w * 0.3, h + h * 0.45], [-w / 2, h]], d, wall));
+  // the roof planes over the gambrel
+  const hh = h * 0.45, hh2 = h * 0.17;
+  for (const s2 of [-1, 1]) {
+    const lo = box(Math.hypot(w * 0.2, hh) + 0.2, 0.16, d + 0.5, roof, 0, 0, 0);
+    lo.rotation.z = -s2 * Math.atan2(hh, w * 0.2);
+    lo.position.set(s2 * w * 0.4, h + hh / 2, 0);
+    const hi = box(Math.hypot(w * 0.3, hh2) + 0.2, 0.16, d + 0.5, roof, 0, 0, 0);
+    hi.rotation.z = -s2 * Math.atan2(hh2, w * 0.3);
+    hi.position.set(s2 * w * 0.15, h + hh + hh2 / 2, 0);
+    g.add(lo, hi);
+  }
+  g.add(box(w * 0.4, h * 0.75, 0.12, C.dark, 0, 0, d / 2 + 0.02));
+  for (const s2 of [-1, 1]) {
+    const door = box(w * 0.2, h * 0.75, 0.1, darker(wall, 1.2), 0, 0, 0);
+    door.position.set(s2 * w * 0.3, 0, d / 2 + 0.4);
+    door.rotation.y = s2 * 0.9;
+    g.add(door);
+  }
+  g.add(box(w * 0.42, 0.1, 0.1, C.white, 0, h * 0.75, d / 2 + 0.08));
+  g.add(glowWindow(0, h + h * 0.3, d / 2 + 0.05));
+  return g;
+}
+
+/** A round granary of stone under a cone. */
+function granary(): THREE.Group {
+  const g = new THREE.Group();
+  g.add(cyl(1.4, 1.5, 4.2, C.stone, 10));
+  g.add(cone(1.8, 2.0, C.tile, 10, 0, 4.2));
+  g.add(box(0.8, 1.4, 0.1, C.door, 0, 0, 1.45));
+  return g;
 }
 
 function farm(t: number, r: () => number): Built {
   const g = new THREE.Group();
-  const fh = house({ w: 5.5, d: 4.2, h: 2.6, roofH: 2.2, roof: C.thatch, windows: 1 });
+  const th = getTheme();
+  // the farmhouse grows from a cottage to a stone farmstead
+  const fh = t >= 7
+    ? house({ w: 7, d: 5, h: 3.4, roofH: 2.6, roof: C.thatch, windows: 3, stone: true })
+    : house({ w: 4.6 + Math.min(3, t) * 0.4, d: 4.0, h: 2.5, roofH: 2.1, roof: C.thatch, windows: 1 });
   g.add(fh);
-  const fields = Math.min(8, t + 1);
-  const spots: [number, number][] = [[-8, -6], [0, -8], [8, -6], [-9, 3], [9, 3], [-4, -15], [5, -15], [13, -12]];
+  // fields, more and wider every level
+  // (laid out round the yard, clear of the barn, and all on the level ground)
+  const spots: [number, number][] = [[-8, -6], [0, -8.5], [8, -6], [-9.5, 3], [-4.5, -15.5], [4.5, -15.5], [13.5, -12], [15.5, -3.5], [-13.5, -12]];
+  const fields = Math.min(spots.length, t + 1);
+  const crop = (i: number): THREE.Group => {
+    // the fields are sown in the village's own way
+    if (th === 'sorcerer' && i % 3 === 1) return glowField(6.5, 5, r, VIO, VIO_EMIT);
+    if (th === 'necromancer' && i % 3 === 1) return pumpkinPatch(6.5, 5, r, true);
+    if (th === 'goblin' && i % 3 === 1) return shroomField(6.5, 5, r);
+    if (th === 'druid' && i % 3 === 1) return flowerField(6.5, 5, r);
+    if (th === 'paladin' && i % 3 === 1) return sunflowerField(6.5, 5, r);
+    if (i % 4 === 3) return pumpkinPatch(6.5, 5, r, false);
+    return wheatField(6.5, 5, r, i % 3 !== 2);
+  };
   for (let i = 0; i < fields; i++) {
-    const f = wheatField(6.5, 5, r, i % 3 !== 2);
+    const f = crop(i);
     f.position.set(spots[i][0], 0, spots[i][1]);
     f.rotation.y = (r() - 0.5) * 0.3;
     g.add(f);
   }
-  for (let i = 0; i < Math.min(5, 1 + t); i++) g.add(hayBale(4 + r() * 3, 3 + r() * 3, r() * 3));
-  for (let i = 0; i < 4; i++) g.add(pumpkin(-4 - r() * 2, 3 + r() * 2, 0.9 + r() * 0.3));
+  for (let i = 0; i < Math.min(6, 1 + t); i++) g.add(hayBale(0.5 + r() * 2.5, 5.6 + r() * 1.2, r() * 3));
+  for (let i = 0; i < 3; i++) g.add(pumpkin(-3.2 - r(), 5.4 + r(), 0.9 + r() * 0.3));
+  if (t >= 2) {
+    // a well in the yard
+    g.add(cyl(0.8, 0.85, 0.8, C.stone, 8, -3.2, 0, 3.8));
+    for (const x of [-3.8, -2.6]) g.add(box(0.12, 1.8, 0.12, C.timber, x, 0.8, 3.8));
+    g.add(box(1.5, 0.12, 0.12, C.timber, -3.2, 2.5, 3.8), cone(1.0, 0.7, C.thatch, 4, -3.2, 2.5, 3.8).rotateY(Math.PI / 4));
+  }
   if (t >= 3) {
     const wm = windmill();
-    wm.group.position.set(-13, 0, -4);
+    wm.group.position.set(-14, 0, -3.5);
     wm.group.rotation.y = 0.6;
     g.add(wm.group);
+  }
+  if (t >= 4) {
+    const b = barn(6, 7.5, 3.4);
+    b.position.set(10, 0, 2.5);
+    b.rotation.y = -Math.PI / 2;
+    g.add(b);
+  }
+  if (t >= 5) {
+    // a paddock of cattle
+    const pad = new THREE.Group();
+    for (const [x, z, rot, len] of [[0, 2.4, 0, 6.6], [0, -2.4, 0, 6.6], [3.3, 0, Math.PI / 2, 4.8], [-3.3, 0, Math.PI / 2, 4.8]] as [number, number, number, number][]) {
+      const fe = fence(len);
+      fe.position.set(x, 0, z);
+      fe.rotation.y = rot;
+      pad.add(fe);
+    }
+    for (let i = 0; i < 4; i++) pad.add(cow(i % 2 ? 0xf2efe6 : 0x6b4a32).translateX(-2 + i * 1.3).translateZ((i % 2 ? 1 : -1) * 0.8).rotateY(r() * 6));
+    pad.position.set(-7.5, 0, 7.5);
+    g.add(pad);
+  }
+  if (t >= 6) { const gr = granary(); gr.scale.setScalar(0.8); gr.position.set(-5, 0, -1.4); g.add(gr); }
+  if (t >= 8) {
+    // a second barn, the old farmhouse's byre
+    const b2 = barn(4.6, 5.2, 2.8);
+    b2.position.set(4.6, 0, -2.2);
+    b2.rotation.y = Math.PI;
+    g.add(b2);
   }
   const f2 = fence(10);
   f2.position.set(0, 0, 4.4);
   g.add(f2);
-  return { obj: g, h: 6, w: 8, d: 8 };
+  const post = themePost(2.6);
+  post.position.set(5.6, 0, 5.4);
+  g.add(post);
+  if (th === 'necromancer') {
+    // a skeleton keeps the crows off
+    const sc = new THREE.Group();
+    sc.add(box(0.1, 2.6, 0.1, C.timber), box(1.6, 0.1, 0.1, C.timber, 0, 1.9, 0));
+    const sk = skull(0.45);
+    sk.position.set(0, 2.55, 0);
+    sc.add(sk);
+    for (let i = 0; i < 4; i++) sc.add(box(0.6, 0.06, 0.06, 0xd8d0bc, 0, 1.3 + i * 0.16, 0.05));
+    sc.position.set(0, 0, -12);
+    g.add(sc);
+  }
+  if (th === 'druid') for (let i = 0; i < 3; i++) g.add(beehive().translateX(11 + i * 1.1).translateZ(7.5));
+  if (th === 'goblin') g.add(blob(1.6, 0x55462f, 11, 0.02, 8.5, 1.4, 0.08, 1), pig().translateX(10.4).translateZ(8.2), pig().translateX(11.8).translateZ(9.1).rotateY(2));
+  return { obj: g, h: 6 + (t >= 4 ? 2 : 0), w: 8, d: 8 };
+}
+
+/** A cow (or an ox), standing about. */
+function cow(color: number): THREE.Group {
+  const g = new THREE.Group();
+  g.add(box(0.6, 0.55, 1.2, color, 0, 0.55, 0));
+  g.add(box(0.36, 0.36, 0.42, color, 0, 0.85, 0.7));
+  for (const [x, z] of [[-0.2, 0.45], [0.2, 0.45], [-0.2, -0.45], [0.2, -0.45]]) g.add(box(0.12, 0.55, 0.12, darker(color, 1.3), x, 0, z));
+  g.add(box(0.5, 0.06, 0.06, 0xe8dcc0, 0, 1.05, 0.72));
+  return g;
+}
+
+function pig(): THREE.Group {
+  const g = new THREE.Group();
+  g.add(blob(0.4, 0xe8a0a0, 0, 0.4, 0, 1, 0.8, 1.4));
+  g.add(blob(0.22, 0xe8a0a0, 0, 0.45, 0.55));
+  for (const [x, z] of [[-0.18, 0.3], [0.18, 0.3], [-0.18, -0.3], [0.18, -0.3]]) g.add(box(0.1, 0.25, 0.1, 0xd08a8a, x, 0, z));
+  return g;
+}
+
+function beehive(): THREE.Group {
+  const g = new THREE.Group();
+  g.add(box(0.5, 0.5, 0.5, C.timber));
+  for (let i = 0; i < 3; i++) g.add(cyl(0.34 - i * 0.07, 0.36 - i * 0.07, 0.2, 0xd9a441, 8, 0, 0.5 + i * 0.2, 0));
+  return g;
+}
+
+/** Rows of crops whose tips glow at dusk (sorcerers' moon-wheat). */
+function glowField(w: number, d: number, r: () => number, c: number, e: number): THREE.Group {
+  const g = new THREE.Group();
+  g.add(box(w, 0.08, d, C.dirtDark));
+  for (let i = 0; i < 7; i++) for (let k = 0; k < 5; k++) {
+    const x = -w / 2 + 0.5 + i * ((w - 1) / 6), z = -d / 2 + 0.5 + k * ((d - 1) / 4);
+    g.add(box(0.12, 0.7, 0.12, 0x5f7568, x, 0.08, z));
+    const tip = mesh(new THREE.OctahedronGeometry(0.12, 0), c, { emissive: e });
+    tip.position.set(x, 0.85 + r() * 0.1, z);
+    g.add(tip);
+  }
+  return g;
+}
+
+function pumpkinPatch(w: number, d: number, r: () => number, ghostly: boolean): THREE.Group {
+  const g = new THREE.Group();
+  g.add(box(w, 0.08, d, C.dirtDark));
+  for (let i = 0; i < 9; i++) {
+    const p = pumpkin((r() - 0.5) * (w - 1), (r() - 0.5) * (d - 1), 0.9 + r() * 0.5);
+    g.add(p);
+    if (ghostly && i % 2 === 0) g.add(glowBit(new THREE.BoxGeometry(0.2, 0.1, 0.05), GHOST, GHOST_EMIT).translateX(p.position.x).translateY(0.35).translateZ(p.position.z + 0.3));
+  }
+  for (let i = 0; i < 6; i++) g.add(box(w * 0.9, 0.06, 0.1, 0x3f6a2a, 0, 0.08, -d / 2 + 0.6 + i * ((d - 1.2) / 5)));
+  return g;
+}
+
+function shroomField(w: number, d: number, r: () => number): THREE.Group {
+  const g = new THREE.Group();
+  g.add(box(w, 0.08, d, 0x55462f));
+  for (let i = 0; i < 16; i++) {
+    const x = (r() - 0.5) * (w - 0.8), z = (r() - 0.5) * (d - 0.8), s2 = 0.6 + r() * 0.7;
+    g.add(cyl(0.07 * s2, 0.09 * s2, 0.4 * s2, 0xefe6d0, 5, x, 0.08, z));
+    g.add(blob(0.24 * s2, i % 3 === 0 ? 0x9ac040 : 0xc0392b, x, 0.08 + 0.42 * s2, z, 1, 0.5, 1));
+  }
+  return g;
+}
+
+function flowerField(w: number, d: number, r: () => number): THREE.Group {
+  const g = new THREE.Group();
+  g.add(box(w, 0.08, d, 0x5a8a36));
+  const cols = [0xf2e46a, 0xf4f1e6, 0xb58cd8, 0xe88aa6, 0xe8a040];
+  for (let i = 0; i < 40; i++) g.add(blob(0.14, cols[i % cols.length], (r() - 0.5) * (w - 0.4), 0.2, (r() - 0.5) * (d - 0.4)));
+  return g;
+}
+
+function sunflowerField(w: number, d: number, r: () => number): THREE.Group {
+  const g = new THREE.Group();
+  g.add(box(w, 0.08, d, C.dirtDark));
+  for (let i = 0; i < 6; i++) for (let k = 0; k < 4; k++) {
+    const x = -w / 2 + 0.6 + i * ((w - 1.2) / 5), z = -d / 2 + 0.6 + k * ((d - 1.2) / 3);
+    const h = 1.2 + r() * 0.4;
+    g.add(box(0.08, h, 0.08, 0x4f7a2e, x, 0.08, z));
+    const head = mesh(new THREE.CylinderGeometry(0.26, 0.26, 0.06, 10).rotateX(1.2), 0xf2c21a);
+    head.position.set(x, h + 0.1, z + 0.06);
+    g.add(head);
+    g.add(mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.07, 8).rotateX(1.2), 0x5a3a1a).translateX(x).translateY(h + 0.12).translateZ(z + 0.09));
+  }
+  return g;
 }
 
 // ---------- hero headquarters ----------
@@ -978,6 +1521,354 @@ function sorcererHall(t: number): Built {
   return { obj: g, h: t === 3 ? 22 : t === 4 ? 25 : 28, w: 15, d: 16 };
 }
 
+// ---------- the Necropolis (necromancer headquarters): a crypt that grows into a keep with a bone dragon on it ----------
+
+const BONE_DK = 0xb9b19c, BLACK_STONE = 0x2e2a33, GRAVE_DARK = 0x0b0a0c;
+const Y_UP = new THREE.Vector3(0, 1, 0);
+
+/** A bone from a to b, thicker at a. */
+function boneSeg(a: THREE.Vector3, b: THREE.Vector3, r: number, color = BONE): THREE.Mesh {
+  const d = b.clone().sub(a);
+  const len = d.length();
+  const m = mesh(new THREE.CylinderGeometry(r * 0.78, r, len, 6), color);
+  m.position.copy(a).addScaledVector(d, 0.5);
+  m.quaternion.setFromUnitVectors(Y_UP, d.normalize());
+  return m;
+}
+
+/** Bones joined end to end through these points, a knuckle at every joint. */
+function boneChain(g: THREE.Group, pts: THREE.Vector3[], r0: number, r1 = r0): void {
+  for (let i = 0; i < pts.length - 1; i++) {
+    const r = r0 + ((r1 - r0) * i) / Math.max(1, pts.length - 2);
+    g.add(boneSeg(pts[i], pts[i + 1], r));
+    if (i > 0) g.add(blob(r * 1.25, BONE_DK, pts[i].x, pts[i].y, pts[i].z));
+  }
+}
+
+/** A frame along a curve at k: its tangent, the "up" across it, and the side. */
+function frameAt(curve: THREE.Curve<THREE.Vector3>, k: number) {
+  const p = curve.getPointAt(k), T = curve.getTangentAt(k).normalize();
+  let U = Y_UP.clone().sub(T.clone().multiplyScalar(T.y));
+  if (U.lengthSq() < 1e-4) U = new THREE.Vector3(1, 0, 0);
+  U.normalize();
+  const S = new THREE.Vector3().crossVectors(T, U).normalize();
+  return { p, T, U, S };
+}
+
+/** A backbone: vertebrae along a curve, a spine on each, tapering from r0 to r1. */
+function backbone(g: THREE.Group, pts: THREE.Vector3[], n: number, r0: number, r1: number, spikes = true): THREE.CatmullRomCurve3 {
+  const curve = new THREE.CatmullRomCurve3(pts);
+  let prev: THREE.Vector3 | null = null;
+  for (let i = 0; i <= n; i++) {
+    const k = i / n;
+    const { p, T, U } = frameAt(curve, k);
+    const r = r0 + (r1 - r0) * k;
+    // the cord of the spine joining each vertebra to the last
+    if (prev) g.add(boneSeg(prev, p, r * 0.5, BONE_DK));
+    prev = p.clone();
+    const v = mesh(new THREE.CylinderGeometry(r, r * 0.85, r * 1.5, 6), BONE);
+    v.position.copy(p);
+    v.quaternion.setFromUnitVectors(Y_UP, T);
+    g.add(v);
+    if (spikes) {
+      const sp = mesh(new THREE.ConeGeometry(r * 0.32, r * 1.7, 4).translate(0, r * 0.85, 0), BONE_DK);
+      sp.position.copy(p).addScaledVector(U, r * 0.7);
+      sp.quaternion.setFromUnitVectors(Y_UP, U.clone().addScaledVector(T, -0.35).normalize());
+      g.add(sp);
+    }
+  }
+  return curve;
+}
+
+/** A dragon's skull, facing +Z: long snout, open jaw full of teeth, swept-back horns, eyes burning green. */
+function dragonSkull(sz: number): THREE.Group {
+  const g = new THREE.Group();
+  g.add(blob(0.8 * sz, BONE, 0, 0, 0, 1.1, 0.85, 1.25));
+  g.add(box(0.9 * sz, 0.48 * sz, 1.7 * sz, BONE, 0, -0.18 * sz, 1.3 * sz).translateZ(0));
+  g.add(box(0.7 * sz, 0.3 * sz, 0.6 * sz, BONE_DK, 0, 0.22 * sz, 1.9 * sz));
+  const jaw = box(0.78 * sz, 0.2 * sz, 1.7 * sz, BONE_DK, 0, 0, 0);
+  jaw.geometry.translate(0, 0, 0.85 * sz);
+  jaw.position.set(0, -0.42 * sz, 0.35 * sz);
+  jaw.rotation.x = 0.42;
+  g.add(jaw);
+  for (let i = 0; i < 6; i++) {
+    for (const x of [-0.36, 0.36]) {
+      const tooth = cone(0.06 * sz, 0.28 * sz, 0xf4efe0, 4);
+      tooth.rotation.x = Math.PI;
+      tooth.position.set(x * sz, -0.4 * sz, (0.75 + i * 0.25) * sz);
+      g.add(tooth);
+    }
+  }
+  for (const x of [-1, 1]) {
+    const socket = mesh(new THREE.IcosahedronGeometry(0.2 * sz, 0), GHOST, { emissive: GHOST_EMIT });
+    socket.position.set(x * 0.42 * sz, 0.12 * sz, 0.72 * sz);
+    g.add(socket);
+    // horns sweeping back
+    const h1 = cone(0.2 * sz, 1.9 * sz, BONE_DK, 6);
+    h1.position.set(x * 0.5 * sz, 0.35 * sz, -0.35 * sz);
+    h1.rotation.set(-2.0, 0, -x * 0.35);
+    g.add(h1);
+    const h2 = cone(0.12 * sz, 1.0 * sz, BONE_DK, 5);
+    h2.position.set(x * 0.72 * sz, 0.05 * sz, -0.2 * sz);
+    h2.rotation.set(-1.8, 0, -x * 0.9);
+    g.add(h2);
+  }
+  return g;
+}
+
+/** A bone wing (x outward on this side): arm and finger bones with torn, dark membrane between. */
+function boneWing(side: number, sz: number, base: number, amp: number): THREE.Group {
+  const g = new THREE.Group();
+  const P = (x: number, y: number, z: number) => new THREE.Vector3(x * side * sz, y * sz, z * sz);
+  const shoulder = P(0, 0, 0), elbow = P(2.2, 1.3, -0.5), wrist = P(4.3, 2.1, 0.1);
+  const tips = [P(7.6, 3.2, -0.7), P(7.5, 1.0, -1.3), P(6.3, -0.9, -1.5), P(4.4, -1.7, -1.3)];
+  boneChain(g, [shoulder, elbow, wrist], 0.2 * sz, 0.14 * sz);
+  for (const tp of tips) g.add(boneSeg(wrist, tp, 0.08 * sz));
+  g.add(cone(0.12 * sz, 0.6 * sz, BONE_DK, 4).translateX(wrist.x).translateY(wrist.y).translateZ(wrist.z));
+  // the membrane: a fan from the wrist, scalloped and torn between the fingers
+  const pts: number[] = [];
+  const tri = (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3) => pts.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z);
+  for (let i = 0; i < tips.length - 1; i++) {
+    const mid = tips[i].clone().lerp(tips[i + 1], 0.5).lerp(wrist, i === 1 ? 0.45 : 0.28);
+    tri(wrist, tips[i], mid);
+    tri(wrist, mid, tips[i + 1]);
+  }
+  const flank = P(0.5, -1.1, -0.9);
+  tri(wrist, tips[tips.length - 1], flank);
+  tri(shoulder, wrist, flank);
+  tri(shoulder, elbow, wrist);
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+  geo.computeVertexNormals();
+  g.add(mesh(geo, 0x2c3a30, { opacity: 0.72, double: true }));
+  g.userData.dynamic = true;
+  g.userData.wing = side;
+  g.userData.wingBase = base;
+  g.userData.wingAmp = amp;
+  return g;
+}
+
+/** A skeletal dragon crouched on a tower top (origin at its feet), facing +Z. */
+function boneDragon(sz: number, spread: boolean): THREE.Group {
+  const g = new THREE.Group();
+  const P = (x: number, y: number, z: number) => new THREE.Vector3(x * sz, y * sz, z * sz);
+  // backbone from the root of the tail to the shoulders, then the neck up to the head
+  const body = backbone(g, [P(0, 0.9, -2.4), P(0, 1.35, -1.2), P(0, 1.55, 0), P(0, 1.45, 1.1)], 9, 0.26 * sz, 0.3 * sz);
+  backbone(g, [P(0, 1.45, 1.1), P(0, 2.3, 1.7), P(0, 3.3, 2.0), P(0, 3.95, 2.55)], 8, 0.24 * sz, 0.17 * sz);
+  const head = dragonSkull(0.95 * sz);
+  head.position.copy(P(0, 4.05, 2.75));
+  head.rotation.x = 0.38;
+  g.add(head);
+  // the ribcage, and soul-fire burning green inside it
+  const ribs = 6;
+  for (let i = 0; i < ribs; i++) {
+    const k = 0.25 + (0.6 * i) / (ribs - 1);
+    const { p, U, S } = frameAt(body, k);
+    const R = (0.95 - Math.abs(i - (ribs - 1) / 2) * 0.1) * sz;
+    for (const side of [-1, 1]) {
+      const pts: THREE.Vector3[] = [];
+      for (let j = 0; j <= 4; j++) {
+        const a = 0.2 + j * 0.56;
+        pts.push(p.clone().addScaledVector(S, side * R * Math.sin(a)).addScaledVector(U, R * (Math.cos(a) - 1) * 1.05));
+      }
+      boneChain(g, pts, 0.085 * sz, 0.06 * sz);
+    }
+  }
+  const soul = new THREE.Group();
+  soul.add(mesh(new THREE.IcosahedronGeometry(0.42 * sz, 1), GHOST, { emissive: GHOST_EMIT }));
+  soul.add(mesh(new THREE.IcosahedronGeometry(0.75 * sz, 1), GHOST, { emissive: GHOST_EMIT, opacity: 0.22 }));
+  soul.userData.dynamic = true;
+  soul.userData.bob = 0.12 * sz;
+  soul.userData.orbit = 0.9;
+  soul.position.copy(P(0, 0.85, -0.3));
+  g.add(soul);
+  // legs: forefeet gripping the parapet, hind legs crouched
+  for (const x of [-1, 1]) {
+    const fore = [P(x * 0.65, 1.15, 0.9), P(x * 1.25, 0.55, 1.35), P(x * 1.3, 0.05, 1.85), P(x * 1.35, -0.15, 2.3)];
+    boneChain(g, fore, 0.17 * sz, 0.12 * sz);
+    const hind = [P(x * 0.6, 1.0, -1.9), P(x * 1.45, 1.1, -1.1), P(x * 1.35, 0.3, -1.85), P(x * 1.4, -0.1, -1.4)];
+    boneChain(g, hind, 0.2 * sz, 0.13 * sz);
+    for (const [foot, dz] of [[fore[3], 1], [hind[3], 1]] as [THREE.Vector3, number][]) {
+      for (let c = -1; c <= 1; c++) {
+        const claw = cone(0.06 * sz, 0.42 * sz, 0x2a2622, 4);
+        claw.position.copy(foot).add(new THREE.Vector3(c * 0.14 * sz, 0, 0.05 * sz * dz));
+        claw.rotation.x = 1.9;
+        g.add(claw);
+      }
+    }
+  }
+  // wings from the shoulders: folded and drooping, or spread and slowly beating
+  for (const side of [-1, 1]) {
+    const w = boneWing(side, sz * (spread ? 1 : 0.8), spread ? 0.15 : -0.55, spread ? 0.2 : 0.06);
+    w.position.copy(P(side * 0.55, 1.75, 0.55));
+    if (!spread) w.rotation.y = side * 0.6;
+    g.add(w);
+  }
+  return g;
+}
+
+/** A column of stacked skulls: an ossuary pillar. */
+function skullColumn(n: number, s2 = 0.62): THREE.Group {
+  const g = new THREE.Group();
+  g.add(box(0.9, 0.3, 0.9, BLACK_STONE));
+  for (let i = 0; i < n; i++) {
+    const sk = skull(s2);
+    sk.position.set(0, 0.62 + i * s2 * 0.98, 0);
+    sk.rotation.y = (i % 2 ? 0.3 : -0.3);
+    g.add(sk);
+  }
+  g.add(box(1.0, 0.25, 1.0, BLACK_STONE, 0, 0.35 + n * s2 * 0.98, 0));
+  return g;
+}
+
+/** An iron basket of green soul-fire on a post. */
+function soulBrazier(h: number): THREE.Group {
+  const g = new THREE.Group();
+  g.add(cyl(0.08, 0.12, h, BLACK_STONE, 5));
+  g.add(cyl(0.45, 0.25, 0.45, BLACK_STONE, 7, 0, h));
+  const fire = cone(0.34, 0.9, GHOST, 6, 0, h + 0.35);
+  fire.material = mat(GHOST, { emissive: GHOST_EMIT });
+  fire.userData.fire = true;
+  g.add(fire);
+  return g;
+}
+
+function necroHall(t: number): Built {
+  const g = new THREE.Group();
+  if (t === 1) {
+    // a crypt: a black-roofed mausoleum behind pillars, a skull over its door, the dead in rows before it
+    g.add(box(5.4, 0.5, 6.4, BLACK_STONE, 0, 0, -0.2));
+    const crypt = house({ w: 4.4, d: 5.2, h: 3.2, roofH: 2.0, stone: true, windows: 0, door: false });
+    crypt.position.set(0, 0.5, -0.4);
+    g.add(crypt);
+    for (const x of [-1.7, -0.6, 0.6, 1.7]) g.add(cyl(0.22, 0.26, 3.0, C.stoneLight, 8, x, 0.5, 2.5));
+    g.add(box(4.4, 0.5, 0.7, C.stone, 0, 3.5, 2.5));
+    g.add(box(1.3, 2.2, 0.2, GRAVE_DARK, 0, 0.5, 2.25));
+    const sk = skull(0.9);
+    sk.position.set(0, 3.2, 2.9);
+    g.add(sk);
+    for (let i = 0; i < 6; i++) g.add(box(0.7, 1.0 + (i % 2) * 0.3, 0.2, C.stone, -3.8 + (i % 2) * 7.6, 0, -2 + Math.floor(i / 2) * 1.8));
+    for (const x of [-2.9, 2.9]) { const b = soulBrazier(1.6); b.position.set(x, 0, 3.4); g.add(b); }
+    return { obj: g, h: 9, w: 8, d: 8 };
+  }
+  if (t === 2) {
+    // a chapel of bones: a black chapel, a needle-spired bell tower, ossuary pillars and a gate of bone
+    const chapel = house({ w: 5.6, d: 8, h: 3.4, roofH: 2.4, stone: true, windows: 2 });
+    chapel.position.set(0.8, 0, -0.6);
+    g.add(chapel);
+    const tw = new THREE.Group();
+    tw.add(box(2.6, 8, 2.6, C.stone));
+    tw.add(box(3.0, 0.4, 3.0, BLACK_STONE, 0, 8, 0));
+    tw.add(cone(2.0, 5.2, C.slate, 4, 0, 8.4).rotateY(Math.PI / 4));
+    tw.add(cone(0.08, 1.2, C.iron, 4, 0, 13.6));
+    tw.add(glowBit(new THREE.BoxGeometry(0.4, 1.1, 0.1), GHOST, GHOST_EMIT).translateY(6).translateZ(1.32));
+    const sk = skull(0.8);
+    sk.position.set(0, 4.6, 1.5);
+    tw.add(sk);
+    tw.position.set(-3.6, 0, 1.6);
+    g.add(tw);
+    for (const x of [-1.6, 3.2]) { const c = skullColumn(4); c.position.set(x, 0, 4.6); g.add(c); }
+    // an arch of bones over the path, a skull for its keystone
+    const arch: THREE.Vector3[] = [];
+    for (let i = 0; i <= 6; i++) { const a = Math.PI * (i / 6); arch.push(new THREE.Vector3(0.8 - Math.cos(a) * 2.4, 3.2 + Math.sin(a) * 1.6, 4.6)); }
+    boneChain(g, arch, 0.16);
+    const ks = skull(0.6);
+    ks.position.set(0.8, 5.0, 4.8);
+    g.add(ks);
+    return { obj: g, h: 16, w: 13, d: 13 };
+  }
+  // the Bone Keep: a black tower behind a hall whose door is the mouth of a giant skull, rib buttresses along it
+  const H = t === 3 ? 12 : t === 4 ? 13 : 14.5;
+  const R = t === 3 ? 2.4 : 2.7;
+  const keep = new THREE.Group();
+  keep.add(cyl(R * 1.15, R * 1.22, 0.9, BLACK_STONE, 10));
+  keep.add(cyl(R * 0.9, R, H, C.stone, 10));
+  for (const k of [0.3, 0.6]) {
+    const band = mesh(new THREE.CylinderGeometry(R * (1 - k * 0.1) + 0.03, R * (1 - k * 0.1) + 0.03, 0.16, 14, 1, true), GHOST, { emissive: GHOST_EMIT, double: true });
+    band.position.y = H * k;
+    keep.add(band);
+  }
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2 + 0.3;
+    for (const k of [0.45, 0.75]) {
+      const rr = R * (1 - k * 0.1) + 0.02;
+      const slit = glowBit(new THREE.BoxGeometry(0.28, 1.1, 0.1), GHOST, GHOST_EMIT);
+      slit.position.set(Math.sin(a) * rr, H * k, Math.cos(a) * rr);
+      slit.rotation.y = a;
+      keep.add(slit);
+    }
+  }
+  keep.add(cyl(R * 1.02, R * 0.88, 0.5, BLACK_STONE, 10, 0, H - 0.4));
+  keep.add(merlonRing(R * 0.95, H + 0.1, 10, BLACK_STONE, 0.5));
+  if (t === 3) {
+    keep.add(cone(R * 1.02, R * 3.1, C.slate, 8, 0, H + 0.3));
+    keep.add(cone(0.08, 1.4, C.iron, 4, 0, H + 0.3 + R * 3.1));
+    const sk = skull(0.9);
+    sk.position.set(0, H + 1.4, R * 0.75);
+    keep.add(sk);
+  }
+  keep.position.set(0, 0, -3.2);
+  g.add(keep);
+  const hall = house({ w: 8, d: 5, h: 4.4, roofH: 2.4, stone: true, windows: 3, door: false });
+  hall.position.set(0, 0, 1.4);
+  g.add(hall);
+  // the skull gate: the hall's door is the mouth of a great skull
+  const gate = skull(2.5);
+  gate.position.set(0, 3.1, 3.7);
+  g.add(gate);
+  g.add(box(1.7, 2.4, 0.35, GRAVE_DARK, 0, 0, 4.05));
+  for (let i = 0; i < 5; i++) { const tooth = cone(0.13, 0.5, 0xf4efe0, 4, -0.8 + i * 0.4, 2.45, 4.35); tooth.rotation.x = Math.PI; g.add(tooth); }
+  for (const x of [-1, 1]) {
+    const tw = roundTower(1.2, 7, {});
+    tw.position.set(x * 4.6, 0, 3.4);
+    g.add(tw);
+    // rib buttresses along the hall's flanks
+    for (const z of [0.1, 2.5]) boneChain(g, [new THREE.Vector3(x * 5.7, 0, z), new THREE.Vector3(x * 5.4, 2.4, z), new THREE.Vector3(x * 4.9, 3.8, z), new THREE.Vector3(x * 4.1, 4.4, z)], 0.24, 0.16);
+    const br = soulBrazier(1.5);
+    br.position.set(x * 2.2, 0, 5.5);
+    g.add(br);
+  }
+  if (t >= 4) {
+    // the dragon: crouched on the keep, its tail coiled down round the tower
+    const sz = t === 5 ? 1.25 : 1.0;
+    const dragon = boneDragon(sz, t === 5);
+    dragon.position.set(0, H + 0.15, -3.2);
+    g.add(dragon);
+    const tail: THREE.Vector3[] = [new THREE.Vector3(0, H + 0.15 + 0.9 * sz, -3.2 - 2.4 * sz)];
+    const turns = 1.15, steps = 10;
+    for (let i = 1; i <= steps; i++) {
+      const k = i / steps;
+      const a = -Math.PI / 2 - k * turns * Math.PI * 2;
+      const rr = R * 1.0 + 0.45 - k * 0.15;
+      tail.push(new THREE.Vector3(Math.cos(a) * rr, H - 0.4 - k * (H * 0.55), -3.2 + Math.sin(a) * rr));
+    }
+    backbone(g, tail, 40, 0.24 * sz, 0.08 * sz);
+    const end = tail[tail.length - 1];
+    const barb = cone(0.22, 0.9, BONE_DK, 4, end.x, end.y, end.z);
+    barb.rotation.z = Math.PI;
+    g.add(barb);
+  }
+  if (t === 5) {
+    // lost souls wheel about the keep
+    const wisps = new THREE.Group();
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      const w = new THREE.Group();
+      w.add(mesh(new THREE.IcosahedronGeometry(0.28, 1), GHOST, { emissive: GHOST_EMIT }));
+      w.add(mesh(new THREE.ConeGeometry(0.22, 0.9, 6).rotateX(-Math.PI / 2).translate(0, 0, -0.5), GHOST, { emissive: GHOST_EMIT, opacity: 0.4 }));
+      w.position.set(Math.cos(a) * 5.4, (i % 3) * 1.6, Math.sin(a) * 5.4);
+      w.rotation.y = -a;
+      wisps.add(w);
+    }
+    wisps.userData.dynamic = true;
+    wisps.userData.orbit = 0.5;
+    wisps.userData.bob = 0.5;
+    wisps.position.set(0, H * 0.5, -3.2);
+    g.add(wisps);
+  }
+  return { obj: g, h: t === 3 ? 22 : t === 4 ? 24 : 28, w: 15, d: 16 };
+}
+
 function glowWindow(x: number, y: number, z: number, ry = 0): THREE.Group {
   const g = new THREE.Group();
   const w = cyl(0.32, 0.32, 0.12, C.window, 8);
@@ -1400,6 +2291,25 @@ function themedWatchtower(t: number, theme: Theme): Built {
     const fire = glowBit(new THREE.IcosahedronGeometry(0.5, 0), 0x5cff9a, 0x1f9a4a);
     fire.position.set(0, py + 1.0, 0);
     g.add(fire, cyl(0.55, 0.35, 0.5, 0x2e2a33, 6, 0, py + 0.2, 0));
+    // a cloud of bats wheels about the top of the tower
+    const flock = new THREE.Group();
+    for (let i = 0; i < 7; i++) {
+      const a = (i / 7) * Math.PI * 2;
+      const bat = new THREE.Group();
+      bat.add(blob(0.14, 0x1a161c, 0, 0, 0, 0.8, 0.8, 1.2));
+      for (const side of [-1, 1]) {
+        const wing = new THREE.Group();
+        wing.add(box(0.42, 0.03, 0.26, 0x241e26, side * 0.21, 0, 0));
+        wing.userData.flap = side;
+        bat.add(wing);
+      }
+      bat.position.set(Math.cos(a) * (2.4 + (i % 2) * 0.8), py + 2.6 + (i % 3) * 0.9, Math.sin(a) * (2.4 + (i % 2) * 0.8));
+      bat.rotation.y = -a;
+      flock.add(bat);
+    }
+    flock.userData.dynamic = true;
+    flock.userData.orbit = -1.1;
+    g.add(flock);
   }
   if (theme === 'paladin') {
     // a belfry over the lookout: four posts, a blue spire and the alarm bell
@@ -1485,6 +2395,16 @@ function themedStatue(theme: Theme): Built {
     const fire = glowBit(new THREE.IcosahedronGeometry(0.2, 0), 0x5cff9a, 0x1f9a4a);
     fire.position.set(0.8, 3.55, 0.1);
     fig.add(fire);
+    const wisps = new THREE.Group();
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2;
+      wisps.add(mesh(new THREE.IcosahedronGeometry(0.16, 1), GHOST, { emissive: GHOST_EMIT }).translateX(Math.cos(a) * 1.7).translateY((i % 2) * 0.6).translateZ(Math.sin(a) * 1.7));
+    }
+    wisps.userData.dynamic = true;
+    wisps.userData.orbit = -0.8;
+    wisps.userData.bob = 0.25;
+    wisps.position.y = 3.6;
+    g.add(wisps);
   } else {
     fig.add(cyl(0.45, 0.55, 1.3, bronze, 7));
     fig.add(blob(0.42, bronze, 0, 1.6, 0));
