@@ -896,6 +896,16 @@ const paths: Record<string, () => JSX.Element> = {
       <path d="m12 6.4 1.3 2.7 3 .4-2.2 2.1.5 3L12 13.2l-2.6 1.4.5-3-2.2-2.1 3-.4Z" fill={GOLD} stroke-width=".7" />
     </Ink>
   ),
+  manager: () => (
+    <Ink>
+      <path d="M4.2 2.6h11.6l3.2 3.2v15.6H4.2Z" fill="#f3e2bd" />
+      <path d="M15.8 2.6v3.2H19" fill="#d9c28f" />
+      <path d="m6.4 8 1.1 1.1 2-2.2M6.4 12.4l1.1 1.1 2-2.2M6.4 16.8l1.1 1.1 2-2.2" fill="none" stroke="#4c7524" stroke-width="1.3" />
+      <path d="M11 8.6h5.4M11 13h5.4M11 17.4h3.6" stroke="#8a6a2a" stroke-width="1.2" />
+      <path d="m16.6 14.6 5 5-1.6 1.6-5-5Z" fill="#8b5a2b" />
+      <path d="m13.6 12.4 3.4-1.6 2 2-1.6 3.4-1.4-1.4-1.4 1.4-1.4-1.4 1.4-1.4Z" fill={STEEL} />
+    </Ink>
+  ),
   rank: () => (
     <Ink>
       <rect x="2.4" y="12.6" width="6" height="8.4" fill={STEEL} />

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { navOrder, saveNavOrder } from './navOrder';
 import { Icon } from './art/icons';
 import { Clock, unitName } from './components/common';
-import { coords, continent, fmt, fmtDur } from './format';
+import { QUADRANT_NAME, coords, fmt, fmtDur, quadrant } from './format';
 import { BuildingScreen } from './screens/BuildingScreen';
 import { MapScreen } from './screens/MapScreen';
 import { NewsScreen } from './screens/NewsScreen';
@@ -15,6 +15,7 @@ import { ReportsScreen } from './screens/ReportsScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { TitleScreen } from './screens/TitleScreen';
 import { VillageScreen } from './screens/VillageScreen';
+import { ManagerScreen } from './screens/ManagerScreen';
 import { GameOver } from './screens/GameOver';
 import {
   PaneCtx, applyTheme, dismissToast, host, liveRes, now, online, paused, resumeSucceeded, setPaused, setSplit, setWarp, sidePane, split, swapPanes, toasts, view, warp,
@@ -109,6 +110,7 @@ function PaneView() {
       {r.name === 'ranking' && <RankingScreen player={r.player} />}
       {r.name === 'quests' && <QuestsScreen />}
       {r.name === 'overviews' && <OverviewsScreen />}
+      {r.name === 'manager' && <ManagerScreen />}
       {r.name === 'settings' && <SettingsScreen />}
       {r.name === 'news' && <NewsScreen />}
       {r.name === 'realm' && <RealmScreen />}
@@ -124,6 +126,7 @@ const SIDE_SCREENS: { label: string; r: Route }[] = [
   { label: 'Reports', r: { name: 'reports' } },
   { label: 'Quests', r: { name: 'quests' } },
   { label: 'Overview', r: { name: 'overviews' } },
+  { label: 'Village manager', r: { name: 'manager' } },
   { label: 'Tribe', r: { name: 'tribe' } },
   { label: 'Rankings', r: { name: 'ranking' } },
   { label: 'Realm', r: { name: 'realm' } },
@@ -204,7 +207,7 @@ function Header() {
             <span class="vname">{cur.name}</span>
           )}
           <span class="vcoords">
-            {coords(cur.x, cur.y)} · {continent(cur.x, cur.y)} · <span class="num">{fmt(cur.points)}</span> pts
+            {coords(cur.x, cur.y)} · <span title={`${QUADRANT_NAME[quadrant(cur.x, cur.y, v.config.size)]} quadrant`}>{quadrant(cur.x, cur.y, v.config.size)}</span> · <span class="num">{fmt(cur.points)}</span> pts
           </span>
         </div>
         {list.length > 1 && (
@@ -287,6 +290,7 @@ function Nav() {
     { r: { name: 'reports' }, icon: 'report', label: 'Reports', key: 'reports', badge: v.unreadReports },
     { r: { name: 'quests' }, icon: 'quest', label: 'Quests', key: 'quests', badge: claimable },
     { r: { name: 'overviews' }, icon: 'overview', label: 'Overview', key: 'overviews' },
+    { r: { name: 'manager' }, icon: 'manager', label: 'Manager', key: 'manager' },
     { r: { name: 'tribe' }, icon: 'tribe', label: 'Tribe', key: 'tribe', badge: v.tribeInvites + (v.tribeApplications ?? 0) || undefined, glow: v.forumUnread.length > 0 },
     { r: { name: 'ranking' }, icon: 'rank', label: 'Rankings', key: 'ranking' },
     { r: { name: 'realm' }, icon: 'star', label: 'Realm', key: 'realm' },

@@ -329,6 +329,8 @@ export interface Player {
   dailyAwards?: DailyAward[];
   /** tribe forum: thread id -> last post id this ruler has read */
   forumSeen?: Record<number, number>;
+  /** the village manager: build and army templates, and which village follows which */
+  manager?: import('./manager').ManagerState;
 }
 
 /** What a tribe member may do, as in Tribal Wars. */
@@ -373,7 +375,7 @@ export interface Tribe {
   forum?: ForumThread[];
 }
 
-export type GameEventType = 'build' | 'arrive' | 'research' | 'ai' | 'barb' | 'scav' | 'item' | 'sample' | 'end';
+export type GameEventType = 'build' | 'arrive' | 'research' | 'ai' | 'barb' | 'scav' | 'item' | 'sample' | 'end' | 'mgr';
 
 export interface GameEvent {
   t: number;

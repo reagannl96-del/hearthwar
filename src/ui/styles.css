@@ -1421,3 +1421,31 @@ button.realm-row:hover { background: var(--surface-2); border-color: var(--line)
 .nav-split { margin-left: auto; }
 .split-glyph { font-size: 17px; line-height: 1; }
 .shell.is-split { max-width: none; }
+
+/* ---------- quadrant leaderboards ---------- */
+.quad-pick { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; max-width: 420px; }
+.quad-btn { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 12px; border: 1px solid var(--line-strong); border-radius: 4px; background: var(--parch-hi); color: var(--ink); cursor: pointer; text-align: left; }
+.quad-btn b { font: 700 1.1rem var(--font-display); }
+.quad-btn.is-active { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+
+/* ---------- village manager ---------- */
+.mgr-lede { max-width: 72ch; margin: 0; }
+.mgr-table select { max-width: 180px; }
+.mgr-table tr.is-paused td { opacity: 0.6; }
+.mgr-status { display: grid; gap: 3px; min-width: 150px; }
+.mgr-all { margin-top: 10px; align-items: center; }
+.mgr-grid { display: grid; grid-template-columns: minmax(200px, 280px) minmax(0, 1fr); gap: 12px; align-items: start; }
+@media (max-width: 760px) { .mgr-grid { grid-template-columns: 1fr; } }
+.mgr-list { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 4px; }
+.mgr-item { width: 100%; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--parch-hi); color: var(--ink); cursor: pointer; text-align: left; }
+.mgr-item.is-active { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+.mgr-name { display: flex; align-items: center; gap: 8px; font-weight: 700; }
+.mgr-name input { flex: 1; max-width: 320px; }
+.mgr-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.mgr-steps li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 4px 6px; border-bottom: 1px solid var(--line); }
+.mgr-steps li > .num { width: 2ch; text-align: right; }
+.mgr-step-btns { margin-left: auto; display: flex; gap: 2px; }
+.mgr-units { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 6px 12px; }
+.mgr-unit { display: grid; grid-template-columns: 22px 1fr 90px; align-items: center; gap: 6px; }
+.mgr-savebar { position: sticky; bottom: 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 12px; background: var(--parch-hi); border: 1px solid var(--accent); border-radius: 6px; box-shadow: var(--shadow); }
+.mgr-savebar span { flex: 1; }

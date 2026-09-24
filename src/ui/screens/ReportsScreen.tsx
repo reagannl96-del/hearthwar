@@ -161,6 +161,9 @@ function ShareReport({ r }: { r: Report }) {
 /** A report as it appears inside a forum post. */
 export function SharedReportCard({ r }: { r: SharedReport }) {
   const [open, setOpen] = useState(false);
+  const [watching, setWatching] = useState(false);
+  // a battle with fighting in it can be watched, whoever shared it
+  const watchable = !!r.battle && (Object.values(r.battle.attUnits ?? {}).some((n) => (n ?? 0) > 0));
   const loot = r.battle?.loot ? r.battle.loot.wood + r.battle.loot.clay + r.battle.loot.iron : 0;
   return (
     <article class={`rep-card rep-${r.color} shared-report`}>
@@ -174,9 +177,11 @@ export function SharedReportCard({ r }: { r: SharedReport }) {
         <div class="shared-body">
           {r.text && <p class="rep-text">{r.text}</p>}
           {r.res && <span class="cost">{(['wood', 'clay', 'iron'] as ResKey[]).map((k) => <Res k={k} n={r.res![k]} />)}</span>}
+          {watchable && <div class="rep-watch"><Btn small onClick={() => setWatching(true)}>⚔ Watch the battle</Btn></div>}
           {r.battle && <Battle b={r.battle} kind={r.kind} shared />}
         </div>
       )}
+      {watching && r.battle && <AttackViewer r={{ id: -Math.round(r.t % 1e9), t: r.t, kind: r.kind, title: r.title, color: r.color, read: true, battle: r.battle }} onClose={() => setWatching(false)} />}
     </article>
   );
 }

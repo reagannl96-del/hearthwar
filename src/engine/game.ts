@@ -13,6 +13,7 @@ import { peekEvent, popEvent, pushEvent } from './events';
 import { addUnits, unitsPop } from './formulas';
 import { replenishExchange } from './market';
 import { dropFromTribe } from './tribes';
+import { runManager } from './manager';
 import { nextRandom, pick } from './rng';
 import type { Command, GameEvent, Player, UnitId, Village, World } from './types';
 import { RES_KEYS } from './types';
@@ -189,6 +190,12 @@ export function processEvent(w: World, e: GameEvent): void {
       pushEvent(w, 'sample', w.now + sampleInterval(w), 0);
       break;
     case 'item': paladinItem(w, e); break;
+    case 'mgr': {
+      const p = w.players[e.a];
+      // only the manager's own scheduled look (a stale one from an earlier save is dropped)
+      if (p?.manager && p.manager.tickAt === e.t) runManager(w, p);
+      break;
+    }
     case 'end': finishRound(w); break;
   }
 }

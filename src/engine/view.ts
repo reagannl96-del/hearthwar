@@ -109,6 +109,8 @@ export interface PlayerView {
     tribeId: number | null;
     /** the village this ruler started from (white halo on the map) */
     homeVid: number | null;
+    /** the village manager's templates and assignments */
+    manager: import('./manager').ManagerState | null;
   };
   villages: VillageView[];
   /** tribe invitations waiting for me */
@@ -261,6 +263,7 @@ export function buildView(w: World, pid: number): PlayerView {
       history: p.history,
       tribeId: p.tribeId,
       homeVid: p.villages[0] ?? null,
+      manager: p.manager ? JSON.parse(JSON.stringify(p.manager)) : null,
     },
     villages,
     tribeInvites: invitesFor(w, pid).length,

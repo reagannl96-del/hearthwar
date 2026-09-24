@@ -19,6 +19,7 @@ export type Route =
   | { name: 'reports'; id?: number }
   | { name: 'ranking'; player?: number }
   | { name: 'quests' }
+  | { name: 'manager' }
   | { name: 'overviews' }
   | { name: 'settings' }
   | { name: 'news' }
@@ -50,6 +51,7 @@ export function isNightNow(p: Prefs): boolean {
 }
 
 export const host = signal<HostBase | null>(null);
+if (import.meta.env.DEV && typeof window !== 'undefined') (window as unknown as { __host: unknown }).__host = host;
 export const view = signal<PlayerView | null>(null);
 export const now = signal(0);
 export const vid = signal(0);

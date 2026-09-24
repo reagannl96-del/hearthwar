@@ -19,6 +19,7 @@ import {
 import { claimQuest } from './quests';
 import { exchangeQuote } from './market';
 import { restartPlayer } from './world';
+import { setManager } from './manager';
 import {
   acceptInvite, cancelInvite, createTribe, declineInvite, disbandTribe, editTribe, forumDelete, forumNewThread, forumPin, forumReply,
   invitePlayer, kickMember, leaveTribe, setDiplomacy, setRights, forumRead,
@@ -70,7 +71,8 @@ export type Action =
   | { type: 'forumReply'; thread: number; text: string; report?: number }
   | { type: 'forumDelete'; thread: number; post?: number }
   | { type: 'forumPin'; thread: number; sticky: boolean }
-  | { type: 'forumRead'; thread: number };
+  | { type: 'forumRead'; thread: number }
+  | { type: 'manager'; manager: unknown };
 
 const fail = (error: string): ActionResult => ({ ok: false, error });
 
@@ -467,6 +469,12 @@ export function applyAction(w: World, pid: number, a: Action): ActionResult {
   // once the round is over the realm is frozen: reports, notes and the tribe forum still work
   if (w.finished && !AFTER_ROUND.has(a.type)) return fail('This round is over. A new realm opens soon.');
   switch (a.type) {
+    case 'manager': {
+      const p = w.players[pid];
+      if (!p || p.kind !== 'human') return fail('Only rulers can use the village manager.');
+      setManager(w, p, a.manager);
+      return { ok: true };
+    }
     case 'build': return build(w, pid, a.vid, a.building);
     case 'demolish': return demolish(w, pid, a.vid, a.building);
     case 'cancelBuild': return cancelBuild(w, pid, a.vid, a.job);

@@ -48,6 +48,11 @@ export function fmtAgo(t: number, gameNow: number): string {
 export const coords = (x: number, y: number) => `${x}|${y}`;
 export const continent = (x: number, y: number) => `K${Math.floor(y / 10)}${Math.floor(x / 10)}`;
 
+/** The realm is split into four quadrants about its middle: NW, NE, SW and SE. */
+export type Quadrant = 'NW' | 'NE' | 'SW' | 'SE';
+export const quadrant = (x: number, y: number, size: number): Quadrant => `${y < size / 2 ? 'N' : 'S'}${x < size / 2 ? 'W' : 'E'}` as Quadrant;
+export const QUADRANT_NAME: Record<Quadrant, string> = { NW: 'North-west', NE: 'North-east', SW: 'South-west', SE: 'South-east' };
+
 export function interpRes(res: Res, rates: Res, cap: number, resAt: number, t: number): Res {
   const h = Math.max(0, t - resAt) / 3600_000;
   const f = (v: number, r: number) => (v >= cap ? v : Math.min(cap, v + r * h));

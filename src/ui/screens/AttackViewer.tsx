@@ -84,7 +84,7 @@ export function AttackViewer({ r, onClose }: { r: Report; onClose: () => void })
     <div class="battle-viewer" role="dialog" aria-modal="true" aria-label={`The attack on ${b.defender.vname}`}>
       <header class="battle-viewer-bar">
         <div class="grow">
-          <b>⚔ Your attack on {b.defender.vname}</b>
+          <b>⚔ {b.attacker.playerId === view.value?.me.id ? 'Your attack' : `${b.attacker.playerName}'s attack`} on {b.defender.vname}</b>
           <span class="muted small"> ({b.defender.x}|{b.defender.y}) · {b.defender.playerName}</span>
         </div>
         <Btn small variant="ghost" onClick={() => vr.current?.watchBattle()}>Follow the fight</Btn>

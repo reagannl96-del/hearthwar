@@ -8,7 +8,7 @@ import { forestSprite, lookOfHero, onVillageArt, villageSprite, villageStage } f
 import { isVolcanic, isWinter } from '../../engine/world';
 import { Icon } from '../art/icons';
 import { Btn, UnitList, UnitIcon, unitName } from '../components/common';
-import { coords, continent, fmt, fmtAgo, fmtDur, parseCoords } from '../format';
+import { coords, fmt, fmtAgo, fmtDur, parseCoords, quadrant } from '../format';
 import { TribeTag } from './TribeScreen';
 import { MARK_COLORS, markFor, marks, setMark, useWorldMarks, type Marks } from '../mapMarks';
 import { act, host, marketTarget, now, rallyTarget, view, warp, usePane } from '../store';
@@ -198,7 +198,26 @@ export function MapScreen({ focus }: { focus?: number }) {
       ctx.font = `600 ${Math.min(14, 6 + z * 0.25)}px system-ui, sans-serif`;
       for (let cy2 = Math.floor(fy0 / 10) * 10; cy2 <= fy1; cy2 += 10)
         for (let cx2 = Math.floor(fx0 / 10) * 10; cx2 <= fx1; cx2 += 10)
-          ctx.fillText(`K${cy2 / 10}${cx2 / 10}`, sx(cx2) + 4, sy(cy2) + 14);
+          void cx2;
+    }
+    // the quadrant lines through the middle of the realm, and each quadrant's name
+    {
+      const mid = data.size / 2;
+      ctx.strokeStyle = col['--map-grid'];
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(Math.round(sx(mid)) + 0.5, sy(fy0)); ctx.lineTo(Math.round(sx(mid)) + 0.5, sy(fy1 + 1));
+      ctx.moveTo(sx(fx0), Math.round(sy(mid)) + 0.5); ctx.lineTo(sx(fx1 + 1), Math.round(sy(mid)) + 0.5);
+      ctx.stroke();
+      ctx.lineWidth = 1;
+      ctx.fillStyle = col['--map-grid'];
+      ctx.font = `700 ${Math.min(18, 8 + z * 0.35)}px system-ui, sans-serif`;
+      for (const [qx, qy, q] of [[mid - 1, mid - 1, 'NW'], [mid + 1, mid - 1, 'NE'], [mid - 1, mid + 1, 'SW'], [mid + 1, mid + 1, 'SE']] as [number, number, string][]) {
+        const px = sx(qx), py = sy(qy);
+        ctx.textAlign = qx < mid ? 'right' : 'left';
+        ctx.fillText(q, px, qy < mid ? py - 4 : py + 14);
+      }
+      ctx.textAlign = 'left';
     }
     // villages: every island first (back to front), then every marker on top, so a
     // big island never hides its neighbour's flag, tribe ring or selection
@@ -392,7 +411,7 @@ export function MapScreen({ focus }: { focus?: number }) {
     ctx.fillRect(0, S - 16, S, 16);
     ctx.fillStyle = '#f3e3bd';
     ctx.font = '600 11px system-ui, sans-serif';
-    ctx.fillText(`${continent(Math.floor(center[0]), Math.floor(center[1]))} · ${coords(Math.floor(center[0]), Math.floor(center[1]))}`, 6, S - 5);
+    ctx.fillText(`${quadrant(Math.floor(center[0]), Math.floor(center[1]), data.size)} · ${coords(Math.floor(center[0]), Math.floor(center[1]))}`, 6, S - 5);
   };
 
   useEffect(() => {
@@ -501,7 +520,7 @@ export function MapScreen({ focus }: { focus?: number }) {
             <button type="button" class="icon-btn" aria-label="Zoom out" onClick={() => setZoomAround(zoom / 1.4)}>−</button>
             <button type="button" class="icon-btn" aria-label="Zoom in" onClick={() => setZoomAround(zoom * 1.4)}>+</button>
           </div>
-          <span class="muted small num">{coords(Math.floor(center[0]), Math.floor(center[1]))} · {continent(Math.floor(center[0]), Math.floor(center[1]))}</span>
+          <span class="muted small num">{coords(Math.floor(center[0]), Math.floor(center[1]))} · {quadrant(Math.floor(center[0]), Math.floor(center[1]), data.size)}</span>
         </div>
         <div class="map-wrap" ref={wrap}>
           <canvas
@@ -642,7 +661,7 @@ function HoverCard({ v, data, x, y, mine, home }: { v: MapVillage; data: MapData
       </div>
       <div class="mh-meta">
         <span><Icon name="points" size={12} /> <b class="num">{fmt(v.points)}</b></span>
-        <span class="num">{coords(v.x, v.y)} · {continent(v.x, v.y)}</span>
+        <span class="num">{coords(v.x, v.y)} · {quadrant(v.x, v.y, view.value!.config.size)}</span>
         {v.bonus && <span class="mh-bonus">bonus</span>}
       </div>
     </div>
@@ -715,7 +734,7 @@ function VillagePanel({ v, data, onClose }: { v: MapVillage; data: MapData; onCl
       <header>
         <button type="button" class="icon-btn map-info-close" aria-label="Close" onClick={onClose}><Icon name="close" size={14} /></button>
         <h3>{v.name}</h3>
-        <div class="muted small">{coords(v.x, v.y)} · {continent(v.x, v.y)} · <span class="num">{fmt(v.points)}</span> points</div>
+        <div class="muted small">{coords(v.x, v.y)} · {quadrant(v.x, v.y, view.value!.config.size)} · <span class="num">{fmt(v.points)}</span> points</div>
       </header>
       <dl class="facts">
         <dt>Ruler</dt>
