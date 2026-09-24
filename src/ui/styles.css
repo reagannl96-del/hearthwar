@@ -1859,3 +1859,7 @@ button.realm-row:hover { background: var(--surface-2); border-color: var(--line)
   .bb-mode { order: -1; width: 100%; display: flex; }
   .bb-mode button { flex: 1; }
 }
+
+/* map: which movement lines to draw */
+.map-lines { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; }
+.map-lines select { font-size: 0.85rem; padding: 2px 6px; }

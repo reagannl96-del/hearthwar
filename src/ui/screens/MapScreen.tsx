@@ -12,7 +12,7 @@ import { loadFarmTemplates, tplName } from '../farmTemplates';
 import { coords, fmt, fmtAgo, fmtDur, parseCoords, quadrant } from '../format';
 import { TribeTag } from './TribeScreen';
 import { MARK_COLORS, markFor, marks, setMark, useWorldMarks, type Marks } from '../mapMarks';
-import { act, host, marketTarget, now, rallyTarget, view, warp, usePane } from '../store';
+import { act, host, marketTarget, now, prefs, rallyTarget, setPrefs, view, warp, usePane } from '../store';
 
 const TERRAIN_COLORS: Record<string, [string, string]> = {
   '.': ['--map-grass', '--map-grass-2'],
@@ -351,8 +351,16 @@ export function MapScreen({ focus, at }: { focus?: number; at?: [number, number]
     // movements
     const t = now.value;
     const lines = [...pv.commands, ...pv.incoming];
+    const lineMode = prefs.value.mapLines ?? 'all';
     for (const c of lines) {
       if (c.kind === 'tradeback' || c.kind === 'trade') continue;
+      // your own movements can be thinned out (a busy farmer's map is all dots); incoming attacks always show
+      if (c.dir === 'out' && lineMode !== 'all') {
+        if (lineMode === 'off') continue;
+        const targetVid = c.kind === 'return' ? c.origin : c.toVid;
+        const tgt = targetVid !== undefined ? byId.get(targetVid) : undefined;
+        if ((c.kind === 'attack' || c.kind === 'return') && (c.tag === 'farm' || (tgt && tgt.ownerId === null))) continue;
+      }
       const from = c.kind === 'return' ? byId.get(c.origin ?? c.toVid) : byId.get(c.fromVid);
       const to = c.kind === 'return' ? byId.get(c.fromVid) : byId.get(c.toVid);
       if (!from || !to) continue;
@@ -575,6 +583,14 @@ export function MapScreen({ focus, at }: { focus?: number; at?: [number, number]
             <button type="button" class="icon-btn" aria-label="Zoom in" onClick={() => setZoomAround(zoom * 1.4)}>+</button>
           </div>
           <span class="muted small num">{coords(Math.floor(center[0]), Math.floor(center[1]))} · {quadrant(Math.floor(center[0]), Math.floor(center[1]), data.size)}</span>
+          <label class="map-lines muted small" title="Which of your own troop movements the map draws. Incoming attacks always show.">
+            Lines
+            <select value={prefs.value.mapLines ?? 'all'} onChange={(e) => setPrefs({ mapLines: (e.currentTarget as HTMLSelectElement).value as 'all' | 'noFarm' | 'off' })}>
+              <option value="all">All movements</option>
+              <option value="noFarm">Hide farm runs</option>
+              <option value="off">Only incoming</option>
+            </select>
+          </label>
         </div>
         <div class="map-wrap" ref={wrap}>
           <canvas

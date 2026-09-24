@@ -73,6 +73,19 @@ function SendRes() {
   const cap = free * carry;
   const maxFor = (k: ResKey) => Math.max(0, Math.min(Math.floor(res[k]), cap - (total - Number(amt[k] || 0))));
   const horseName = unitName('trader', true, theme);
+  // fill the merchants' room evenly across the three resources (a resource running short
+  // leaves its share to the others), or all the stock if it doesn't fill them
+  const evenSplit = () => {
+    const out: Record<ResKey, number> = { wood: 0, clay: 0, iron: 0 };
+    let room = cap;
+    const byStock = [...KEYS].sort((a, b) => res[a] - res[b]);
+    byStock.forEach((k, i) => {
+      const give = Math.max(0, Math.min(Math.floor(res[k]), Math.floor(room / (byStock.length - i))));
+      out[k] = give;
+      room -= give;
+    });
+    setAmt(out);
+  };
   return (
     <div class="grid-2">
       <Section title="Goods">
@@ -97,6 +110,10 @@ function SendRes() {
             <NumInput id={`trade-${k}`} value={amt[k]} max={maxFor(k)} onInput={(n) => setAmt({ ...amt, [k]: n })} />
           </label>
         ))}
+        <div class="row gap send-fill">
+          <Btn small variant="ghost" disabled={cap <= 0} onClick={evenSplit} title="Split what the merchants can carry evenly between wood, clay and iron">Even split</Btn>
+          <Btn small variant="quiet" disabled={total === 0} onClick={() => setAmt({ wood: '', clay: '', iron: '' })}>Clear</Btn>
+        </div>
         <p class={`small ${need > free ? 'reason' : 'muted'}`}>
           Needs <b class="num">{need}</b> of {free} {horse ? horseName.toLowerCase() : 'merchants'} · room for <span class="num">{fmt(cap)}</span>
         </p>

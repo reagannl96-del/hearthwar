@@ -41,6 +41,8 @@ export interface Prefs {
   confirmAttacks: boolean;
   /** 3D village detail: 'auto' picks by the device */
   quality: 'auto' | 'low' | 'medium' | 'high';
+  /** which of your own movements the map draws: all of them, all but farm runs, or none (incoming attacks always show) */
+  mapLines: 'all' | 'noFarm' | 'off';
 }
 
 /** A day in the realm lasts two hours of server time; the last third of it is night. */
@@ -84,7 +86,7 @@ export const warp = signal(1);
 export const rallyTarget = signal<{ x: number; y: number; kind?: 'attack' | 'support'; units?: Record<string, number> } | null>(null);
 export const marketTarget = signal<{ x: number; y: number } | null>(null);
 
-const defaultPrefs: Prefs = { sound: true, notify: false, theme: 'system', confirmAttacks: false, quality: 'auto' };
+const defaultPrefs: Prefs = { sound: true, notify: false, theme: 'system', confirmAttacks: false, quality: 'auto', mapLines: 'all' };
 function loadPrefs(): Prefs {
   try {
     const { season: _s, sceneTime: _t, ...saved } = JSON.parse(lsGet('hw-prefs') ?? '{}');
