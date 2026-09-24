@@ -247,6 +247,10 @@ export interface AIState {
   lost?: Record<number, number>;
   /** village it sent support to -> where from and when */
   support?: Record<number, { from: number; at: number }>;
+  /** conquests in a row, each soon after the last (a ruler on a roll) */
+  streak?: number;
+  /** setbacks lately: failed conquests and villages lost (it takes longer to try again) */
+  cold?: number;
   /** when this ruler last sent scouts round the neighbours */
   lastScoutRound?: number;
   /** what the attacks on this ruler were made of lately (population by class), to recruit the counter */
@@ -296,6 +300,8 @@ export interface AIState {
 
 /** A ruler's own habits, on top of its temperament. */
 export interface AITraits {
+  /** the version of the rules these were drawn under (older ones are drawn again) */
+  v?: number;
   /** hours it rests between one conquest and the next (plus a little for every village it already holds) */
   patienceH: number;
   /** how many fields it will march to take a village */

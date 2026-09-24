@@ -194,8 +194,20 @@ export function aiAwake(w: World, p: Player): boolean {
   const cycle = diff === 'hard' ? 85 : diff === 'easy' ? 130 : 105;
   const t = minute + p.id * 37;
   const session = Math.floor(t / cycle);
-  const len = 30 + (((session * 2654435761 + p.id * 40503) >>> 0) % 26);
+  const len = (30 + (((session * 2654435761 + p.id * 40503) >>> 0) % 26)) * activityOf(p);
   return t % cycle < len;
+}
+
+/**
+ * How much of a dedicated player's time this ruler puts in: some are at it every
+ * spare minute, some are casual and look in now and then (0.5 to 1.15, the same for
+ * a ruler all round; warlords and opportunists lean keen, defenders lean casual).
+ */
+export function activityOf(p: Player): number {
+  const base = 0.5 + (((p.id * 2654435761) >>> 0) % 1000) / 1000 * 0.62;
+  const pers = p.ai?.personality;
+  const lean = pers === 'warlord' || pers === 'opportunist' ? 0.12 : pers === 'turtle' || pers === 'guardian' ? -0.08 : 0;
+  return Math.max(0.5, Math.min(1.15, base + lean));
 }
 
 /**
@@ -471,7 +483,7 @@ const NOBLES_WANTED = 6;
 
 type Span = [number, number];
 /** hours between conquests */
-const PATIENCE: Record<P, Span> = { warlord: [4, 6], expander: [3, 5], farmer: [6, 10], turtle: [9, 14], opportunist: [4, 7], guardian: [8, 12] };
+const PATIENCE: Record<P, Span> = { warlord: [2.5, 5], expander: [2.5, 4.5], farmer: [7, 12], turtle: [15, 26], opportunist: [3, 6], guardian: [11, 18] };
 /** fields a ruler will march to take a village */
 const REACH: Record<P, Span> = { warlord: [16, 22], expander: [14, 20], farmer: [12, 16], turtle: [10, 14], opportunist: [15, 20], guardian: [11, 15] };
 const HELPER: Record<P, number> = { warlord: 0.3, expander: 0.4, farmer: 0.35, turtle: 0.8, opportunist: 0.15, guardian: 1 };
@@ -479,16 +491,20 @@ const FAKER: Record<P, number> = { warlord: 0.6, expander: 0.3, farmer: 0.2, tur
 const CAUTION: Record<P, Span> = { warlord: [1.1, 1.3], expander: [1.2, 1.4], farmer: [1.3, 1.5], turtle: [1.4, 1.7], opportunist: [1.2, 1.4], guardian: [1.4, 1.6] };
 const BARB_FIRST: Record<P, number> = { warlord: 0.3, expander: 0.7, farmer: 0.8, turtle: 0.9, opportunist: 0.15, guardian: 0.9 };
 
+const TRAITS_V = 2;
+
 /** A ruler's own habits, drawn once from its temperament (so no two warlords are quite alike). */
 export function traitsOf(w: World, p: Player): AITraits {
   const ai = p.ai!;
-  if (!ai.traits) {
+  if (!ai.traits || ai.traits.v !== TRAITS_V) {
     const pers = ai.personality;
     const between = ([lo, hi]: Span) => lo + nextRandom(w) * (hi - lo);
     const diff = w.config.difficulty;
     const pace = diff === 'hard' ? 0.7 : diff === 'easy' ? 1.5 : diff === 'peaceful' ? 2 : 1;
     ai.traits = {
-      patienceH: Math.round(between(PATIENCE[pers]) * pace * 10) / 10,
+      v: TRAITS_V,
+      // and an appetite of its own on top: some are hungrier than their kind, some lazier
+      patienceH: Math.round(between(PATIENCE[pers]) * pace * (0.65 + nextRandom(w) * 0.9) * 10) / 10,
       reach: Math.round(between(REACH[pers])),
       helper: Math.min(1, Math.max(0, HELPER[pers] + (nextRandom(w) - 0.5) * 0.3)),
       faker: nextRandom(w) < FAKER[pers],
@@ -552,8 +568,10 @@ function attackHero(v: Village): UnitId | null {
  * be read and planned against:
  *
  *  - It starts as soon as it has a nobleman at home and has rested since its last
- *    conquest: its patience (3 to 14 hours by temperament), half as long again for
- *    every village it already holds, as a person has more and more to look after.
+ *    conquest: its patience (a couple of hours for the hungriest warlords, a day or
+ *    more for the most careful defenders), half as long again for every village it
+ *    already holds (three quarters again for each), as a person has more and more to look after. A ruler on a
+ *    winning streak rests less, one that keeps failing or losing rests more.
  *  - It picks a village within its reach (10 to 22 fields): a barbarian village of
  *    100 points or more, or a player's village (people's too, their first one
  *    included) that is out of beginner protection, not in its tribe and not an ally
@@ -576,10 +594,26 @@ const INTEL_FRESH = 45 * MIN;
 
 function campaignReady(w: World, p: Player): boolean {
   if (recentLoss(w, p) !== null) return true;
-  const last = p.ai!.lastCampaignEnd;
+  const ai = p.ai!;
+  const last = ai.lastCampaignEnd;
   if (last === undefined) return true;
-  const gapH = traitsOf(w, p).patienceH * (1 + 0.5 * Math.max(0, p.villages.length - 1));
-  return w.now - last >= gapH * 3_600_000;
+  return w.now - last >= campaignGapH(w, p) * 3_600_000;
+}
+
+/**
+ * Hours of rest before the next conquest: the ruler's patience, three quarters as
+ * long again for every village it holds, shorter on a winning streak (a bully on a
+ * roll, from the third day on), longer after setbacks, and never under three hours
+ * (twelve at the realm's start, easing down over the first two days).
+ */
+export function campaignGapH(w: World, p: Player): number {
+  const ai = p.ai!;
+  // (streaks only count once the opening is over)
+  const hot = w.now < 3 * DAY_MS ? 1 : Math.pow(0.8, Math.min(3, ai.streak ?? 0));
+  const cold = 1 + 0.4 * Math.min(4, ai.cold ?? 0);
+  // the opening is slow for everyone: nobody snowballs before the realm has found its feet
+  const floor = Math.max(3, 12 - 4 * (w.now / DAY_MS));
+  return Math.max(floor, traitsOf(w, p).patienceH * (1 + 0.75 * Math.max(0, p.villages.length - 1)) * hot * cold);
 }
 
 /** A village taken from this ruler in the last few hours, still in someone else's hands. */
@@ -595,6 +629,15 @@ function endCampaign(w: World, p: Player, taken: boolean): void {
   const ai = p.ai!;
   const c = ai.campaign;
   if (!c) return;
+  if (taken) {
+    // another one soon after the last: the streak grows; a long pause lets it cool
+    const recent = ai.lastCampaignEnd !== undefined && w.now - ai.lastCampaignEnd < campaignGapH(w, p) * 3_600_000 * 2.5;
+    ai.streak = recent ? (ai.streak ?? 0) + 1 : 1;
+    ai.cold = Math.max(0, (ai.cold ?? 0) - 1);
+  } else if (c.waves > 0) {
+    ai.streak = Math.max(0, (ai.streak ?? 0) - 1);
+    ai.cold = (ai.cold ?? 0) + 1;
+  }
   if (!taken) (ai.avoid ??= {})[c.target] = w.now + 3 * 60 * MIN;
   ai.campaign = undefined;
   // a campaign that never sent a nobleman costs no rest
@@ -761,8 +804,14 @@ function campaignDrive(w: World, p: Player): void {
   const blindNeed = target.ownerId === null ? 600 + target.points * 2 : 2500 + target.points * 3;
   const wins = hasUnits(clear) && sim.winner === 'attacker' && sim.attStrength >= sim.defStrength * t.caution
     && (known !== undefined || sim.attStrength >= blindNeed);
-  if (!wins && !emptyish) {
-    // too strong for this army: find something else (and come back to it another day)
+  let helpers: { v: Village; units: Units }[] | null = null;
+  if (!wins && !emptyish && known !== undefined) {
+    // too strong for the noble village's army alone: our other villages clear it, landing just ahead of the noblemen
+    const joint = gatherArmies(w, p, home, target, clear, t.caution);
+    helpers = joint ? joint.filter((j) => j.v.id !== home.id) : null;
+  }
+  if (!wins && !emptyish && !helpers?.length) {
+    // too strong for us: find something else (and come back to it another day)
     endCampaign(w, p, false);
     return;
   }
@@ -771,7 +820,16 @@ function campaignDrive(w: World, p: Player): void {
   const waves: Units[] = [];
   if (hasUnits(clear)) waves.push(clear);
   for (let i = 0; i < count; i++) waves.push({ noble: 1, ...escort });
-  const cat = (clear.catapult ?? 0) > 0 ? pickCatTarget(intel?.buildings) : undefined;
+  // catapults only ever go for the wall: nobody wrecks the village they are about to own
+  const cat = (clear.catapult ?? 0) > 0 && wall > 0 ? 'wall' as BuildingId : undefined;
+  if (!cat) delete clear.catapult;
+  // the helpers must be able to land a little ahead of the train
+  if (helpers?.length) {
+    const trainTime = Math.max(...waves.map((u) => travelTime(w, home, target, u, p.id)));
+    const land = w.now + trainTime - 1500;
+    if (helpers.some((hlp) => w.now + travelTime(w, hlp.v, target, hlp.units, p.id) > land)) { endCampaign(w, p, false); return; }
+    if (!launchTogether(w, p, target, helpers, 'wall', land)) { endCampaign(w, p, false); return; }
+  }
   const ok = waves.length >= 2
     ? sendTrain(w, p.id, home.id, target.id, waves, cat).ok
     : sendTroops(w, { ownerId: p.id, fromVid: home.id, toVid: target.id, kind: 'attack', units: waves[0], tag: 'train' }).ok;
@@ -1306,7 +1364,13 @@ function strike(w: World, p: Player, v: Village, target: Village, army: Units): 
     wall, luck: 0, morale: moraleAgainst(w, p, target),
   });
   if (!mayHit(w, p, target.ownerId)) return;
-  if (sim.winner !== 'attacker' || sim.attStrength < sim.defStrength * margin) { ai.avoid![target.id] = w.now + WAR_WAIT.tooStrong; return; }
+  if (sim.winner !== 'attacker' || sim.attStrength < sim.defStrength * margin) {
+    // too much for this army alone: armies from our other villages, landing together, might do it
+    const joint = gatherArmies(w, p, v, target, army, margin);
+    if (joint && launchTogether(w, p, target, joint, pickCatTarget(intel.buildings))) { noteHit(w, p, target); return; }
+    ai.avoid![target.id] = w.now + WAR_WAIT.tooStrong;
+    return;
+  }
   if (commandsTo(w, v.id).some((c) => c.kind === 'attack' && c.ownerId !== p.id && c.arrive - w.now < think * 6)) return;
   const send = { ...army };
   if (wall === 0) delete send.ram;
@@ -1323,6 +1387,67 @@ function strike(w: World, p: Player, v: Village, target: Village, army: Units): 
   const cost = unitWorth(sim.attLost);
   if (gain < 1500 || gain < cost * 0.8) { ai.avoid![target.id] = w.now + WAR_WAIT.notWorth; return; }
   if (sendTroops(w, { ownerId: p.id, fromVid: v.id, toVid: target.id, kind: 'attack', units: send, catTarget: cat, tag: 'war' }).ok) noteHit(w, p, target);
+}
+
+/**
+ * A combined strike, the way players time one: when a single village's army can't
+ * win, the offensive armies of our other villages within reach are added, strongest
+ * first (at most four villages in all), until the battle would be won with the
+ * margin we want. Null when even all of them together would not do it.
+ */
+function gatherArmies(w: World, p: Player, lead: Village, target: Village, leadArmy: Units, margin: number): { v: Village; units: Units }[] | null {
+  const ai = p.ai!;
+  const intel = p.intel[target.id];
+  const wall = intel?.buildings?.wall ?? intel?.wall ?? 0;
+  const reach = traitsOf(w, p).reach;
+  const others = p.villages
+    .map((id) => w.villages[id])
+    .filter((o): o is Village => !!o && o.id !== lead.id && o.buildings.rally > 0 && ai.campaign?.from !== o.id
+      && warVillage(w, p, o) && distance(o.x, o.y, target.x, target.y) <= reach
+      && !commandsTo(w, o.id).some((c) => c.kind === 'attack' && c.ownerId !== p.id))
+    .map((o) => ({ v: o, units: offensiveArmy(o) }))
+    .filter((x) => attackValue(x.units) > 0)
+    .sort((a, b) => attackValue(b.units) - attackValue(a.units));
+  const picked: { v: Village; units: Units }[] = hasUnits(leadArmy) ? [{ v: lead, units: leadArmy }] : [];
+  const total: Units = { ...leadArmy };
+  for (const o of others) {
+    if (picked.length >= 4) break;
+    picked.push(o);
+    for (const k in o.units) total[k as UnitId] = (total[k as UnitId] ?? 0) + (o.units[k as UnitId] ?? 0);
+    if (wall === 0) delete total.ram;
+    const sim = resolveBattle({
+      att: total, attTech: lead.tech, attItem: null, defStacks: [{ units: intel?.units ?? {}, tech: {} }], defItems: [],
+      wall, luck: 0, morale: moraleAgainst(w, p, target),
+    });
+    if (sim.winner === 'attacker' && sim.attStrength >= sim.defStrength * margin) return picked.length > 1 ? picked : null;
+  }
+  return null;
+}
+
+/**
+ * Send armies from several villages so they land together (the slowest sets the
+ * time; the others wait to leave). `before` makes them all land that long before a
+ * given moment instead, as a clearing wave ahead of a noble train. False if any
+ * could not get there in time.
+ */
+function launchTogether(w: World, p: Player, target: Village, armies: { v: Village; units: Units }[], cat?: BuildingId, landBy?: number): boolean {
+  const legs = armies.map((a) => {
+    const units = { ...a.units };
+    if ((units.catapult ?? 0) === 0) delete units.catapult;
+    return { ...a, units, dur: travelTime(w, a.v, target, units, p.id) };
+  });
+  const slowest = Math.max(...legs.map((l) => l.dur));
+  const land = landBy ?? w.now + slowest + 60_000;
+  if (legs.some((l) => w.now + l.dur > land)) return false;
+  let sent = 0;
+  legs.forEach((l, i) => {
+    const r = sendTroops(w, {
+      ownerId: p.id, fromVid: l.v.id, toVid: target.id, kind: 'attack', units: l.units,
+      catTarget: (l.units.catapult ?? 0) > 0 ? cat : undefined, arriveAt: land + i * 150, tag: 'war',
+    });
+    if (r.ok) sent++;
+  });
+  return sent > 0;
 }
 
 /** The morale our troops would fight with against this village (a much smaller player's people fight harder). */
@@ -1369,6 +1494,17 @@ function pickWarTarget(w: World, p: Player, v: Village): Village | null {
     if (mateCampaignOn(w, p, t.id)) score += 60;
     const intel = p.intel[t.id];
     if (intel?.lastColor === 'red' && w.now - (intel.lastAttackT ?? 0) < aiThinkInterval(w) * 30) score -= 80;
+    // what our reports say (if they are recent): an army we can beat, and something to carry home
+    const seenAt = Math.max(intel?.scoutT ?? 0, intel?.lastAttackT ?? 0);
+    if (intel?.units && w.now - seenAt < 3 * 3_600_000) {
+      const army = offensiveArmy(v);
+      const sim = resolveBattle({
+        att: army, attTech: v.tech, attItem: null, defStacks: [{ units: intel.units, tech: {} }], defItems: [],
+        wall: intel.buildings?.wall ?? intel.wall ?? 0, luck: 0, morale: moraleAgainst(w, p, t),
+      });
+      score += sim.winner === 'attacker' ? 25 : -40;
+      if (intel.res) score += Math.min(20, (intel.res.wood + intel.res.clay + intel.res.iron) / 5000);
+    }
     if (score > bestScore) { bestScore = score; best = t; }
   }
   return best;
@@ -1382,6 +1518,9 @@ export function aiOnConquest(w: World, v: Village, oldOwner: number | null, newO
   const op = oldOwner !== null ? w.players[oldOwner] : undefined;
   if (op?.ai) {
     // the first loss starts the clock; losing it again the same day does not restart the counter-attack
+    // losing a village breaks a streak
+    op.ai.streak = 0;
+    op.ai.cold = (op.ai.cold ?? 0) + 1;
     const lost = (op.ai.lost ??= {});
     if (lost[v.id] === undefined || w.now - lost[v.id] > DAY_MS) lost[v.id] = w.now;
     op.ai.targetPlayer = newOwner;

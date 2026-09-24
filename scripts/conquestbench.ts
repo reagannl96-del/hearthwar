@@ -49,6 +49,7 @@ const finished = { taken: 0, given: 0, wavesToTake: [] as number[] };
 
 const reinforceDay = Number(process.env.REINFORCE_DAY || 0), reinforceTo = Number(process.env.REINFORCE_TO || 0);
 const newcomers = new Set<number>();
+const gains = new Map<number, string[]>();
 for (let h = 1; h <= days * 24; h++) {
   if (reinforceDay && h === reinforceDay * 24) {
     const before = new Set(Object.keys(w.players).map(Number));
@@ -93,6 +94,7 @@ for (let h = 1; h <= days * 24; h++) {
       const by = v.ownerId !== null ? w.players[v.ownerId] : undefined;
       const prev = was === null || was === undefined ? undefined : w.players[was];
       if (by) {
+        (gains.get(by.id) ?? gains.set(by.id, []).get(by.id)!).push(`${(h / 24).toFixed(2)}${prev ? (prev.kind === 'ai' ? 'A' : 'H') : 'b'}`);
         if (!prev) taken.barb++;
         else if (prev.kind === 'ai') taken.ai++;
         else { taken.human++; (humanHits[prev.name] ??= { attacks: 0, nobles: 0, fakes: 0, lost: 0 }).lost++; }
@@ -112,6 +114,8 @@ for (let h = 1; h <= days * 24; h++) {
     const inCampaign = list.filter((p) => p.ai!.campaign).length;
     const villages = list.reduce((a, p) => a + p.villages.length, 0);
     console.log(`-- day ${h / 24}: ${list.length} AIs, ${villages} villages (${(villages / list.length).toFixed(1)} each), ${nob} noblemen home, ${inCampaign} campaigning now | taken: ${taken.barb} barb, ${taken.ai} AI, ${taken.human} human | noble waves ${tally.trains}, fakes ${tally.fakes}, help ${tally.help}, scouts ${tally.scouts}, war ${tally.war}`);
+    if (h === 48) { const top = [...list].sort((a, b) => b.villages.length - a.villages.length)[0]; console.log(`   fastest: ${top.name} (${top.ai!.personality}) ${top.villages.length}v gains ${(gains.get(top.id) ?? []).join(' ')} traits ${JSON.stringify(top.ai!.traits)}`); }
+    { const c = list.filter((p) => !p.eliminated).map((p) => p.villages.length).sort((a, b) => a - b); const q = (x: number) => c[Math.min(c.length - 1, Math.floor(x * c.length))]; console.log(`   spread: min ${c[0]} 25% ${q(0.25)} median ${q(0.5)} 75% ${q(0.75)} 90% ${q(0.9)} max ${c[c.length - 1]}`); }
     console.log(`   heroes at home: ${JSON.stringify(heroes)}`);
     if (process.env.WHY) for (const hp of humans.filter((_, i) => i % 2 === 0)) { const hv = w.villages[hp.villages[0]]; if (!hv) continue; const why: Record<string, number> = {}; for (const a of ais()) { if (!a.villages.some((id) => { const x = w.villages[id]; return x && distance(x.x, x.y, hv.x, hv.y) <= 22; })) continue; const r = campaignVerdict(w, a, hv).replace(/d+/g, '#'); why[r] = (why[r] ?? 0) + 1; } console.log(`   why not ${hp.name}: ${JSON.stringify(why)}`); }
     if (newcomers.size) { const nc = [...newcomers].map((id) => w.players[id]); console.log(`   newcomers: ${nc.filter((p) => p.villages.length > 0).length}/${nc.length} still standing, ${nc.reduce((a, p) => a + p.villages.length, 0)} villages, avg ${Math.round(nc.reduce((a, p) => a + p.points, 0) / nc.length)} pts`); }
@@ -126,6 +130,9 @@ void finished;
 // how the round ended: the biggest rulers, and how each temperament fared
 {
   const list = ais().filter((p) => !p.eliminated).sort((a, b) => b.points - a.points);
+  const counts = list.map((p) => p.villages.length).sort((a, b) => a - b);
+  const q = (x: number) => counts[Math.min(counts.length - 1, Math.floor(x * counts.length))];
+  console.log(`== villages per ruler: min ${counts[0]}, 25% ${q(0.25)}, median ${q(0.5)}, 75% ${q(0.75)}, 90% ${q(0.9)}, max ${counts[counts.length - 1]}`);
   console.log('== top rulers: ' + list.slice(0, 6).map((p) => `${p.name} (${p.ai!.personality}, ${p.ai!.hero ?? '-'}) ${p.villages.length}v ${Math.round(p.points / 1000)}k`).join(' | '));
   const by: Record<string, { n: number; v: number; pts: number; dead: number }> = {};
   for (const p of ais()) {

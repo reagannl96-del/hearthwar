@@ -50,8 +50,8 @@ describe('AI rulers keep human hours', () => {
         was = on;
       }
       w.now = 0;
-      // at the keyboard 5-8 hours a day, spread over several sessions, with one long night
-      expect(awake).toBeGreaterThan(5 * 60);
+      // at the keyboard 3-8 hours a day (casual to dedicated), spread over several sessions, with one long night
+      expect(awake).toBeGreaterThan(3 * 60);
       expect(awake).toBeLessThan(8 * 60);
       expect(sessions).toBeGreaterThanOrEqual(6);
       expect(longestAway).toBeGreaterThanOrEqual(8 * 60);
