@@ -12,7 +12,7 @@ import { nextRandom } from '../rng';
 import { villagesNear } from '../spatial';
 import { exchangeQuote } from '../market';
 import { commandsOf, commandsTo } from '../cmdindex';
-import { TRIBE_MAX_MEMBERS, tribeFull, acceptInvite, answerApplication, applicationsBy, applyToTribe, cancelInvite, createTribe, declineInvite, hasRight, invitePlayer, invitesFor, leaveTribe, relation, setDiplomacy, tribeOf, tribePoints, withdrawApplication } from '../tribes';
+import { TRIBE_MAX_MEMBERS, mergeTribes, tribeFull, acceptInvite, answerApplication, applicationsBy, applyToTribe, cancelInvite, createTribe, declineInvite, hasRight, invitePlayer, invitesFor, leaveTribe, relation, setDiplomacy, tribeOf, tribePoints, withdrawApplication } from '../tribes';
 import { tribeName } from '../data/names';
 import type { AITraits, BattleData, BuildingId, Command, Player, Res, Tribe, UnitId, Units, Village, VillageRole, World } from '../types';
 import { RES_KEYS } from '../types';
@@ -1669,6 +1669,7 @@ function tribeLife(w: World, p: Player): void {
   const t = tribeOf(w, p.id);
   if (!t || !hasRight(t, p.id, 'invite')) return;
   const tp = tribePoints(w, t);
+  if (t.founderId === p.id && seekMerger(w, p, t, tp)) return;
   // answer other tribes' diplomacy
   if (!hasRight(t, p.id, 'diplomacy')) return;
   // a tribe that took one of ours is an enemy
@@ -1706,6 +1707,36 @@ function tribeLife(w: World, p: Player): void {
 }
 
 const HOUR_MS = 3_600_000;
+
+/**
+ * Tribes grow the way they do on a real server: a small tribe of rulers, a few days
+ * old, now and then folds into a much stronger tribe close by (one that is not its
+ * enemy and has room), so over the round tribes of five become tribes of ten and
+ * fifteen. Its founder decides; only tribes of computer rulers merge (people choose
+ * their own tribe). About one chance in a day or so per small tribe.
+ */
+function seekMerger(w: World, p: Player, t: Tribe, tp: number): boolean {
+  if (nextRandom(w) > 0.04) return false;
+  if (w.now - (t.createdAt ?? 0) < 2 * DAY_MS) return false;
+  if (t.members.some((m) => w.players[m]?.kind !== 'ai')) return false;
+  const target = aiTribeTarget(w);
+  let best: Tribe | null = null, bestScore = 0;
+  for (const id in w.tribes) {
+    const o = w.tribes[id];
+    if (o.id === t.id || o.members.length + t.members.length > target) continue;
+    if (w.players[o.founderId ?? -1]?.kind !== 'ai') continue;
+    if (t.diplomacy?.[o.id] === 'enemy' || o.diplomacy?.[t.id] === 'enemy') continue;
+    const op = tribePoints(w, o);
+    if (op < tp * 1.5 || o.members.length < t.members.length) continue;
+    // how many of theirs live close to ours
+    const appeal = tribeAppeal(w, p, o);
+    const near = appeal - Math.min(5, op / Math.max(1, p.points));
+    if (near < 1) continue;
+    const score = near + Math.min(3, op / Math.max(1, tp));
+    if (score > bestScore) { bestScore = score; best = o; }
+  }
+  return !!best && mergeTribes(w, t.id, best.id);
+}
 
 /**
  * How big a tribe led by AI rulers aims to be: small at first, growing with the
@@ -1764,12 +1795,19 @@ function tribeRecruiting(w: World, p: Player): void {
     if (t.invites?.some((i) => i.pid === o.id)) continue;
     if (o.points < avg * 0.08) continue;
     const d = distance(home.x, home.y, v.x, v.y);
-    // people get an invitation only from fairly close neighbours
-    if (o.kind === 'human' && d > 24) continue;
+    // people get an invitation only from fairly close neighbours, and only now and then: a
+    // person hears from a tribe of rulers once every few days at most, and not often even then
+    if (o.kind === 'human') {
+      if (d > 24 || nextRandom(w) > 0.08) continue;
+      if (w.now - (o.aiInviteAt ?? -Infinity) < 3 * DAY_MS) continue;
+    }
     const score = Math.min(2, o.points / Math.max(1, avg)) - d / 30;
     if (score > bestScore) { bestScore = score; best = o; }
   }
-  if (best && invitePlayer(w, p.id, best.name).ok) ai.invited[best.id] = w.now;
+  if (best && invitePlayer(w, p.id, best.name).ok) {
+    ai.invited[best.id] = w.now;
+    if (best.kind === 'human') best.aiInviteAt = w.now;
+  }
 }
 
 export { BUILDINGS };

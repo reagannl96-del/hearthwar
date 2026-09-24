@@ -142,7 +142,10 @@ export function VillageScreen() {
           <UnitList units={v.units} empty="No troops at home." />
           {supportTotal > 0 && (
             <div class="sub">
-              <h4>Support stationed here</h4>
+              <h4 class="row gap">
+                <span class="grow">Support stationed here</span>
+                <Btn small variant="quiet" onClick={() => pane.go({ name: 'building', id: 'rally', tab: 'troops' })} title="Send some or all of it home">Send home…</Btn>
+              </h4>
               {v.support.map((s) => (
                 <div class="support-row">
                   <span class="muted small">{s.ownerName} · {s.fromName}</span>

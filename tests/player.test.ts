@@ -359,6 +359,8 @@ describe('a human player', () => {
         ai.ai!.hostile = true;
         ai.ai!.aggression = 1;
         ai.ai!.targetPlayer = null;
+        // the player struck first, so every ruler may pay them back once (past the realm's breather between attacks)
+        ai.ai!.provoked = { [p.id]: 1 };
         for (const vid of ai.villages) {
           const av = w.villages[vid];
           av.buildings.rally = 1;

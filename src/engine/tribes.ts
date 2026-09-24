@@ -88,6 +88,30 @@ export function dropFromTribe(w: World, pid: number): void {
   }
 }
 
+/**
+ * One tribe folds into another: every member moves over, the smaller tribe's name
+ * and diplomacy are gone, and the realm hears of it. False if it would not fit.
+ */
+export function mergeTribes(w: World, fromId: number, intoId: number): boolean {
+  const a = w.tribes[fromId], b = w.tribes[intoId];
+  if (!a || !b || a.id === b.id) return false;
+  if (a.members.length + b.members.length > TRIBE_MAX_MEMBERS) return false;
+  const moving = [...a.members];
+  // empty the old tribe first, so nobody's leaving disbands it along the way
+  a.members = [];
+  for (const m of moving) {
+    const p = w.players[m];
+    if (!p) continue;
+    p.tribeId = null;
+    joinTribe(w, b, p);
+  }
+  for (const id in w.tribes) delete w.tribes[id].diplomacy?.[a.id];
+  delete w.tribes[a.id];
+  news(w, `The tribe ${a.name} [${a.tag}] has joined ${b.name} [${b.tag}]: ${moving.length} more ${moving.length === 1 ? 'ruler' : 'rulers'} under one banner.`, 'world');
+  w.mapRev++;
+  return true;
+}
+
 function removeMember(w: World, t: Tribe | undefined, pid: number): void {
   if (!t) return;
   t.members = t.members.filter((m) => m !== pid);

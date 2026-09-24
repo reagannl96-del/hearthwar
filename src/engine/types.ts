@@ -388,6 +388,8 @@ export interface Player {
   dailyAwards?: DailyAward[];
   /** tribe forum: thread id -> last post id this ruler has read */
   forumSeen?: Record<number, number>;
+  /** when a tribe of computer rulers last invited this person (they hear from one only now and then) */
+  aiInviteAt?: number;
   /** the village manager: build and army templates, and which village follows which */
   manager?: import('./manager').ManagerState;
 }
