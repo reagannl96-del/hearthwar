@@ -7,7 +7,7 @@ import { resolveBattle } from '../combat';
 import { isProtected, sendTrain, sendTroops, travelTime, withdrawSupport } from '../commands';
 import { BUILDINGS, BUILDING_ORDER } from '../data/buildings';
 import { HEROES, UNITS } from '../data/units';
-import { COIN_COST, distance, hasUnits, hideCap, recruitTime, resGte, unitsCarry, unitsCount } from '../formulas';
+import { COIN_COST, distance, hasUnits, hideCap, moraleFor, recruitTime, resGte, unitsCarry, unitsCount } from '../formulas';
 import { nextRandom } from '../rng';
 import { villagesNear } from '../spatial';
 import { exchangeQuote } from '../market';
@@ -138,6 +138,24 @@ function roleWeights(p: Player, role: VillageRole): Partial<Record<UnitId, numbe
   if (role.kind === 'offense' || role.kind === 'defense') return ROLE_ARMY[role.kind];
   if (role.kind === 'random' && role.weights) return role.weights;
   return ARMY[p.ai!.personality];
+}
+
+/**
+ * What the attacks on this ruler have been made of lately: if it is mostly cavalry,
+ * more spearmen; mostly infantry, more swordsmen; mostly archers, more archers of
+ * our own. Offensive villages keep their recipe.
+ */
+function counterWeights(w: World, p: Player, role: VillageRole, base: Partial<Record<UnitId, number>>): Partial<Record<UnitId, number>> {
+  const th = p.ai!.threat;
+  if (!th || role.kind === 'offense' || w.now - th.t > 2 * DAY_MS) return base;
+  const total = th.cav + th.inf + th.arc;
+  if (total < 50) return base;
+  const out = { ...base };
+  const lean = (u: UnitId, share: number) => { if (out[u] !== undefined) out[u] = out[u]! * (1 + 0.8 * share); };
+  lean('spear', th.cav / total);
+  lean('sword', th.inf / total);
+  lean('archer', th.arc / total);
+  return out;
 }
 
 /** Can this village go to war? Defensive villages hold the line and only farm. */
@@ -394,7 +412,8 @@ function recruit(w: World, p: Player, v: Village): void {
   const horizon = aiThinkInterval(w) * 3;
   const army = armyCount(v);
   const armyPop = Object.entries(army).reduce((s, [k, n]) => s + (n ?? 0) * UNITS[k as UnitId].pop, 0) + 1;
-  const weights = roleWeights(p, villageRole(w, p, v));
+  const role = villageRole(w, p, v);
+  const weights = counterWeights(w, p, role, roleWeights(p, role));
   const options = (Object.keys(weights) as UnitId[])
     .filter((u) => unitAvailable(w, v, u).ok)
     .map((u) => ({ u, deficit: weights[u]! - ((army[u] ?? 0) * UNITS[u].pop) / armyPop }))
@@ -633,8 +652,11 @@ function chooseCampaignTarget(w: World, p: Player, from: Village): Village | nul
         if (personTaken(w, p, o.id)) continue;
         if (!mayHit(w, p, o.id)) continue;
       }
-      if (!t.barbFirst) score += 30;
+      if (!t.barbFirst) score += ai.personality === 'warlord' || ai.personality === 'opportunist' ? 50 : 30;
       if (ai.targetPlayer === o.id) score += 50;
+      // a soft target our own reports vouch for: few defenders and a low wall, seen lately
+      const seenAt = Math.max(intel?.scoutT ?? 0, intel?.lastAttackT ?? 0);
+      if (intel?.units && w.now - seenAt < 12 * 3_600_000 && defence <= 60 && wall <= 3) score += 90;
       if (intel?.lastColor === 'green' && w.now - (intel.lastAttackT ?? 0) < 6 * 3_600_000) score += ai.personality === 'opportunist' ? 60 : 25;
       // the tribe is at war with them
       if (tribeEnemy(w, p, o)) score += 35;
@@ -719,7 +741,7 @@ function campaignDrive(w: World, p: Player): void {
   const def = known ?? {};
   const sim = resolveBattle({
     att: clear, attTech: home.tech, attItem: null, defStacks: [{ units: def, tech: {} }], defItems: [],
-    wall, luck: 0, morale: 1,
+    wall, luck: 0, morale: moraleAgainst(w, p, target),
   });
   // an empty village needs no clearing; an unknown one needs a real army
   const emptyish = known !== undefined && unitsCount(def) - (def.scout ?? 0) <= 5 && wall <= 1;
@@ -767,6 +789,12 @@ function sendFakes(w: World, p: Player, home: Village, target: Village): void {
     if (!u) return;
     sendTroops(w, { ownerId: p.id, fromVid: home.id, toVid: o.id, kind: 'attack', units: { [u]: 1 }, tag: 'fake' });
   }
+}
+
+/** Is a tribe mate trying to take this very village? */
+function mateCampaignOn(w: World, p: Player, vid: number): boolean {
+  if (p.tribeId === null) return false;
+  return !!w.tribes[p.tribeId]?.members.some((m) => m !== p.id && w.players[m]?.ai?.campaign?.target === vid);
 }
 
 /** Is this player someone our tribe is at war with, or someone a tribe mate is taking villages from? */
@@ -910,7 +938,7 @@ function farm(w: World, p: Player, v: Village): void {
     const intel = p.intel[t.id];
     if (intel?.lastColor === 'red' && w.now - (intel.lastAttackT ?? 0) < cooldown * 10) continue;
     const wall = intel?.wall ?? 0;
-    const group = raidGroup(v, wall);
+    const group = raidGroup(v, wall, expectedHaul(w, intel));
     if (!group) break;
     const r = sendTroops(w, { ownerId: p.id, fromVid: v.id, toVid: t.id, kind: 'attack', units: group, tag: 'farm' });
     if (!r.ok) break;
@@ -952,7 +980,36 @@ function farm(w: World, p: Player, v: Village): void {
 /** A player's village is raided at most this often by one ruler. */
 const PLAYER_RAID_COOLDOWN = 40 * 60_000;
 
-function raidGroup(v: Village, wall: number): Units | null {
+/**
+ * How much a barbarian village is likely holding: what the scouts last saw, or,
+ * if the last raid came home full, a good deal more than it carried. Unknown: nothing to go on.
+ */
+function expectedHaul(w: World, intel: Player['intel'][number] | undefined): number {
+  if (!intel) return 0;
+  if (intel.res && intel.scoutT !== undefined && w.now - intel.scoutT < 2 * 60 * MIN) return intel.res.wood + intel.res.clay + intel.res.iron;
+  if (intel.lastCapacity && (intel.lastLoot ?? 0) >= intel.lastCapacity * 0.95) return intel.lastCapacity * 1.6;
+  return 0;
+}
+
+/** Enough to win (a wall calls for more), and enough carriers for the haul we expect, within reason. */
+function raidGroup(v: Village, wall: number, haul = 0): Units | null {
+  const g0 = raidCore(v, wall);
+  if (!g0 || haul <= 0) return g0;
+  // top up with carriers (light cavalry first: fast, and they carry the most) until the haul fits
+  let carry = unitsCarry(g0);
+  const cap = Math.min(haul, carry * 4);
+  for (const u of ['light', 'marcher', 'axe', 'spear'] as UnitId[]) {
+    if (carry >= cap) break;
+    const spare = (v.units[u] ?? 0) - (g0[u] ?? 0);
+    if (spare <= 0 || UNITS[u].carry <= 0) continue;
+    const add = Math.min(spare, Math.ceil((cap - carry) / UNITS[u].carry));
+    g0[u] = (g0[u] ?? 0) + add;
+    carry += add * UNITS[u].carry;
+  }
+  return g0;
+}
+
+function raidCore(v: Village, wall: number): Units | null {
   const strength = wall > 0 ? 250 + wall * 180 : 60;
   const g: Units = {};
   let att = 0;
@@ -1200,7 +1257,7 @@ function strike(w: World, p: Player, v: Village, target: Village, army: Units): 
   const wall = intel.buildings?.wall ?? intel.wall ?? 0;
   const sim = resolveBattle({
     att: army, attTech: v.tech, attItem: null, defStacks: [{ units: intel.units ?? {}, tech: {} }], defItems: [],
-    wall, luck: 0, morale: 1,
+    wall, luck: 0, morale: moraleAgainst(w, p, target),
   });
   if (!mayHit(w, p, target.ownerId)) return;
   if (sim.winner !== 'attacker' || sim.attStrength < sim.defStrength * margin) { ai.avoid![target.id] = w.now + WAR_WAIT.tooStrong; return; }
@@ -1220,6 +1277,13 @@ function strike(w: World, p: Player, v: Village, target: Village, army: Units): 
   const cost = unitWorth(sim.attLost);
   if (gain < 1500 || gain < cost * 0.8) { ai.avoid![target.id] = w.now + WAR_WAIT.notWorth; return; }
   if (sendTroops(w, { ownerId: p.id, fromVid: v.id, toVid: target.id, kind: 'attack', units: send, catTarget: cat, tag: 'war' }).ok) noteHit(w, p, target);
+}
+
+/** The morale our troops would fight with against this village (a much smaller player's people fight harder). */
+function moraleAgainst(w: World, p: Player, target: Village): number {
+  if (!w.config.morale || target.ownerId === null) return 1;
+  const o = w.players[target.ownerId];
+  return o ? moraleFor(o.points, p.points) : 1;
 }
 
 function pickCatTarget(b: Partial<Record<BuildingId, number>> | undefined): BuildingId {
@@ -1256,6 +1320,7 @@ function pickWarTarget(w: World, p: Player, v: Village): Village | null {
     let score = -d * 3 + t.points / 50;
     if (ai.targetPlayer === o.id) score += 40;
     if (tribeEnemy(w, p, o)) score += 30;
+    if (mateCampaignOn(w, p, t.id)) score += 60;
     const intel = p.intel[t.id];
     if (intel?.lastColor === 'red' && w.now - (intel.lastAttackT ?? 0) < aiThinkInterval(w) * 30) score -= 80;
     if (score > bestScore) { bestScore = score; best = t; }
@@ -1293,6 +1358,19 @@ export function aiOnBattle(w: World, c: Command, target: Village, data: BattleDa
   if (target.ownerId === null) return;
   const victim = w.players[target.ownerId];
   if (!victim?.ai || c.ownerId === victim.id) return;
+  // and what they were hit with (it fades: every new attack counts, older ones count less)
+  if (c.tag !== 'scout' && c.tag !== 'fake') {
+    const th = victim.ai.threat && w.now - victim.ai.threat.t < 2 * DAY_MS ? victim.ai.threat : { cav: 0, inf: 0, arc: 0, t: w.now };
+    th.cav *= 0.8; th.inf *= 0.8; th.arc *= 0.8;
+    for (const k in data.attUnits) {
+      const u = k as UnitId, n = data.attUnits[u] ?? 0;
+      const cls = UNITS[u].cls;
+      if (u === 'scout' || u === 'noble' || n <= 0) continue;
+      if (cls === 'cav') th.cav += n * UNITS[u].pop; else if (cls === 'arc') th.arc += n * UNITS[u].pop; else th.inf += n * UNITS[u].pop;
+    }
+    th.t = w.now;
+    victim.ai.threat = th;
+  }
   const attacker = w.players[c.ownerId];
   if (!attacker) return;
   if (attacker.kind === 'human' && !victim.ai.hostile) return;
@@ -1508,3 +1586,23 @@ function tribeRecruiting(w: World, p: Player): void {
 }
 
 export { BUILDINGS };
+
+/** Why this ruler would or would not set out to take this village right now (for the benches). */
+export function campaignVerdict(w: World, p: Player, v: Village): string {
+  const ai = p.ai!;
+  if (ai.campaign) return `busy with ${ai.campaign.target}`;
+  if (!campaignReady(w, p)) return 'resting';
+  const homes = p.villages.map((id) => w.villages[id]).filter((h): h is Village => !!h && (h.units.noble ?? 0) > 0);
+  if (!homes.length) return 'no nobleman home';
+  const t = traitsOf(w, p);
+  const near = homes.some((h) => distance(h.x, h.y, v.x, v.y) <= t.reach);
+  if (!near) return `out of reach (${t.reach})`;
+  if (!campaignTargetOk(w, p, v)) return 'not allowed';
+  if ((ai.avoid?.[v.id] ?? 0) > w.now) return 'avoiding';
+  if (v.ownerId !== null && w.players[v.ownerId]?.kind === 'human') {
+    if (personTaken(w, p, v.ownerId)) return 'someone else is on them';
+    if (!mayHit(w, p, v.ownerId)) return 'breather';
+  }
+  const pick = chooseCampaignTarget(w, p, homes[0]);
+  return pick?.id === v.id ? 'picked' : `prefers ${pick ? `${pick.ownerId === null ? 'barb' : 'player'} ${pick.points}pts` : 'nothing'}`;
+}

@@ -129,6 +129,17 @@ export function RealmScreen() {
         </div>
       </Section>
 
+      <Section title="How the other rulers play">
+        <p class="muted small">The realm's computer rulers play by the same rules as you and keep a person's hours: they sleep, they are online in sessions, and they never act faster than someone at the keyboard could. What they do is fixed, so you can plan against it:</p>
+        <ul class="realm-rules small">
+          <li><b>Conquest.</b> A ruler with a nobleman goes after one village at a time, within 10 to 22 fields. It scouts first, then sends a clearing attack with its noblemen right behind, and comes back as they return until the village falls. Each nobleman takes 20 to 35 loyalty; loyalty grows back on its own.</li>
+          <li><b>Who is safe.</b> Beginner protection, and after it anyone's only village for their first day in the realm. Tribe mates, allies and pacts. Barbarian villages within 5 fields of a person are left for that person. Only one ruler at a time goes after any one person.</li>
+          <li><b>When they give up.</b> If scouts or reports show more defence than their army can beat, if two attacks are beaten back, if they lose their noblemen, or after a day. Stack defenders, support each other, and they look elsewhere.</li>
+          <li><b>Their pace.</b> Hours of rest between conquests (more for careful rulers), and longer the more villages they hold. A person who is attacked gets a breather of about three hours before the next ruler may strike, unless they struck first.</li>
+          <li><b>Their ways.</b> Every ruler raises a hero at its statue. Some send fake attacks alongside real ones, some come to their tribe mates' aid, all want back what was taken from them, and they train troops to counter whatever keeps hitting them.</li>
+        </ul>
+      </Section>
+
       <Section title="Hall of fame">
         {r.pastRounds.length === 0 ? <Empty>This is the realm's first round. The winners will be remembered here.</Empty> : (
           <ul class="realm-fame">

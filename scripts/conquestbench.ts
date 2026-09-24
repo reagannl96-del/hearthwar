@@ -6,6 +6,8 @@
 //   npx vite build --ssr scripts/conquestbench.ts --outDir .bench --emptyOutDir && node .bench/conquestbench.js [days] [seed] [ais]
 
 import { advance } from '../src/engine/game';
+import { campaignVerdict } from '../src/engine/ai/ai';
+import { distance } from '../src/engine/formulas';
 import { HEROES } from '../src/engine/data/units';
 import { villagePoints } from '../src/engine/formulas';
 import { createWorld, defaultConfig, reinforceRulers, spawnPlayer } from '../src/engine/world';
@@ -111,6 +113,7 @@ for (let h = 1; h <= days * 24; h++) {
     const villages = list.reduce((a, p) => a + p.villages.length, 0);
     console.log(`-- day ${h / 24}: ${list.length} AIs, ${villages} villages (${(villages / list.length).toFixed(1)} each), ${nob} noblemen home, ${inCampaign} campaigning now | taken: ${taken.barb} barb, ${taken.ai} AI, ${taken.human} human | noble waves ${tally.trains}, fakes ${tally.fakes}, help ${tally.help}, scouts ${tally.scouts}, war ${tally.war}`);
     console.log(`   heroes at home: ${JSON.stringify(heroes)}`);
+    if (process.env.WHY) for (const hp of humans.filter((_, i) => i % 2 === 0)) { const hv = w.villages[hp.villages[0]]; if (!hv) continue; const why: Record<string, number> = {}; for (const a of ais()) { if (!a.villages.some((id) => { const x = w.villages[id]; return x && distance(x.x, x.y, hv.x, hv.y) <= 22; })) continue; const r = campaignVerdict(w, a, hv).replace(/d+/g, '#'); why[r] = (why[r] ?? 0) + 1; } console.log(`   why not ${hp.name}: ${JSON.stringify(why)}`); }
     if (newcomers.size) { const nc = [...newcomers].map((id) => w.players[id]); console.log(`   newcomers: ${nc.filter((p) => p.villages.length > 0).length}/${nc.length} still standing, ${nc.reduce((a, p) => a + p.villages.length, 0)} villages, avg ${Math.round(nc.reduce((a, p) => a + p.points, 0) / nc.length)} pts`); }
     console.log('   humans: ' + humans.map((p) => {
       const hh = humanHits[p.name] ?? { attacks: 0, nobles: 0, fakes: 0, lost: 0 };

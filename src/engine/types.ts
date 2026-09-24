@@ -247,6 +247,8 @@ export interface AIState {
   lost?: Record<number, number>;
   /** village it sent support to -> where from and when */
   support?: Record<number, { from: number; at: number }>;
+  /** what the attacks on this ruler were made of lately (population by class), to recruit the counter */
+  threat?: { cav: number; inf: number; arc: number; t: number };
   /** village id -> the highest its wall has stood (a battered wall is rebuilt first) */
   wallWas?: Record<number, number>;
   nextThink: number;
