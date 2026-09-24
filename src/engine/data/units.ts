@@ -200,7 +200,9 @@ export const HERO_INFO: Record<string, HeroInfo> = {
 
 export const ARMY_ORDER: UnitId[] = [...UNIT_ORDER, 'militia'];
 
-export const MERCHANT_SPEED = 6; // minutes per field
+export const MERCHANT_SPEED = 12; // minutes per field
+/** Shipments between two of your own villages crawl at this share of merchant speed. */
+export const OWN_SHIPMENT_SPEED = 0.15;
 export const MERCHANT_CARRY = 1000;
 
 /** Research level bonuses (attack & defense multipliers). */

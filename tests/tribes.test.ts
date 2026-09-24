@@ -229,3 +229,39 @@ describe('tribes merging', () => {
     expect(w.news[0].text).toContain('has joined');
   });
 });
+
+describe('tribes answering attacks', () => {
+  it('when a person attacks a ruler in a tribe, a tribe mate answers: scouts, support or a strike back', async () => {
+    const { advance } = await import('../src/engine/game');
+    const { conquer } = await import('../src/engine/commands');
+    const w = createWorld({ worldName: 'T', playerName: 'P', villageName: 'Home', seed: 11, config: { ...defaultConfig(), aiCount: 8, size: 70, aiAlwaysAwake: true, difficulty: 'hard' } });
+    const me = w.players[w.humanId];
+    me.protectedUntil = 0;
+    const home = w.villages[me.villages[0]];
+    Object.assign(home.buildings, { rally: 1, barracks: 10, farm: 25, wall: 5 });
+    home.units = { axe: 3000, spear: 500, scout: 20 };
+    // two rulers in one tribe, both near us and ready for anything
+    const ais = Object.values(w.players).filter((p) => p.kind === 'ai')
+      .sort((a, b) => Math.hypot(w.villages[a.villages[0]].x - home.x, w.villages[a.villages[0]].y - home.y) - Math.hypot(w.villages[b.villages[0]].x - home.x, w.villages[b.villages[0]].y - home.y));
+    const [victim, mate] = ais;
+    for (const p of [victim, mate]) { if (p.tribeId !== null) applyAction(w, p.id, { type: 'tribeLeave' }); p.tribeId = null; }
+    const tid = applyAction(w, victim.id, { type: 'tribeCreate', name: 'Test Oath', tag: 'TST' }).data as number;
+    applyAction(w, victim.id, { type: 'tribeInvite', name: mate.name });
+    applyAction(w, mate.id, { type: 'tribeAccept', tribe: tid });
+    for (const p of [victim, mate]) {
+      p.ai!.hostile = true;
+      const v = w.villages[p.villages[0]];
+      Object.assign(v.buildings, { rally: 1, barracks: 10, stable: 5, farm: 25 });
+      v.units = { spear: 800, sword: 600, axe: 1500, light: 400, scout: 60 };
+    }
+    const target = w.villages[victim.villages[0]];
+    expect(applyAction(w, me.id, { type: 'send', vid: home.id, target: target.id, kind: 'attack', units: { axe: 2500 } }).ok).toBe(true);
+    let answered = false;
+    for (let i = 0; i < 240 && !answered; i++) {
+      advance(w, w.now + 60_000);
+      answered = Object.values(w.commands).some((c) => c.ownerId === mate.id && (me.villages.includes(c.toVid) || (c.kind === 'support' && c.toVid === target.id)))
+        || Object.values(w.villages).some((v) => v.support.some((s) => s.ownerId === mate.id));
+    }
+    expect(answered).toBe(true);
+  });
+});

@@ -5,8 +5,10 @@ import { merchantCount } from './formulas';
 import type { Res, Village, World } from './types';
 import { RES_KEYS } from './types';
 
-/** The trading post keeps half: at balanced stock you get about 1 for 2. */
-export const EXCHANGE_FEE = 0.5;
+/** The trading post keeps three quarters: at balanced stock you get about 1 for 4. */
+export const EXCHANGE_FEE = 0.75;
+/** What you get back per resource given, at balanced stock. */
+export const EXCHANGE_RATE = 1 - EXCHANGE_FEE;
 
 export function exchangeBaseline(w: World): number {
   // the post grows with the strongest human ruler
@@ -20,7 +22,7 @@ export function exchangeQuote(w: World, v: Village, give: keyof Res, get: keyof 
   const sGet = Math.max(1, w.exchange[get]);
   const k = sGive * sGet;
   const raw = sGet - k / (sGive + amount);
-  const receive = Math.max(0, Math.floor(raw * (1 - EXCHANGE_FEE)));
+  const receive = Math.max(0, Math.floor(raw * EXCHANGE_RATE));
   const freeMerchants = merchantCount(v.buildings.market, v.bonus) - v.merchantsOut;
   const maxAmount = freeMerchants * MERCHANT_CARRY;
   return { receive, rate: amount > 0 ? receive / amount : 0, maxAmount };

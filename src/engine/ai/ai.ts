@@ -10,11 +10,11 @@ import { HEROES, UNITS } from '../data/units';
 import { COIN_COST, distance, hasUnits, hideCap, moraleFor, recruitTime, resGte, unitsCarry, unitsCount } from '../formulas';
 import { nextRandom } from '../rng';
 import { villagesNear } from '../spatial';
-import { exchangeQuote } from '../market';
+import { EXCHANGE_RATE, exchangeQuote } from '../market';
 import { commandsOf, commandsTo } from '../cmdindex';
 import { TRIBE_MAX_MEMBERS, mergeTribes, tribeFull, acceptInvite, answerApplication, applicationsBy, applyToTribe, cancelInvite, createTribe, declineInvite, hasRight, invitePlayer, invitesFor, leaveTribe, relation, setDiplomacy, tribeOf, tribePoints, withdrawApplication } from '../tribes';
 import { tribeName } from '../data/names';
-import type { AITraits, BattleData, BuildingId, Command, Player, Res, Tribe, UnitId, Units, Village, VillageRole, World } from '../types';
+import type { AITraits, BattleData, Incident, BuildingId, Command, Player, Res, Tribe, UnitId, Units, Village, VillageRole, World } from '../types';
 import { RES_KEYS } from '../types';
 import { farmMax, loyaltyRegen, popFree, queuedLevel, recruitQueueEnd, storageOf, unitAvailable, updateVillage } from '../village';
 import { aiThinkInterval } from '../world';
@@ -282,6 +282,7 @@ export function aiThink(w: World, p: Player): void {
     war(w, p);
   }
   campaignDrive(w, p);
+  respondToIncidents(w, p);
   scoutRound(w, p);
   helpAllies(w, p);
   tribeLife(w, p);
@@ -383,13 +384,13 @@ function trade(w: World, p: Player, v: Village): void {
   const sorted = [...RES_KEYS].sort((a, b) => v.res[b] - v.res[a]);
   const rich = sorted[0], poor = sorted[2];
   if (v.res[rich] < cap * 0.55 || v.res[poor] > cap * 0.25) return;
-  // rulers trade with their own merchants at the same 2:1 rate the trading
-  // post gives, so they never drain the shared post the humans use
+  // rulers trade with their own merchants at the same balanced-stock rate the
+  // trading post gives (about 4:1), so they never drain the shared post the humans use
   const q = exchangeQuote(w, v, rich, poor, 1);
   const amount = Math.floor(Math.min(q.maxAmount, (v.res[rich] - v.res[poor]) / 2));
   if (amount < 200) return;
   v.res[rich] -= amount;
-  v.res[poor] = Math.min(cap, v.res[poor] + Math.floor(amount * 0.5));
+  v.res[poor] = Math.min(cap, v.res[poor] + Math.floor(amount * EXCHANGE_RATE));
 }
 
 // ---------- research ----------
@@ -1575,6 +1576,7 @@ export function aiOnConquest(w: World, v: Village, oldOwner: number | null, newO
 }
 
 export function aiOnBattle(w: World, c: Command, target: Village, data: BattleData): void {
+  logIncident(w, c, target, data);
   // a campaign's noble wave beaten back counts against it
   const att = w.players[c.ownerId];
   if (att?.ai?.campaign?.target === target.id && c.tag === 'train' && data.winner !== 'attacker') att.ai.campaign.fails++;
@@ -1881,4 +1883,171 @@ export function campaignState(w: World, p: Player): string {
     return info.canTrain > 0 ? 'no noble: can train' : info.coinsNeeded > 0 ? 'no noble: needs crowns' : 'no noble: other';
   }
   return chooseCampaignTarget(w, p, homes[0]) ? 'target ready' : 'nothing to take';
+}
+
+// ---------- answering attacks ----------
+
+/**
+ * When someone attacks a ruler, the ruler (and its tribe mates) weigh how to answer,
+ * the way a tribe does on a real server. Each attack is written down as an incident
+ * (who struck, at which village, whether it won, and what the army was mostly made
+ * of). On a look while online, a ruler takes one fresh incident and scores its
+ * options: scout the attacker, reinforce the village with troops that suit what hit
+ * it, strike back (or scout first, if it knows too little), or stay out of it. What
+ * it picks depends on its temperament and habits, on how far away it is, on what its
+ * own villages hold, on what the tribe has already done about it, and on whether it
+ * is under attack itself. A few answers per incident at most, so an attack draws a
+ * response, not an avalanche.
+ */
+const INCIDENT_FRESH = 3 * 3_600_000;
+/** How the rulers have been answering attacks (for the benches). */
+export const incidentStats = { logged: 0, weighed: 0, scout: 0, support: 0, strike: 0, none: 0 };
+/** Answers of each kind an incident gets at most, from the whole tribe. */
+const INCIDENT_CAP = { scouts: 2, supports: 3, strikes: 2 };
+
+/** What the attacking army was mostly made of: which defenders it takes to stop it. */
+function attackClass(units: Units): Incident['cls'] {
+  const pop = { inf: 0, cav: 0, arc: 0 };
+  for (const k in units) {
+    const u = k as UnitId, n = units[u] ?? 0;
+    if (n <= 0 || u === 'scout' || u === 'noble') continue;
+    const cls = UNITS[u].cls;
+    pop[cls === 'cav' ? 'cav' : cls === 'arc' ? 'arc' : 'inf'] += n * UNITS[u].pop;
+  }
+  const total = pop.inf + pop.cav + pop.arc;
+  if (total === 0) return 'inf';
+  const top = (Object.keys(pop) as ('inf' | 'cav' | 'arc')[]).sort((a, b) => pop[b] - pop[a])[0];
+  return pop[top] / total >= 0.6 ? top : 'mixed';
+}
+
+/** Write an attack down for whoever will answer it: the victim's tribe, or the victim alone. */
+function logIncident(w: World, c: Command, target: Village, data: BattleData): void {
+  if (target.ownerId === null || c.tag === 'scout' || c.tag === 'fake' || c.tag === 'farm') return;
+  const victim = w.players[target.ownerId];
+  const attacker = w.players[c.ownerId];
+  if (!victim || !attacker || attacker.id === victim.id) return;
+  if (victim.tribeId !== null && attacker.tribeId === victim.tribeId) return;
+  // barely an army: not worth anyone's attention
+  if (unitsCount(data.attUnits) - (data.attUnits.scout ?? 0) < 20) return;
+  const inc: Incident = {
+    id: c.id, attacker: attacker.id, victim: victim.id, vid: target.id, at: w.now,
+    won: data.winner === 'attacker', cls: attackClass(data.attUnits), scouts: 0, supports: 0, strikes: 0, seen: [],
+  };
+  const t = victim.tribeId !== null ? w.tribes[victim.tribeId] : undefined;
+  const list = t ? (t.incidents ??= []) : victim.ai ? (victim.ai.incidents ??= []) : null;
+  if (!list) return;
+  list.unshift(inc);
+  incidentStats.logged++;
+  // the latest few, and nothing stale
+  for (let i = list.length - 1; i >= 0; i--) if (i >= 8 || w.now - list[i].at > INCIDENT_FRESH) list.splice(i, 1);
+}
+
+/** Defence our village could lend against this kind of army, per unit kind (only the kinds that suit it). */
+function suitedDefenders(v: Village, cls: Incident['cls']): Units {
+  const idx = cls === 'cav' ? 1 : cls === 'arc' ? 2 : 0;
+  const out: Units = {};
+  for (const u of ['spear', 'sword', 'archer', 'heavy'] as UnitId[]) {
+    const n = Math.floor((v.units[u] ?? 0) * 0.4);
+    if (n < 10) continue;
+    const d = UNITS[u].def;
+    // against a mixed army anything solid helps; otherwise the unit must be good against this kind
+    const good = cls === 'mixed' ? Math.min(...d) >= 15 : d[idx] >= Math.max(...d) * 0.8;
+    if (good) out[u] = n;
+  }
+  return out;
+}
+
+const defenceValue = (units: Units, cls: Incident['cls']) => {
+  const idx = cls === 'cav' ? 1 : cls === 'arc' ? 2 : 0;
+  let n = 0;
+  for (const k in units) n += (units[k as UnitId] ?? 0) * (cls === 'mixed' ? Math.min(...UNITS[k as UnitId].def) : UNITS[k as UnitId].def[idx]);
+  return n;
+};
+
+function respondToIncidents(w: World, p: Player): void {
+  const ai = p.ai!;
+  const t = p.tribeId !== null ? w.tribes[p.tribeId] : undefined;
+  const list = [...(t?.incidents ?? []), ...(ai.incidents ?? [])];
+  const inc = list.find((x) => w.now - x.at < INCIDENT_FRESH && !x.seen.includes(p.id) && x.attacker !== p.id);
+  if (!inc) return;
+  inc.seen.push(p.id);
+  const attacker = w.players[inc.attacker];
+  const victimV = w.villages[inc.vid];
+  if (!attacker || attacker.eliminated || !victimV) return;
+  // never against a tribe mate, an ally or a pact
+  if (attacker.tribeId !== null && attacker.tribeId === p.tribeId) return;
+  const rel = relation(w, p.tribeId, attacker.tribeId);
+  if (rel === 'ally' || rel === 'nap') return;
+  const traits = traitsOf(w, p);
+  const own = inc.victim === p.id;
+  const underFire = p.villages.some((vid) => commandsTo(w, vid).some((cm) => cm.kind === 'attack' && cm.ownerId !== p.id));
+  // our village closest to the trouble
+  let home: Village | null = null, homeD = Infinity;
+  for (const vid of p.villages) {
+    const v = w.villages[vid];
+    if (!v || v.buildings.rally < 1 || v.id === inc.vid) continue;
+    const d = distance(v.x, v.y, victimV.x, victimV.y);
+    if (d < homeD) { home = v; homeD = d; }
+  }
+  // the attacker's village nearest to us, and what we know of it
+  const from = home ?? victimV;
+  let foe: Village | null = null, foeD = Infinity;
+  for (const vid of attacker.villages) {
+    const v = w.villages[vid];
+    if (!v) continue;
+    const d = distance(from.x, from.y, v.x, v.y);
+    if (d < foeD) { foe = v; foeD = d; }
+  }
+  const intel = foe ? p.intel[foe.id] : undefined;
+  const known = !!intel?.units && w.now - Math.max(intel.scoutT ?? 0, intel.lastAttackT ?? 0) < 6 * 3_600_000;
+  const humanFoe = attacker.kind === 'human';
+  if (humanFoe && !ai.hostile) return;
+
+  // what each answer is worth to this ruler right now
+  const options: { kind: 'scout' | 'support' | 'strike' | 'none'; score: number }[] = [{ kind: 'none', score: 30 + (underFire ? 40 : 0) }];
+  if (foe && home && foeD <= traits.reach + 6 && !known && inc.scouts < INCIDENT_CAP.scouts && (home.units.scout ?? 0) >= 10) {
+    options.push({ kind: 'scout', score: 25 + (ai.personality === 'opportunist' || ai.personality === 'guardian' ? 20 : 10) + (inc.won ? 15 : 5) - foeD });
+  }
+  const lend = home && !own && homeD <= 15 ? suitedDefenders(home, inc.cls) : {};
+  if (home && !own && homeD <= 15 && inc.supports < INCIDENT_CAP.supports && hasUnits(lend) && !underFire) {
+    // worth more if the village fell short, and if what we can lend really counts against this army
+    const weight = Math.min(1.5, defenceValue(lend, inc.cls) / 20_000);
+    options.push({ kind: 'support', score: traits.helper * 70 * weight + (inc.won ? 25 : 5) - homeD * 1.5 });
+  }
+  if (foe && home && foeD <= traits.reach && inc.strikes < INCIDENT_CAP.strikes && !underFire && warVillage(w, p, home)) {
+    const army = offensiveArmy(home);
+    if (attackValue(army) >= 1500) {
+      // a ruler answers blows to itself harder than blows to its tribe
+      const grudge = own ? 35 : 15;
+      options.push({ kind: 'strike', score: ai.aggression * 60 + grudge + (inc.won ? 15 : 0) + (known ? 10 : -5) - foeD * 1.5 - (traits.caution - 1) * 40 });
+    }
+  }
+  // people are not perfectly predictable
+  for (const o of options) o.score += nextRandom(w) * 20;
+  const pick = options.sort((a, b) => b.score - a.score)[0];
+  incidentStats.weighed++;
+  incidentStats[pick.kind]++;
+
+  if (pick.kind === 'scout' && foe && home) {
+    const n = Math.min(home.units.scout ?? 0, scoutParty(ai, foe.id));
+    if (sendTroops(w, { ownerId: p.id, fromVid: home.id, toVid: foe.id, kind: 'attack', units: { scout: n }, tag: 'scout' }).ok) inc.scouts++;
+  } else if (pick.kind === 'support' && home) {
+    const send = suitedDefenders(home, inc.cls);
+    if (sendTroops(w, { ownerId: p.id, fromVid: home.id, toVid: inc.vid, kind: 'support', units: send, tag: 'help' }).ok) {
+      (ai.support ??= {})[inc.vid] = { from: home.id, at: w.now };
+      inc.supports++;
+    }
+  } else if (pick.kind === 'strike' && foe && home) {
+    // the grudge is taken up; a person who struck first may be paid back past the realm's breather
+    ai.targetPlayer = attacker.id;
+    ai.grudgeAt = w.now;
+    if (humanFoe) (ai.provoked ??= {})[attacker.id] = w.now;
+    inc.strikes++;
+    if (known) strike(w, p, home, foe, offensiveArmy(home));
+    else if ((home.units.scout ?? 0) >= 5 && !(ai.plans ??= {})[home.id]) {
+      // find out first; the war plans follow up when the report is in
+      const r = sendTroops(w, { ownerId: p.id, fromVid: home.id, toVid: foe.id, kind: 'attack', units: { scout: Math.min(home.units.scout ?? 0, scoutParty(ai, foe.id)) }, tag: 'scout' });
+      if (r.ok) ai.plans![home.id] = { target: foe.id, since: w.now, scoutCmd: (r.data as { id: number }).id };
+    }
+  }
 }

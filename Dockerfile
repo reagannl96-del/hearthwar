@@ -7,4 +7,5 @@ COPY . .
 RUN npm run server:build
 ENV NODE_ENV=production
 EXPOSE 8787
-CMD ["node", "server-dist/index.js"]
+# a free instance has 512 MB: let the JS heap use most of it (the default stops near 250 MB)
+CMD ["node", "--max-old-space-size=400", "server-dist/index.js"]

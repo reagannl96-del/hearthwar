@@ -5,7 +5,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { BUILDINGS, BUILDING_ORDER } from '../../engine/data/buildings';
 import { ARMY_ORDER, UNITS, isHero } from '../../engine/data/units';
-import { ARMY_PRESETS, BUILD_PRESETS, MANAGER_MIN_VILLAGES, type ArmyTemplate, type BuildStep, type BuildTemplate, type ManagerState } from '../../engine/manager';
+import { ARMY_PRESETS, BUILD_PRESETS, MANAGER_MAX_VILLAGES, MANAGER_MIN_VILLAGES, type ArmyTemplate, type BuildStep, type BuildTemplate, type ManagerState } from '../../engine/manager';
 import type { BuildingId, UnitId } from '../../engine/types';
 import type { VillageView } from '../../engine/view';
 import { Btn, Empty, NumInput, Section, Tabs, UnitIcon, unitName } from '../components/common';
@@ -65,6 +65,18 @@ export function ManagerScreen() {
     else m.villages[vid] = cur;
     save(m);
   };
+  /** villages holding one of the manager's slots (paused ones included) */
+  const isManaged = (vid: number) => { const mv = draft.villages[vid]; return !!mv && (mv.build !== undefined || mv.army !== undefined); };
+  const managedCount = pv.villages.filter((v) => isManaged(v.id)).length;
+  const full = managedCount >= MANAGER_MAX_VILLAGES;
+  /** set one template on every managed village ('none' clears it; a village left with neither frees its slot) */
+  const assignAll = (kind: 'build' | 'army', x: string) => {
+    if (x === '') return;
+    const m = clone(draft);
+    for (const v of pv.villages) if (isManaged(v.id)) m.villages[v.id] = { ...m.villages[v.id], [kind]: x === 'none' ? undefined : Number(x) };
+    for (const k in m.villages) if (m.villages[k].build === undefined && m.villages[k].army === undefined) delete m.villages[k];
+    save(m);
+  };
 
   if (pv.villages.length < MANAGER_MIN_VILLAGES) {
     return (
@@ -87,11 +99,15 @@ export function ManagerScreen() {
       <p class="muted small mgr-lede">
         Give each village a <b>build template</b> (buildings to raise, in order) and an <b>army template</b> (troops to keep).
         The realm works through them for you, even while you are away: it keeps the build queue full as resources allow, and
-        recruits only from what the next building doesn't need.
+        recruits only from what the next building doesn't need. Up to {MANAGER_MAX_VILLAGES} villages can be managed at a time.
       </p>
       <Tabs<Tab> active={tab} onChange={setTab} tabs={[{ id: 'villages', label: 'Villages' }, { id: 'build', label: `Build templates (${draft.build.length})` }, { id: 'army', label: `Army templates (${draft.army.length})` }]} />
       {tab === 'villages' && (
         <Section>
+          <p class="small mgr-slots">
+            Managing <b class="num">{managedCount}</b> of <b class="num">{MANAGER_MAX_VILLAGES}</b> villages.
+            {full && <span class="muted"> To manage another village, free a slot by setting a managed village's templates to None.</span>}
+          </p>
           {draft.build.length === 0 && draft.army.length === 0 ? (
             <Empty>
               No templates yet. <button type="button" class="link" onClick={() => setTab('build')}>Make a build template</button> or{' '}
@@ -109,6 +125,8 @@ export function ManagerScreen() {
                     const bs = buildStatus(v, bt);
                     const as = armyStatus(v, at);
                     const managed = bt || at;
+                    const locked = full && !isManaged(v.id);
+                    const lockTip = locked ? `You can manage ${MANAGER_MAX_VILLAGES} villages at a time. Set a managed village's templates to None to free a slot.` : undefined;
                     return (
                       <tr class={mv.paused ? 'is-paused' : ''}>
                         <td>
@@ -116,7 +134,7 @@ export function ManagerScreen() {
                           <div class="muted small num">{coords(v.x, v.y)} · {fmt(v.points)} pts</div>
                         </td>
                         <td>
-                          <select id={`mgr-b-${v.id}`} aria-label={`Build template for ${v.name}`} value={mv.build ?? ''} onChange={(e) => { const x = (e.currentTarget as HTMLSelectElement).value; assign(v.id, { build: x === '' ? undefined : Number(x) }); }}>
+                          <select id={`mgr-b-${v.id}`} aria-label={`Build template for ${v.name}`} disabled={locked} title={lockTip} value={mv.build ?? ''} onChange={(e) => { const x = (e.currentTarget as HTMLSelectElement).value; assign(v.id, { build: x === '' ? undefined : Number(x) }); }}>
                             <option value="">None</option>
                             {draft.build.map((t) => <option value={t.id}>{t.name}</option>)}
                           </select>
@@ -130,7 +148,7 @@ export function ManagerScreen() {
                           ) : <span class="muted">—</span>}
                         </td>
                         <td>
-                          <select id={`mgr-a-${v.id}`} aria-label={`Army template for ${v.name}`} value={mv.army ?? ''} onChange={(e) => { const x = (e.currentTarget as HTMLSelectElement).value; assign(v.id, { army: x === '' ? undefined : Number(x) }); }}>
+                          <select id={`mgr-a-${v.id}`} aria-label={`Army template for ${v.name}`} disabled={locked} title={lockTip} value={mv.army ?? ''} onChange={(e) => { const x = (e.currentTarget as HTMLSelectElement).value; assign(v.id, { army: x === '' ? undefined : Number(x) }); }}>
                             <option value="">None</option>
                             {draft.army.map((t) => <option value={t.id}>{t.name}</option>)}
                           </select>
@@ -153,15 +171,15 @@ export function ManagerScreen() {
               </table>
             </div>
           )}
-          {pv.villages.length > 1 && (draft.build.length > 0 || draft.army.length > 0) && (
+          {managedCount > 1 && (draft.build.length > 0 || draft.army.length > 0) && (
             <div class="row gap wrap mgr-all">
-              <span class="small muted">For every village:</span>
-              <select id="mgr-all-b" aria-label="Build template for every village" value="" onChange={(e) => { const x = (e.currentTarget as HTMLSelectElement).value; if (x === '') return; const m = clone(draft); for (const v of pv.villages) m.villages[v.id] = { ...(m.villages[v.id] ?? {}), build: x === 'none' ? undefined : Number(x) }; for (const k in m.villages) if (m.villages[k].build === undefined && m.villages[k].army === undefined) delete m.villages[k]; save(m); }}>
+              <span class="small muted">For every managed village:</span>
+              <select id="mgr-all-b" aria-label="Build template for every managed village" value="" onChange={(e) => assignAll('build', (e.currentTarget as HTMLSelectElement).value)}>
                 <option value="">Build template…</option>
                 <option value="none">None</option>
                 {draft.build.map((t) => <option value={t.id}>{t.name}</option>)}
               </select>
-              <select id="mgr-all-a" aria-label="Army template for every village" value="" onChange={(e) => { const x = (e.currentTarget as HTMLSelectElement).value; if (x === '') return; const m = clone(draft); for (const v of pv.villages) m.villages[v.id] = { ...(m.villages[v.id] ?? {}), army: x === 'none' ? undefined : Number(x) }; for (const k in m.villages) if (m.villages[k].build === undefined && m.villages[k].army === undefined) delete m.villages[k]; save(m); }}>
+              <select id="mgr-all-a" aria-label="Army template for every managed village" value="" onChange={(e) => assignAll('army', (e.currentTarget as HTMLSelectElement).value)}>
                 <option value="">Army template…</option>
                 <option value="none">None</option>
                 {draft.army.map((t) => <option value={t.id}>{t.name}</option>)}

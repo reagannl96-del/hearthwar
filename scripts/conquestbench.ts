@@ -6,7 +6,7 @@
 //   npx vite build --ssr scripts/conquestbench.ts --outDir .bench --emptyOutDir && node .bench/conquestbench.js [days] [seed] [ais]
 
 import { advance } from '../src/engine/game';
-import { campaignState, campaignVerdict } from '../src/engine/ai/ai';
+import { campaignState, campaignVerdict, incidentStats } from '../src/engine/ai/ai';
 import { nobleInfo } from '../src/engine/actions';
 import { farmMax, popFree } from '../src/engine/village';
 import { distance } from '../src/engine/formulas';
@@ -125,6 +125,7 @@ for (let h = 1; h <= days * 24; h++) {
     if (h === 48) { const top = [...list].sort((a, b) => b.villages.length - a.villages.length)[0]; console.log(`   fastest: ${top.name} (${top.ai!.personality}) ${top.villages.length}v gains ${(gains.get(top.id) ?? []).join(' ')} traits ${JSON.stringify(top.ai!.traits)}`); }
     { const c = list.filter((p) => !p.eliminated).map((p) => p.villages.length).sort((a, b) => a - b); const q = (x: number) => c[Math.min(c.length - 1, Math.floor(x * c.length))]; console.log(`   spread: min ${c[0]} 25% ${q(0.25)} median ${q(0.5)} 75% ${q(0.75)} 90% ${q(0.9)} max ${c[c.length - 1]}`); }
     { const sizes = Object.values(w.tribes).map((t) => t.members.length).sort((a, b) => b - a); const alone = list.filter((p) => !p.eliminated && p.tribeId === null).length; const hIn = humans.filter((hp) => hp.tribeId !== null).length; const hInv = humans.reduce((a, hp) => a + Object.values(w.tribes).filter((t) => t.invites?.some((i) => i.pid === hp.id)).length, 0); console.log(`   tribes: ${sizes.length} sizes [${sizes.slice(0, 12).join(',')}] tribeless AIs ${alone}, humans in tribes ${hIn}, invites open to humans ${hInv}`); }
+    console.log(`   answering attacks: ${JSON.stringify(incidentStats)}`);
     console.log(`   heroes at home: ${JSON.stringify(heroes)}`);
     if (process.env.WHY) for (const hp of humans.filter((_, i) => i % 2 === 0)) { const hv = w.villages[hp.villages[0]]; if (!hv) continue; const why: Record<string, number> = {}; for (const a of ais()) { if (!a.villages.some((id) => { const x = w.villages[id]; return x && distance(x.x, x.y, hv.x, hv.y) <= 22; })) continue; const r = campaignVerdict(w, a, hv).replace(/d+/g, '#'); why[r] = (why[r] ?? 0) + 1; } console.log(`   why not ${hp.name}: ${JSON.stringify(why)}`); }
     if (newcomers.size) { const nc = [...newcomers].map((id) => w.players[id]); console.log(`   newcomers: ${nc.filter((p) => p.villages.length > 0).length}/${nc.length} still standing, ${nc.reduce((a, p) => a + p.villages.length, 0)} villages, avg ${Math.round(nc.reduce((a, p) => a + p.points, 0) / nc.length)} pts`); }

@@ -4,7 +4,7 @@ import { bumpDaily } from './awards';
 import { themeOfHero, unitNameAt } from './data/themes';
 import { computeLoot, resolveBattle, type DefStackInput } from './combat';
 import { BUILDINGS, BUILDING_ORDER } from './data/buildings';
-import { HEROES, HERO_POWERS, ITEM_BY_ID, ITEM_POWERS, MERCHANT_CARRY, MERCHANT_SPEED, UNITS, isHero, type ItemDef } from './data/units';
+import { HEROES, HERO_POWERS, ITEM_BY_ID, ITEM_POWERS, MERCHANT_CARRY, MERCHANT_SPEED, OWN_SHIPMENT_SPEED, UNITS, isHero, type ItemDef } from './data/units';
 import { pushEvent } from './events';
 import { addCommand, commandsFrom, commandsOf, removeCommand } from './cmdindex';
 import {
@@ -72,8 +72,13 @@ export function travelTime(w: World, from: Village, to: Village, units: Units, o
   return Math.max(1000, Math.round(distance(from.x, from.y, to.x, to.y) * per * druid));
 }
 
+/**
+ * One-way merchant trip. Hauling between two of your own villages is much
+ * slower, so a fresh conquest cannot simply be fed from home.
+ */
 export function merchantTime(w: World, from: Village, to: Village): number {
-  return Math.max(1000, Math.round((distance(from.x, from.y, to.x, to.y) * MERCHANT_SPEED * MINUTE) / w.config.unitSpeed));
+  const own = from.ownerId !== null && from.ownerId === to.ownerId ? OWN_SHIPMENT_SPEED : 1;
+  return Math.max(1000, Math.round((distance(from.x, from.y, to.x, to.y) * MERCHANT_SPEED * MINUTE) / (w.config.unitSpeed * own)));
 }
 
 export function isProtected(w: World, playerId: number | null): boolean {
@@ -369,6 +374,7 @@ function arriveTrade(w: World, c: Command): void {
     });
   }
   if (from) {
+    // the way home takes as long as the way out (slow own-village hauls included)
     const back: Command = {
       id: w.nextId++, kind: 'tradeback', ownerId: c.ownerId, fromVid: c.fromVid, toVid: c.fromVid, origin: c.toVid,
       units: {}, merchants: c.merchants, depart: w.now, arrive: w.now + (c.arrive - c.depart),

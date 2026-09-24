@@ -136,6 +136,7 @@ export function RealmScreen() {
           <li><b>Who is safe.</b> Beginner protection, and after it anyone's only village for their first day in the realm. Tribe mates, allies and pacts. Barbarian villages within 5 fields of a person are left for that person. Only one ruler at a time goes after any one person.</li>
           <li><b>When they give up.</b> If scouts or reports show more defence than their army can beat, if two attacks are beaten back, if they lose their noblemen, or after a day. Stack defenders, support each other, and they look elsewhere.</li>
           <li><b>Their pace.</b> This is a fast realm: a keen ruler whose battles go well takes several villages a day, a careful one about one, and each has good days and bad. Winning streaks speed them up, setbacks slow them down, and most eventually have enough. A person who is attacked gets a breather of about three hours before the next ruler may strike, unless they struck first.</li>
+          <li><b>Answering attacks.</b> Strike a ruler and it, or its tribe mates, may answer: scouting you, reinforcing the village with troops suited to what hit it, or striking back. Each weighs it by temperament, distance and what it has; most of the time most of them stay out of it.</li>
           <li><b>Their ways.</b> Every ruler raises a hero at its statue. Some send fake attacks alongside real ones, some come to their tribe mates' aid, all want back what was taken from them, and they train troops to counter whatever keeps hitting them.</li>
         </ul>
       </Section>

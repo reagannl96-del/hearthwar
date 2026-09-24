@@ -247,6 +247,8 @@ export interface AIState {
   lost?: Record<number, number>;
   /** village it sent support to -> where from and when */
   support?: Record<number, { from: number; at: number }>;
+  /** attacks on this ruler to answer, when it has no tribe to share them with */
+  incidents?: Incident[];
   /** conquests in a row, each soon after the last (a ruler on a roll) */
   streak?: number;
   /** setbacks lately: failed conquests and villages lost (it takes longer to try again) */
@@ -296,6 +298,25 @@ export interface AIState {
   turnedAway?: Record<number, number>;
   /** where the between-session glances got to in the village list */
   glanceCursor?: number;
+}
+
+/** An attack on a ruler, written down for it (and its tribe mates) to answer. */
+export interface Incident {
+  /** the attack command */
+  id: number;
+  attacker: number;
+  victim: number;
+  vid: number;
+  at: number;
+  won: boolean;
+  /** what the army was mostly made of */
+  cls: 'inf' | 'cav' | 'arc' | 'mixed';
+  /** answers so far, from the whole tribe */
+  scouts: number;
+  supports: number;
+  strikes: number;
+  /** rulers who have already weighed it */
+  seen: number[];
 }
 
 /** A ruler's own habits, on top of its temperament. */
@@ -435,6 +456,8 @@ export interface Tribe {
   applications?: TribeApplication[];
   /** when members joined, for the rankings' "growing" figure (the last few weeks only) */
   joins?: number[];
+  /** attacks on members lately, for the rulers among them to answer (AI bookkeeping) */
+  incidents?: Incident[];
   /** other tribe id -> relation */
   diplomacy?: Record<number, Diplomacy>;
   forum?: ForumThread[];

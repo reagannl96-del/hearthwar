@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
-import { MERCHANT_CARRY } from '../../engine/data/units';
+import { MERCHANT_CARRY, OWN_SHIPMENT_SPEED } from '../../engine/data/units';
+import { EXCHANGE_RATE } from '../../engine/market';
 import type { ResKey } from '../../engine/types';
 import { Icon } from '../art/icons';
 import { Btn, Clock, Countdown, Empty, NumInput, Section, Tabs } from '../components/common';
@@ -68,6 +69,7 @@ function SendRes() {
           </div>
         )}
         {info && <p><b>{info.name}</b> <span class="muted">· {info.own ? 'your village' : info.ownerName} · arrives in <span class="num">{fmtDur(dur / warp.value)}</span></span></p>}
+        <p class="muted small">Shipments between your own villages are slow: merchants travel at {Math.round(OWN_SHIPMENT_SPEED * 100)}% speed.</p>
         <Btn
           disabled={tid === undefined || total <= 0 || need > free}
           onClick={() => {
@@ -97,7 +99,7 @@ function Exchange() {
   return (
     <div class="grid-2">
       <Section title="Trade with the post">
-        <p class="muted">The trading post always buys and sells. Prices follow its stock: the more of something it holds, the less it pays for it. It keeps a 10% fee.</p>
+        <p class="muted">The trading post always buys and sells. Prices follow its stock: the more of something it holds, the less it pays for it. Its fee is steep: at balanced stock you get about {fmt(EXCHANGE_RATE * 1000)} for every 1,000 you give.</p>
         <div class="exchange">
           <label class="field">
             <span>Give</span>

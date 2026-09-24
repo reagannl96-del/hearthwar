@@ -167,24 +167,36 @@ interface Client {
 
 const clients = new Set<Client>();
 
+/**
+ * A connection that is still working through what we sent it (a phone on a poor
+ * signal, a sleeping tab) gets nothing new for now: every update replaces the last,
+ * so it loses nothing, and the server never piles up unsent messages in memory.
+ */
+const BACKLOG = 512 * 1024;
+const backedUp = (c: Client) => c.ws.bufferedAmount > BACKLOG;
+
 function send(c: Client, m: ServerMsg) {
   if (c.ws.readyState === c.ws.OPEN) c.ws.send(JSON.stringify(m));
 }
 
+/** The whole map is big (a megabyte and more): it goes out at most this often, whatever changes. */
+const PUBLIC_EVERY = 30_000;
 let pubCache: { rev: number; at: number; json: string } | null = null;
-function sendPublic(c: Client) {
-  // the public snapshot is the same for everyone; build it once per change
-  if (!pubCache || pubCache.rev !== world.mapRev || Date.now() - pubCache.at > 60_000) {
+function sendPublic(c: Client, force = false) {
+  if (c.ws.readyState !== c.ws.OPEN || (!force && backedUp(c))) return;
+  // the public snapshot is the same for everyone: build it once, and not more often than it is sent
+  if (!pubCache || (pubCache.rev !== world.mapRev && Date.now() - pubCache.at > PUBLIC_EVERY / 2)) {
     const snap = publicSnapshot(world);
     pubCache = { rev: world.mapRev, at: Date.now(), json: JSON.stringify({ t: 'public', rev: snap.rev, world: snap.world } satisfies ServerMsg) };
   }
-  if (c.ws.readyState === c.ws.OPEN) c.ws.send(pubCache.json);
-  c.sentRev = world.mapRev;
+  c.ws.send(pubCache.json);
+  c.sentRev = pubCache.rev;
   c.lastPublic = Date.now();
 }
 
-function sendPrivate(c: Client) {
+function sendPrivate(c: Client, force = false) {
   if (c.pid === null || !world.players[c.pid]) return;
+  if (!force && backedUp(c)) return;
   send(c, { t: 'private', packet: privatePacket(world, c.pid) });
 }
 
@@ -207,8 +219,8 @@ async function authenticate(c: Client, token: string) {
     players: humans,
   });
   if (c.pid !== null) {
-    sendPublic(c);
-    sendPrivate(c);
+    sendPublic(c, true);
+    sendPrivate(c, true);
   }
 }
 
@@ -224,8 +236,8 @@ function handle(c: Client, m: ClientMsg) {
     world.accounts![c.userId] = p.id;
     c.pid = p.id;
     invalidateSpatial();
-    sendPublic(c);
-    sendPrivate(c);
+    sendPublic(c, true);
+    sendPrivate(c, true);
     void saveWorld();
     return;
   }
@@ -241,18 +253,18 @@ function handle(c: Client, m: ClientMsg) {
     send(c, { t: 'result', id: m.id, result });
     if (m.action.type === 'restart' && result.ok) {
       invalidateSpatial();
-      sendPublic(c);
+      sendPublic(c, true);
       void saveWorld();
     }
-    sendPrivate(c);
+    sendPrivate(c, true);
     return;
   }
   if (m.t === 'respawn') {
     const p = world.players[c.pid];
     if (!p?.eliminated || world.finished) return;
     respawnHuman(world, String(m.village ?? 'New Hope'), c.pid);
-    sendPublic(c);
-    sendPrivate(c);
+    sendPublic(c, true);
+    sendPrivate(c, true);
   }
 }
 
@@ -273,7 +285,12 @@ async function main() {
     res.writeHead(200, { 'content-type': 'text/plain' });
     res.end(`Hearthwar server: ${world.name}, ${Object.keys(world.accounts ?? {}).length} players`);
   });
-  const wss = new WebSocketServer({ server, perMessageDeflate: true, maxPayload: 64 * 1024 });
+  // compress, but cheaply: a small instance has a tenth of a CPU and half a gigabyte to share
+  const wss = new WebSocketServer({
+    server,
+    maxPayload: 64 * 1024,
+    perMessageDeflate: { zlibDeflateOptions: { level: 1, memLevel: 7 }, serverMaxWindowBits: 13, threshold: 1024, concurrencyLimit: 2 },
+  });
   wss.on('connection', (ws, req) => {
     const origin = req.headers.origin ?? '';
     if (ORIGINS.length && !ORIGINS.includes(origin)) {
@@ -298,14 +315,19 @@ async function main() {
   });
 
   setInterval(tick, 250);
-  // private packets every second; the (bigger) public map only when it changes
+  // private packets every second; the (much bigger) public map when it has changed, at most every half minute
   setInterval(() => {
     for (const c of clients) {
       if (c.pid === null) continue;
-      if (c.sentRev !== world.mapRev && Date.now() - c.lastPublic > 4000) sendPublic(c);
+      if (c.sentRev !== world.mapRev && Date.now() - c.lastPublic > PUBLIC_EVERY) sendPublic(c);
       sendPrivate(c);
     }
   }, 1000);
+  // how the server is holding up, now and then in the log
+  setInterval(() => {
+    const m = process.memoryUsage();
+    console.log(`health: heap ${Math.round(m.heapUsed / 1e6)} MB, rss ${Math.round(m.rss / 1e6)} MB, ${clients.size} connections`);
+  }, 10 * 60_000);
   setInterval(() => void saveWorld(), 30_000);
 
   // Free hosts (like Render) put servers to sleep after 15 idle minutes, which

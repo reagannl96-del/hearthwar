@@ -40,6 +40,19 @@ export const MANAGER_MIN_VILLAGES = 5;
 export const managerUnlocked = (p: Player) => p.villages.length >= MANAGER_MIN_VILLAGES;
 
 /**
+ * At most this many villages may follow templates at once (a paused village still
+ * holds its slot). The templates themselves are not limited. Kept low so the
+ * manager helps without playing the game for you.
+ */
+export const MANAGER_MAX_VILLAGES = 3;
+
+/** Drop managed villages past the cap, keeping the first ones in the record's order. */
+export function capManagedVillages(m: ManagerState): void {
+  const keys = Object.keys(m.villages);
+  for (const k of keys.slice(MANAGER_MAX_VILLAGES)) delete m.villages[Number(k)];
+}
+
+/**
  * Below the villages it needs, the manager is switched off: no village follows a
  * template any more (the templates themselves are kept for when it unlocks again).
  */
@@ -135,7 +148,9 @@ export function sanitizeManager(w: World, p: Player, raw: unknown): ManagerState
     }
     army.push({ id: takeId(t?.id), name: cleanName(t?.name, 'Army template'), units });
   }
-  const villages: Record<number, ManagedVillage> = {};
+  // only MANAGER_MAX_VILLAGES villages may be managed: the ones already managed keep
+  // their slots, then the rest in the order sent
+  const clean: [number, ManagedVillage][] = [];
   for (const [k, mv] of Object.entries(m.villages ?? {})) {
     const vid = Number(k);
     if (!p.villages.includes(vid) || !mv) continue;
@@ -143,8 +158,13 @@ export function sanitizeManager(w: World, p: Player, raw: unknown): ManagerState
     if (build.some((t) => t.id === mv.build)) e.build = mv.build;
     if (army.some((t) => t.id === mv.army)) e.army = mv.army;
     if (mv.paused === true) e.paused = true;
-    if (e.build !== undefined || e.army !== undefined) villages[vid] = e;
+    if (e.build !== undefined || e.army !== undefined) clean.push([vid, e]);
   }
+  const before = p.manager?.villages ?? {};
+  const held = (vid: number) => (vid in before ? 0 : 1);
+  clean.sort((a, b) => held(a[0]) - held(b[0])); // stable: keeps the sent order within each group
+  const villages: Record<number, ManagedVillage> = {};
+  for (const [vid, e] of clean.slice(0, MANAGER_MAX_VILLAGES)) villages[vid] = e;
   return { build, army, villages, tickAt: p.manager?.tickAt };
 }
 
@@ -228,11 +248,17 @@ export function runManager(w: World, p: Player): void {
   if (!m || p.eliminated) return;
   // fell below the villages it needs: it switches off
   if (!managerUnlocked(p)) { switchOffManager(p); return; }
+  // villages lost since the last look free their slots; saves from before the cap are trimmed to it
+  for (const k of Object.keys(m.villages)) {
+    const v = w.villages[Number(k)];
+    if (!v || v.ownerId !== p.id) delete m.villages[Number(k)];
+  }
+  capManagedVillages(m);
   let any = false;
   for (const [k, mv] of Object.entries(m.villages)) {
     const vid = Number(k);
     const v = w.villages[vid];
-    if (!v || v.ownerId !== p.id) { delete m.villages[vid]; continue; }
+    if (!v) continue;
     any = true;
     if (mv.paused) continue;
     updateVillage(w, v, w.now);

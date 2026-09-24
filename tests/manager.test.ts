@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { applyAction } from '../src/engine/actions';
 import { advance } from '../src/engine/game';
-import { ARMY_PRESETS, BUILD_PRESETS } from '../src/engine/manager';
+import { ARMY_PRESETS, BUILD_PRESETS, MANAGER_MAX_VILLAGES } from '../src/engine/manager';
 import { createWorld, defaultConfig } from '../src/engine/world';
 import { conquer } from '../src/engine/commands';
 
@@ -73,6 +73,36 @@ describe('the village manager', () => {
     const before = v2.buildings.clay ?? v2.buildings.claypit;
     advance(w2, w2.now + 6 * HOUR);
     expect(v2.buildings.claypit).toBeGreaterThan(before);
+  });
+
+  it('manages at most three villages at a time', () => {
+    const { w, me } = world();
+    expect(MANAGER_MAX_VILLAGES).toBe(3);
+    const eco = { id: 1, ...BUILD_PRESETS[0] };
+    const [a, b, c, d] = me.villages;
+    applyAction(w, me.id, { type: 'manager', manager: { build: [eco], army: [], villages: { [a]: { build: 1 }, [b]: { build: 1 }, [c]: { build: 1, paused: true } } } });
+    expect(Object.keys(me.manager!.villages)).toHaveLength(3);
+    // a fourth is dropped: the three already managed (the paused one included) keep their slots
+    applyAction(w, me.id, { type: 'manager', manager: { ...me.manager!, villages: { [d]: { build: 1 }, [a]: { build: 1 }, [b]: { build: 1 }, [c]: { build: 1, paused: true } } } });
+    expect(Object.keys(me.manager!.villages).map(Number).sort()).toEqual([a, b, c].sort());
+    // clearing a village frees its slot for another
+    applyAction(w, me.id, { type: 'manager', manager: { ...me.manager!, villages: { [a]: { build: 1 }, [b]: { build: 1 }, [d]: { build: 1 } } } });
+    expect(Object.keys(me.manager!.villages).map(Number).sort()).toEqual([a, b, d].sort());
+    // the templates themselves are not limited
+    const many = Array.from({ length: 8 }, (_, i) => ({ id: i + 1, ...BUILD_PRESETS[i % BUILD_PRESETS.length] }));
+    applyAction(w, me.id, { type: 'manager', manager: { build: many, army: [], villages: {} } });
+    expect(me.manager!.build).toHaveLength(8);
+  });
+
+  it('trims a save from before the cap to three villages on its next run', () => {
+    const { w, me } = world();
+    const eco = { id: 1, ...BUILD_PRESETS[0] };
+    applyAction(w, me.id, { type: 'manager', manager: { build: [eco], army: [], villages: { [me.villages[0]]: { build: 1 } } } });
+    // an old save: all five villages managed
+    for (const vid of me.villages) me.manager!.villages[vid] = { build: 1 };
+    expect(Object.keys(me.manager!.villages)).toHaveLength(5);
+    advance(w, w.now + 2 * 60_000);
+    expect(Object.keys(me.manager!.villages)).toHaveLength(3);
   });
 
   it('unlocks at five villages, and switches itself off below that', () => {
