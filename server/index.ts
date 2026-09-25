@@ -113,12 +113,14 @@ function freshWorld(pastRounds: RoundResult[] = []): World {
     multiplayer: true,
     config: {
       ...defaultConfig(),
-      speed: Number(env.WORLD_SPEED || 150),
-      unitSpeed: Number(env.WORLD_UNIT_SPEED || 80),
+      // a two-day round: the economy runs 7x a standard two-week round's speed, marches 4x
+      // (at the full 7x an attack ten fields off would land in twenty seconds: nobody could answer it)
+      speed: Number(env.WORLD_SPEED || 1050),
+      unitSpeed: Number(env.WORLD_UNIT_SPEED || 320),
       size,
       aiCount: AI_RULERS,
       difficulty: (env.WORLD_DIFFICULTY as Difficulty) || 'normal',
-      roundDays: Number(env.ROUND_DAYS || 14),
+      roundDays: Number(env.ROUND_DAYS || 2),
     },
   });
   w.accounts = {};

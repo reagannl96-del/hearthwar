@@ -21,10 +21,13 @@ import type { Command, UnitId, Units, Village, World } from './types';
 import { RES_KEYS } from './types';
 import { commandsTo, removeCommand, addCommand } from './cmdindex';
 import { createVillage, storageOf, updateVillage } from './village';
-import { buildable, inRealm, terrainAt } from './world';
+import { buildable, inRealm, paceOf, realmDayMs, terrainAt } from './world';
 
 /** How long a cache lasts, from the moment it's found. */
 export const CACHE_DURATION = 90 * MINUTE;
+/** On a fast (short) round a cache is shorter-lived and turns up more often, but stays special. */
+export const cacheDuration = (w: World) => Math.max(30 * MINUTE, CACHE_DURATION / paceOf(w));
+const gapScale = (w: World) => 1 / Math.min(2.5, paceOf(w));
 /** A new cache turns up this long after the last one ended, give or take (real time). */
 const CACHE_GAP_MIN = 6 * HOUR, CACHE_GAP_MAX = 12 * HOUR;
 /** The realm must be at least this old before the first one. */
@@ -43,7 +46,7 @@ export function activeCache(w: World): Village | null {
 
 /** The guard strength of a cache found now: 1 on the first day, rising a level a day to 10. */
 export function cacheLevel(w: World): number {
-  return Math.max(1, Math.min(10, 1 + Math.floor(w.now / DAY)));
+  return Math.max(1, Math.min(10, 1 + Math.floor(w.now / realmDayMs(w))));
 }
 
 /** The guards and wall of a cache at a given strength. */
@@ -113,12 +116,12 @@ export function spawnCache(w: World): Village | null {
   v.buildings.wall = g.wall;
   v.res = { wood: 0, clay: 0, iron: 0 };
   v.points = 0;
-  v.cache = { level, endsAt: w.now + CACHE_DURATION, claims: [] };
+  v.cache = { level, endsAt: w.now + cacheDuration(w), claims: [] };
   w.cacheVid = v.id;
   invalidateSpatial();
   w.mapRev++;
   pushEvent(w, 'cache', v.cache.endsAt, v.id);
-  news(w, `A resource cache has been found at ${v.x}|${v.y} (guards: level ${level}). Whoever holds it in an hour and a half fills their stores to the brim.`, 'world', v.id);
+  news(w, `A resource cache has been found at ${v.x}|${v.y} (guards: level ${level}). Whoever holds it in ${Math.round(cacheDuration(w) / MINUTE)} minutes fills their stores to the brim.`, 'world', v.id);
   return v;
 }
 
@@ -126,7 +129,7 @@ export function spawnCache(w: World): Village | null {
 export function cacheTick(w: World): void {
   if (w.finished || activeCache(w)) return;
   if (w.nextCacheAt === undefined) {
-    w.nextCacheAt = Math.max(w.now, CACHE_FIRST) + randInt(w, 0, CACHE_GAP_MAX - CACHE_GAP_MIN);
+    w.nextCacheAt = Math.max(w.now, CACHE_FIRST * gapScale(w)) + randInt(w, 0, Math.round((CACHE_GAP_MAX - CACHE_GAP_MIN) * gapScale(w)));
     return;
   }
   if (w.now < w.nextCacheAt) return;
@@ -201,7 +204,7 @@ export function endCache(w: World, vid: number): void {
   turnBack(w, v);
   delete w.villages[v.id];
   if (w.cacheVid === v.id) w.cacheVid = undefined;
-  w.nextCacheAt = w.now + randInt(w, CACHE_GAP_MIN, CACHE_GAP_MAX);
+  w.nextCacheAt = w.now + randInt(w, Math.round(CACHE_GAP_MIN * gapScale(w)), Math.round(CACHE_GAP_MAX * gapScale(w)));
   invalidateSpatial();
   w.mapRev++;
 }

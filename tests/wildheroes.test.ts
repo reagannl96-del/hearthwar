@@ -123,7 +123,7 @@ describe('the heroes of the wilds', () => {
     barb.units = { spear: 400, sword: 200 };
     barb.res = { wood: 0, clay: 0, iron: 0 };
     expect(sendTroops(w, { ownerId: p.id, fromVid: v.id, toVid: barb.id, kind: 'attack', units: { axe: 3000, djinn: 1 } }).ok).toBe(true);
-    advance(w, w.now + 48 * 3600_000);
+    advance(w, w.now + 6 * 3600_000);
     const rep = p.reports.find((r) => r.battle?.tribute);
     expect(rep).toBeTruthy();
     const t = rep!.battle!.tribute!;

@@ -117,7 +117,15 @@ export function terrainAt(w: World, x: number, y: number): string {
 export const aiThinkInterval = (w: World) => Math.min(300_000, Math.max(60_000, Math.round(18_000_000 / w.config.speed)));
 /** Beginner protection lasts a fixed two and a half real hours, whatever the world speed. */
 export const PROTECTION_MS = 150 * 60_000;
-export const protectionEnd = (w: World) => w.now + PROTECTION_MS;
+/**
+ * How much faster than a standard two-week round this realm runs: 1 normally, 7 for a
+ * two-day round. Everything timed by the real clock (the AI's conquest pace, newcomers,
+ * protection, caches...) is squeezed by it, so a short round plays out a whole round's story.
+ */
+export const paceOf = (w: { config: { roundDays?: number } }) => Math.max(1, 14 / (w.config.roundDays ?? 14));
+/** A "day" of this realm's story: a real day on a standard round, about 3.4 hours on a two-day one. */
+export const realmDayMs = (w: { config: { roundDays?: number } }) => (24 * HOUR) / paceOf(w);
+export const protectionEnd = (w: World) => w.now + Math.max(30 * 60_000, PROTECTION_MS / paceOf(w));
 
 /**
  * Bring an older saved world up to today's rules. Beginner protection used to
@@ -477,10 +485,10 @@ export function realmGrowth(w: World): void {
   const room = rulers <= usual ? 1 : Math.max(0, 1 - (rulers - usual) / Math.max(1, usual * 0.15));
   // (well under its usual size, newcomers come faster: twice as often at half)
   const short = Math.max(0, (usual - rulers) / Math.max(1, usual));
-  const arriveGap = (ARRIVE_GAP * Math.max(1, Math.sqrt(150 / w.config.speed))) / (1 + 2 * short);
+  const arriveGap = (ARRIVE_GAP * Math.max(1, Math.sqrt(150 / w.config.speed))) / (1 + 2 * short) / paceOf(w);
   if (usual > 0 && nextRandom(w) < (tick / arriveGap) * room) {
     // a late arrival comes with a start that fits the realm's age, so it is not simply eaten
-    const head = w.now < DAY_MS / 2 ? 0 : Math.min(14, 4 + Math.floor(w.now / DAY_MS) * 2);
+    const head = w.now < realmDayMs(w) / 2 ? 0 : Math.min(14, 4 + Math.floor(w.now / realmDayMs(w)) * 2);
     const p = foundAiRuler(w, head);
     if (p) {
       const v = w.villages[p.villages[0]];
@@ -490,11 +498,11 @@ export function realmGrowth(w: World): void {
   // and now and then someone gives up: mostly rulers who are struggling (down to their last
   // village after losing others, or failing again and again), now and then anyone (life happens)
   for (const p of living) {
-    if (w.now - p.createdAt < DAY_MS) continue;
+    if (w.now - p.createdAt < realmDayMs(w)) continue;
     const ai = p.ai;
-    const lostLately = Object.values(ai?.lost ?? {}).some((at) => w.now - at < DAY_MS);
+    const lostLately = Object.values(ai?.lost ?? {}).some((at) => w.now - at < realmDayMs(w));
     const struggling = p.villages.length <= 1 && (lostLately || (ai?.cold ?? 0) >= 2);
-    const perHour = struggling ? 0.02 : 0.0012;
+    const perHour = (struggling ? 0.02 : 0.0012) * paceOf(w);
     if (nextRandom(w) < perHour * (tick / HOUR)) {
       const name = p.name;
       const n = p.villages.length;
@@ -528,7 +536,7 @@ export function reinforceRulers(w: World, want: number): number {
   if (w.finished) return 0;
   const have = Object.values(w.players).filter((p) => p.kind === 'ai' && !p.eliminated).length;
   w.config.aiCount = Math.max(w.config.aiCount, want);
-  const head = Math.min(14, 4 + Math.floor(w.now / (24 * HOUR)) * 2);
+  const head = Math.min(14, 4 + Math.floor(w.now / realmDayMs(w)) * 2);
   let n = 0;
   for (let i = have; i < want; i++) {
     const p = foundAiRuler(w, head);
@@ -587,7 +595,7 @@ export function abandonRealm(w: World, p: Player): void {
 export function welcomeWave(w: World, key: string, count: number): number {
   if (w.finished || (w.onceDone ?? []).includes(key)) return 0;
   (w.onceDone ??= []).push(key);
-  const head = Math.min(14, 4 + Math.floor(w.now / (24 * HOUR)) * 2);
+  const head = Math.min(14, 4 + Math.floor(w.now / realmDayMs(w)) * 2);
   let n = 0;
   for (let i = 0; i < count; i++) if (foundAiRuler(w, head)) n++;
   const living = Object.values(w.players).filter((p) => p.kind === 'ai' && !p.eliminated).length;

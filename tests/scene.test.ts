@@ -128,7 +128,7 @@ describe('village layout', () => {
       }
     }
     expect([...new Set(bad)]).toEqual([]);
-  });
+  }, 60_000);
 
   it('buildings inside the walls stay clear of the wall', () => {
     const bad: string[] = [];

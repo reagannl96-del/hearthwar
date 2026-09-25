@@ -19,7 +19,7 @@ import { tribeName } from '../data/names';
 import type { AITraits, BattleData, Incident, BuildingId, Command, Player, Res, Tribe, UnitId, Units, Village, VillageRole, World } from '../types';
 import { RES_KEYS } from '../types';
 import { buildingsPop, farmMax, loyaltyRegen, popFree, troopsPop, queuedLevel, recruitQueueEnd, storageOf, unitAvailable, updateVillage } from '../village';
-import { aiThinkInterval } from '../world';
+import { aiThinkInterval, paceOf, realmDayMs } from '../world';
 
 type P = NonNullable<Player['ai']>['personality'];
 
@@ -180,7 +180,7 @@ function roleWeights(p: Player, role: VillageRole): Partial<Record<UnitId, numbe
  */
 function counterWeights(w: World, p: Player, role: VillageRole, base: Partial<Record<UnitId, number>>): Partial<Record<UnitId, number>> {
   const th = p.ai!.threat;
-  if (!th || role.kind === 'offense' || w.now - th.t > 2 * DAY_MS) return base;
+  if (!th || role.kind === 'offense' || w.now - th.t > 2 * realmDayMs(w)) return base;
   const total = th.cav + th.inf + th.arc;
   if (total < 50) return base;
   const out = { ...base };
@@ -703,7 +703,7 @@ export function campaignGapH(w: World, p: Player): number {
   const t = traitsOf(w, p);
   const n = p.villages.length;
   // its pace: a day divided by the conquests it goes for, a little slower as the realm it runs grows
-  let gap = (24 / Math.max(0.3, t.tempo ?? 1)) * (1 + 0.02 * Math.max(0, n - 1));
+  let gap = (24 / Math.max(0.3, t.tempo ?? 1)) * (1 + 0.02 * Math.max(0, n - 1)) / paceOf(w);
   // content with what it has: past its ambition it slows right down
   if (n >= (t.ambition ?? 99)) gap *= 3;
   // on a roll it keeps rolling; setbacks slow it down
@@ -711,7 +711,7 @@ export function campaignGapH(w: World, p: Player): number {
   // and people have their days: some it is on fire, some it barely plays
   gap *= dayMood(w, p);
   // the opening is a little slower for everyone, and no ruler takes villages back to back
-  const floor = Math.max(1.5, 8 - 8 * (w.now / DAY_MS));
+  const floor = Math.max(1.5, 8 - 8 * (w.now / realmDayMs(w))) / paceOf(w);
   return Math.max(floor, gap);
 }
 
@@ -721,7 +721,7 @@ export function campaignGapH(w: World, p: Player): number {
  * rest), now and then a day it barely plays (x3).
  */
 export function dayMood(w: World, p: Player): number {
-  const day = Math.floor(w.now / DAY_MS);
+  const day = Math.floor(w.now / realmDayMs(w));
   const roll = (((p.id * 2654435761) ^ (day * 40503 + 17)) >>> 0) % 100;
   return roll < 14 ? 3 : roll > 85 ? 0.6 : 1;
 }
@@ -730,7 +730,7 @@ export function dayMood(w: World, p: Player): number {
 function recentLoss(w: World, p: Player): number | null {
   for (const [k, at] of Object.entries(p.ai!.lost ?? {})) {
     const v = w.villages[Number(k)];
-    if (w.now - at < 6 * 3_600_000 && v && v.ownerId !== p.id && (p.ai!.avoid?.[v.id] ?? 0) <= w.now) return v.id;
+    if (w.now - at < (6 * 3_600_000) / paceOf(w) && v && v.ownerId !== p.id && (p.ai!.avoid?.[v.id] ?? 0) <= w.now) return v.id;
   }
   return null;
 }
@@ -806,7 +806,7 @@ function chooseCampaignTarget(w: World, p: Player, from: Village): Village | nul
     const defence = unitsCount(intel?.units ?? {}) - (intel?.units?.scout ?? 0);
     let score = Math.min(v.points, 3000) / 12 - d * 5 - wall * 6 - Math.min(defence, 4000) * 0.03;
     const lost = ai.lost?.[v.id];
-    if (lost !== undefined && w.now - lost < 3 * DAY_MS) score += 120;
+    if (lost !== undefined && w.now - lost < 3 * realmDayMs(w)) score += 120;
     if (v.ownerId === null) {
       if (v.points < 100) continue;
       if (nearPerson(w, v)) continue;
@@ -1452,11 +1452,11 @@ function mayHit(w: World, p: Player, ownerId: number | null, campaign = false): 
   if (ownerId === null || w.players[ownerId]?.kind !== 'human') return true;
   if (campaign) return true;
   const last = lastHitOn(w, ownerId);
-  if (!last || w.now - last >= HUMAN_BREATHER) return true;
+  if (!last || w.now - last >= HUMAN_BREATHER / paceOf(w)) return true;
   const ai = p.ai!;
   const mine = ai.lastHit?.[ownerId] ?? 0;
   const wronged = ai.provoked?.[ownerId] ?? 0;
-  return wronged > mine && w.now - mine >= PAYBACK_WAIT;
+  return wronged > mine && w.now - mine >= PAYBACK_WAIT / paceOf(w);
 }
 
 /** Remember who we hit (grudges and the human's attack history). */
@@ -1639,7 +1639,7 @@ export function aiOnConquest(w: World, v: Village, oldOwner: number | null, newO
     op.ai.streak = 0;
     op.ai.cold = (op.ai.cold ?? 0) + 1;
     const lost = (op.ai.lost ??= {});
-    if (lost[v.id] === undefined || w.now - lost[v.id] > DAY_MS) lost[v.id] = w.now;
+    if (lost[v.id] === undefined || w.now - lost[v.id] > realmDayMs(w)) lost[v.id] = w.now;
     op.ai.targetPlayer = newOwner;
     op.ai.grudgeAt = w.now;
     if (op.ai.campaign && w.villages[op.ai.campaign.from]?.ownerId !== op.id) endCampaign(w, op, false);
@@ -1665,7 +1665,7 @@ export function aiOnBattle(w: World, c: Command, target: Village, data: BattleDa
   if (!victim?.ai || c.ownerId === victim.id) return;
   // and what they were hit with (it fades: every new attack counts, older ones count less)
   if (c.tag !== 'scout' && c.tag !== 'fake') {
-    const th = victim.ai.threat && w.now - victim.ai.threat.t < 2 * DAY_MS ? victim.ai.threat : { cav: 0, inf: 0, arc: 0, t: w.now };
+    const th = victim.ai.threat && w.now - victim.ai.threat.t < 2 * realmDayMs(w) ? victim.ai.threat : { cav: 0, inf: 0, arc: 0, t: w.now };
     th.cav *= 0.8; th.inf *= 0.8; th.arc *= 0.8;
     for (const k in data.attUnits) {
       const u = k as UnitId, n = data.attUnits[u] ?? 0;
@@ -1713,7 +1713,6 @@ function tribeAppeal(w: World, p: Player, t: Tribe): number {
   return strength + near * 0.6;
 }
 
-const DAY_MS = 86_400_000;
 
 /**
  * A ruler's life in the tribes, as people play it: take a good invitation, move
@@ -1737,14 +1736,14 @@ function tribeLife(w: World, p: Player): void {
         if (acceptInvite(w, p.id, inv.tribe.id).ok) { ai.tribeSince = w.now; return; }
       }
       if (nextRandom(w) < 0.3) declineInvite(w, p.id, inv.tribe.id);
-    } else if (settled > DAY_MS && appeal > tribeAppeal(w, p, t0) * 1.8 + 0.5 && !(t0.founderId === p.id && t0.members.length > 1)) {
+    } else if (settled > realmDayMs(w) && appeal > tribeAppeal(w, p, t0) * 1.8 + 0.5 && !(t0.founderId === p.id && t0.members.length > 1)) {
       // a much better offer close by: say goodbye and go
       leaveTribe(w, p.id);
       if (acceptInvite(w, p.id, inv.tribe.id).ok) { ai.tribeSince = w.now; return; }
     } else if (nextRandom(w) < 0.2) declineInvite(w, p.id, inv.tribe.id);
   }
   // a tribe that no longer makes sense: alone in it for days, or every tribe mate lives far away
-  if (t0 && settled > 2 * DAY_MS) {
+  if (t0 && settled > 2 * realmDayMs(w)) {
     const mates = t0.members.filter((m) => m !== p.id && !w.players[m]?.eliminated);
     const lonely = mates.length === 0;
     const scattered = mates.length > 0 && tribeAppeal(w, p, t0) < Math.min(5, tribePoints(w, t0) / Math.max(1, myPts)) + 0.3;
@@ -1763,7 +1762,7 @@ function tribeLife(w: World, p: Player): void {
       for (const id in w.tribes) {
         const t = w.tribes[id];
         if (!t.recruiting || tribeFull(t)) continue;
-        if (w.now - (ai.turnedAway?.[t.id] ?? -Infinity) < 2 * DAY_MS) continue;
+        if (w.now - (ai.turnedAway?.[t.id] ?? -Infinity) < 2 * realmDayMs(w)) continue;
         const a = tribeAppeal(w, p, t);
         // a tribe with nobody close by is no help (and would soon be left again)
         const near = a - Math.min(5, tribePoints(w, t) / Math.max(1, p.points));
@@ -1796,7 +1795,7 @@ function tribeLife(w: World, p: Player): void {
   tribeDiplomacy(w, p, t, tp);
   // a tribe that took one of ours is an enemy
   for (const [vid, at] of Object.entries(ai.lost ?? {})) {
-    if (w.now - at > DAY_MS) continue;
+    if (w.now - at > realmDayMs(w)) continue;
     const taker = w.villages[Number(vid)]?.ownerId;
     const tt = taker != null ? w.players[taker]?.tribeId : null;
     if (tt != null && tt !== t.id && t.diplomacy?.[tt] !== 'enemy' && t.diplomacy?.[tt] !== 'ally') setDiplomacy(w, p.id, tt, 'enemy');
@@ -1882,7 +1881,7 @@ function tribeDiplomacy(w: World, p: Player, t: Tribe, tp: number): void {
     if (cur === 'enemy') {
       // peace, when the war has gone quiet for a while
       const since = fr[o.id]?.warSince ?? w.now;
-      if (bad < 0.5 && w.now - since > 2 * DAY_MS && nextRandom(w) < 0.3) {
+      if (bad < 0.5 && w.now - since > 2 * realmDayMs(w) && nextRandom(w) < 0.3) {
         setDiplomacy(w, p.id, o.id, null);
         const theirLead = w.players[o.founderId ?? -1];
         if (theirLead?.kind === 'ai' && o.diplomacy?.[t.id] === 'enemy') setDiplomacy(w, theirLead.id, t.id, null);
@@ -1919,7 +1918,7 @@ function tribeDiplomacy(w: World, p: Player, t: Tribe, tp: number): void {
  */
 function seekMerger(w: World, p: Player, t: Tribe, tp: number): boolean {
   if (nextRandom(w) > 0.04) return false;
-  if (w.now - (t.createdAt ?? 0) < 2 * DAY_MS) return false;
+  if (w.now - (t.createdAt ?? 0) < 2 * realmDayMs(w)) return false;
   if (t.members.some((m) => w.players[m]?.kind !== 'ai')) return false;
   const target = aiTribeTarget(w);
   let best: Tribe | null = null, bestScore = 0;
@@ -1945,7 +1944,7 @@ function seekMerger(w: World, p: Player, t: Tribe, tp: number): boolean {
  * realm, so tribes fill up steadily over the round instead of all at once.
  */
 export function aiTribeTarget(w: World): number {
-  return Math.min(TRIBE_MAX_MEMBERS, 6 + Math.floor((w.now / DAY_MS) * 1.5));
+  return Math.min(TRIBE_MAX_MEMBERS, 6 + Math.floor((w.now / realmDayMs(w)) * 1.5));
 }
 /** A recruiting tribe sends out an invitation about this often (while its recruiter is online). */
 const RECRUIT_GAP = 75 * 60_000;
@@ -1973,20 +1972,20 @@ function tribeRecruiting(w: World, p: Player): void {
     if (!who || who.eliminated || who.tribeId != null) { t.applications = (t.applications ?? []).filter((x) => x.pid !== a.pid); continue; }
     const hostile = t.members.some((m) => {
       const at = w.players[m]?.ai?.provoked?.[who.id];
-      return at !== undefined && at > w.now - DAY_MS;
+      return at !== undefined && at > w.now - realmDayMs(w);
     });
     answerApplication(w, p.id, who.id, !hostile && t.members.length < target && who.points >= avg * 0.08);
   }
   if (!aiLed) return;
   // invitations nobody answered for two days lapse, so they do not block the tribe
-  for (const inv of [...(t.invites ?? [])]) if (inv.by === p.id && w.now - inv.t > 2 * DAY_MS) cancelInvite(w, p.id, inv.pid);
+  for (const inv of [...(t.invites ?? [])]) if (inv.by === p.id && w.now - inv.t > 2 * realmDayMs(w)) cancelInvite(w, p.id, inv.pid);
   if (!t.recruiting || w.now - (ai.lastRecruit ?? -Infinity) < RECRUIT_GAP) return;
   if (t.members.length + (t.invites?.length ?? 0) >= target) return;
   const home = w.villages[p.villages[0]];
   if (!home) return;
   ai.lastRecruit = w.now;
   ai.invited ??= {};
-  for (const k in ai.invited) if (w.now - ai.invited[k] > 2 * DAY_MS) delete ai.invited[k];
+  for (const k in ai.invited) if (w.now - ai.invited[k] > 2 * realmDayMs(w)) delete ai.invited[k];
   let best: Player | null = null, bestScore = -Infinity;
   const seen = new Set<number>();
   for (const v of villagesNear(w, home.x, home.y, 30)) {
@@ -2001,7 +2000,7 @@ function tribeRecruiting(w: World, p: Player): void {
     // person hears from a tribe of rulers once every few days at most, and not often even then
     if (o.kind === 'human') {
       if (d > 24 || nextRandom(w) > 0.08) continue;
-      if (w.now - (o.aiInviteAt ?? -Infinity) < 3 * DAY_MS) continue;
+      if (w.now - (o.aiInviteAt ?? -Infinity) < 3 * realmDayMs(w)) continue;
     }
     const score = Math.min(2, o.points / Math.max(1, avg)) - d / 30;
     if (score > bestScore) { bestScore = score; best = o; }
@@ -2087,7 +2086,7 @@ function attackClass(units: Units): Incident['cls'] {
 const inc_weight = (data: BattleData) => (data.winner === 'attacker' ? 1.5 : 1);
 /** Bad blood fades: about a third a day. */
 function frictionNow(w: World, fr: { n: number; at: number }): number {
-  return fr.n * Math.pow(0.67, (w.now - fr.at) / DAY_MS);
+  return fr.n * Math.pow(0.67, (w.now - fr.at) / realmDayMs(w));
 }
 
 /** Write an attack down for whoever will answer it: the victim's tribe, or the victim alone. */
