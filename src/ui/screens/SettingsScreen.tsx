@@ -3,7 +3,7 @@ import { resetNavOrder } from '../navOrder';
 import { SPEED_PRESETS } from '../../engine/world';
 import { Btn, Modal, Section } from '../components/common';
 import { fmtDur } from '../format';
-import { host, paused, prefs, restartRealm, sceneQuality, setPaused, setPrefs, setWarp, leaveRealm, toast, view, warp, usePane } from '../store';
+import { act, host, paused, prefs, restartRealm, sceneQuality, setPaused, setPrefs, setWarp, leaveRealm, toast, view, warp, usePane } from '../store';
 import { BANNER_WALL, FlagBadge } from './BannerScreen';
 
 const QUALITY_NOTE = {
@@ -45,6 +45,7 @@ export function SettingsScreen() {
     <div class="stack">
       <div class="page-head"><h1>Settings</h1></div>
       <div class="grid-2">
+        <YourName />
         <Section title="Your banner">
           <div class="banner-mini">
             <FlagBadge flag={pv.me.flag} w={66} h={44} title="Your banner" />
@@ -231,6 +232,23 @@ function AdminReset() {
           </div>
         </div>
       )}
+    </Section>
+  );
+}
+
+/** Change your ruler name (unique in the realm; now and then, not every minute). */
+function YourName() {
+  const me = view.value!.me;
+  const [name, setName] = useState(me.name);
+  const clean = name.trim();
+  const changed = clean !== me.name;
+  return (
+    <Section title="Your name">
+      <form class="row gap wrap" onSubmit={(e) => { e.preventDefault(); if (changed && act({ type: 'renamePlayer', name: clean }, `You are now known as ${clean}.`)) setName(clean); }}>
+        <input value={name} maxLength={24} onInput={(e) => setName(e.currentTarget.value)} aria-label="Your ruler name" />
+        <Btn type="submit" disabled={!changed || clean.length < 3}>Change name</Btn>
+      </form>
+      <p class="muted small">3 to 24 characters, and nobody else in the realm may have it. The whole realm hears of the change, and you can change it again after a while.</p>
     </Section>
   );
 }

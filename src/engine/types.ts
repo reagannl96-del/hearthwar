@@ -404,6 +404,8 @@ export type DailyKind = 'attacker' | 'defender' | 'supporter' | 'looter' | 'conq
 export interface DailyAward { kind: DailyKind; day: number; score: number; runnerUp: number | null }
 
 export interface Player {
+  /** when this ruler last changed their name (real time), for the cooldown */
+  renamedAt?: number;
   /** honours this ruler's account has won in earlier realms */
   honours?: Honour[];
   id: number;

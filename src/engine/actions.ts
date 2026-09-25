@@ -5,6 +5,7 @@ import { BUILDINGS } from './data/buildings';
 import { unitNameAt } from './data/themes';
 import { HEROES, HERO_INFO, ITEM_BY_ID, UNITS, isHero, itemHero } from './data/units';
 import { REGION_NAMES, regionAt } from './regions';
+import { news } from './commands';
 import { cancelCommand, sendResources, sendTrain, sendTroops, trimReports, withdrawSupport } from './commands';
 import { commandsFrom, commandsOf } from './cmdindex';
 import { pushEvent } from './events';
@@ -49,6 +50,8 @@ export type Action =
   | { type: 'mintCoin'; vid: number; count: number }
   | { type: 'militia'; vid: number }
   | { type: 'rename'; vid: number; name: string }
+  /** change your ruler name */
+  | { type: 'renamePlayer'; name: string }
   | { type: 'equip'; item: string | null; hero?: UnitId }
   | { type: 'scavengeUnlock'; vid: number; tier: number }
   | { type: 'scavenge'; vid: number; tier: number; units: Units }
@@ -526,6 +529,7 @@ export function applyAction(w: World, pid: number, a: Action): ActionResult {
     case 'mintCoin': return mintCoin(w, pid, a.vid, a.count);
     case 'militia': return callMilitia(w, pid, a.vid);
     case 'rename': return rename(w, pid, a.vid, a.name);
+    case 'renamePlayer': return renamePlayer(w, pid, a.name);
     case 'equip': return equip(w, pid, a.item, a.hero);
     case 'scavengeUnlock': return scavengeUnlock(w, pid, a.vid, a.tier);
     case 'scavenge': return scavenge(w, pid, a.vid, a.tier, a.units);
@@ -585,4 +589,31 @@ export function applyAction(w: World, pid: number, a: Action): ActionResult {
     }
   }
   return fail('Unknown action.');
+}
+
+/** A ruler may take a new name every so often (12 hours on a standard round, less on a short one). */
+export const RENAME_COOLDOWN = 12 * 3_600_000;
+
+export function renamePlayer(w: World, pid: number, raw: unknown): ActionResult {
+  const p = w.players[pid];
+  if (!p) return fail('No such ruler.');
+  const name = String(raw ?? '').replace(/[\u0000-\u001f\u007f]/g, '').replace(/\s+/g, ' ').trim();
+  if (name.length < 3 || name.length > 24) return fail('A name must be 3 to 24 characters long.');
+  if (!/^[\p{L}\p{N} _.'-]+$/u.test(name)) return fail('Use letters, numbers, spaces and . _ \' - only.');
+  if (name === p.name) return fail('That is already your name.');
+  const lower = name.toLowerCase();
+  if (Object.values(w.players).some((o) => o.id !== pid && o.name.toLowerCase() === lower)) return fail('Another ruler already goes by that name.');
+  if (/^(barbarians?|admin|moderator|system)$/i.test(name)) return fail('That name is reserved.');
+  const wait = Math.round(RENAME_COOLDOWN / Math.max(1, 14 / (w.config.roundDays ?? 14)));
+  const since = Date.now() - (p.renamedAt ?? 0);
+  if (p.renamedAt !== undefined && since < wait) {
+    const mins = Math.ceil((wait - since) / 60_000);
+    return fail(`You can change your name again in ${mins >= 60 ? `${Math.ceil(mins / 60)} h` : `${mins} min`}.`);
+  }
+  const old = p.name;
+  p.name = name;
+  p.renamedAt = Date.now();
+  w.mapRev++;
+  news(w, `${old} is now known as ${name}.`, 'player');
+  return { ok: true };
 }
