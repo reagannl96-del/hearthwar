@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 // Hearthwar game server: runs the one shared world in memory, around the clock.
 // Players sign in with Google through Supabase and talk to this server over a
 // WebSocket. The world is saved to Supabase every 30 seconds.
@@ -51,12 +52,24 @@ async function writeStored(w: World): Promise<void> {
   if (error) console.error('Save failed:', error.message);
 }
 
-async function verify(token: string): Promise<{ id: string; name: string } | null> {
-  if (!sb) return token.startsWith('dev:') ? { id: token, name: token.slice(4) || 'Tester' } : null;
+/**
+ * The realm's admins, by a hash of their sign-in email (so no address sits in the code),
+ * plus any listed in ADMIN_EMAILS. Admins may wipe the realm from Settings.
+ */
+const ADMIN_HASHES = new Set(['16414ce420be9ef65dd90745cfcc9cd97da5317d8fc518dfab6dba282ca04b88']);
+const ADMIN_EMAILS = new Set((env.ADMIN_EMAILS || '').split(',').map((e) => e.trim().toLowerCase()).filter(Boolean));
+function isAdminEmail(email: string | undefined): boolean {
+  if (!email) return false;
+  const e = email.trim().toLowerCase();
+  return ADMIN_EMAILS.has(e) || ADMIN_HASHES.has(createHash('sha256').update(e).digest('hex'));
+}
+
+async function verify(token: string): Promise<{ id: string; name: string; admin: boolean } | null> {
+  if (!sb) return token.startsWith('dev:') ? { id: token, name: token.slice(4) || 'Tester', admin: env.DEV_ADMIN === 'yes' } : null;
   const { data, error } = await sb.auth.getUser(token);
   if (error || !data.user) return null;
   const meta = data.user.user_metadata as Record<string, string | undefined>;
-  return { id: data.user.id, name: meta.full_name || meta.name || data.user.email?.split('@')[0] || 'Wanderer' };
+  return { id: data.user.id, name: meta.full_name || meta.name || data.user.email?.split('@')[0] || 'Wanderer', admin: isAdminEmail(data.user.email) };
 }
 
 // ---------- world ----------
@@ -121,9 +134,14 @@ const RESULTS_MS = Number(env.ROUND_RESULTS_MINUTES || 60) * 60_000;
 let resetting = false;
 async function maybeStartNextRound(): Promise<void> {
   if (resetting || !world.finished || world.now - world.finished.at < RESULTS_MS) return;
+  await openNewRealm([...(world.pastRounds ?? []), world.finished]);
+}
+
+/** Archive the realm and open a fresh one; everyone connected is sent back to found a new village. */
+async function openNewRealm(past: RoundResult[]): Promise<void> {
+  if (resetting) return;
   resetting = true;
   try {
-    const past = [...(world.pastRounds ?? []), world.finished];
     await saveArchive(world);
     world = freshWorld(past);
     clockBase = Date.now() - world.now;
@@ -171,6 +189,7 @@ interface Client {
   sentRev: number;
   lastPublic: number;
   actions: number[];
+  admin?: boolean;
 }
 
 const clients = new Set<Client>();
@@ -216,6 +235,7 @@ async function authenticate(c: Client, token: string) {
     return;
   }
   c.userId = user.id;
+  c.admin = user.admin;
   const pid = world.accounts?.[c.userId];
   c.pid = pid !== undefined && world.players[pid] ? pid : null;
   const humans = Object.values(world.players).filter((p) => p.kind === 'human').length;
@@ -225,6 +245,7 @@ async function authenticate(c: Client, token: string) {
     suggestedName: user.name.slice(0, 24),
     worldName: world.name,
     players: humans,
+    admin: c.admin || undefined,
   });
   if (c.pid !== null) {
     sendPublic(c, true);
@@ -236,6 +257,14 @@ function handle(c: Client, m: ClientMsg) {
   if (m.t === 'ping') return send(c, { t: 'pong', now: world.now });
   if (m.t === 'auth') return void authenticate(c, m.token);
   if (!c.userId) return send(c, { t: 'error', message: 'Sign in first.' });
+  if (m.t === 'adminReset') {
+    // only the realm's admin, and only with the realm's exact name typed as confirmation
+    if (!c.admin) return send(c, { t: 'error', message: 'Only the realm\'s admin can do that.' });
+    if (String(m.confirm ?? '') !== world.name) return send(c, { t: 'error', message: 'Type the realm\'s exact name to confirm.' });
+    console.log(`The admin reset the realm "${world.name}".`);
+    void openNewRealm([]);
+    return;
+  }
   if (m.t === 'join') {
     if (c.pid !== null) return;
     if (world.finished) return send(c, { t: 'error', message: 'This round is over. A new realm opens soon.' });

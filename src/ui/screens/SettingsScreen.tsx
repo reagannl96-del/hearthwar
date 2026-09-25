@@ -147,6 +147,7 @@ export function SettingsScreen() {
             <Btn variant="danger" onClick={() => setRestarting(true)}>Restart village…</Btn>
           </div>
         </Section>
+        {(h as unknown as { admin?: boolean }).admin && <AdminReset />}
         <Section title="Keyboard">
           <dl class="facts">
             <dt><kbd>A</kbd> / <kbd>D</kbd></dt><dd>Previous / next village</dd>
@@ -204,5 +205,32 @@ function RestartModal({ onClose }: { onClose: () => void }) {
         </div>
       </div>
     </Modal>
+  );
+}
+
+/** Only for the realm's admin: wipe the whole realm and open a fresh one (typed confirmation). */
+function AdminReset() {
+  const h = host.value! as unknown as { admin?: boolean; adminReset?: (confirm: string) => void; world: { name: string } };
+  const [open, setOpen] = useState(false);
+  const [typed, setTyped] = useState('');
+  const name = h.world.name;
+  return (
+    <Section title="Admin: restart the realm" class="admin-danger">
+      <p class="muted">Only you can see this. It wipes <b>{name}</b> completely, for everyone: every ruler, village, tribe, report and the round history. A brand-new realm opens and everyone founds a new village.</p>
+      {!open ? (
+        <Btn variant="danger" onClick={() => setOpen(true)}>Restart the realm…</Btn>
+      ) : (
+        <div class="stack-sm">
+          <label class="field">
+            <span>Type the realm's name to confirm: <b>{name}</b></span>
+            <input value={typed} onInput={(e) => setTyped(e.currentTarget.value)} placeholder={name} />
+          </label>
+          <div class="row gap">
+            <Btn variant="danger" disabled={typed !== name} onClick={() => { h.adminReset?.(typed); toast('Restarting the realm…', 'warn'); setOpen(false); setTyped(''); }}>Wipe it and start fresh</Btn>
+            <Btn variant="quiet" onClick={() => { setOpen(false); setTyped(''); }}>Cancel</Btn>
+          </div>
+        </div>
+      )}
+    </Section>
   );
 }

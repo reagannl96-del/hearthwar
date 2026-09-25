@@ -9,10 +9,12 @@ export type ClientMsg =
   | { t: 'join'; name: string; village: string }
   | { t: 'act'; id: number; action: Action }
   | { t: 'respawn'; village: string }
+  /** the realm's admin wipes it and opens a fresh one (confirm = the realm's exact name) */
+  | { t: 'adminReset'; confirm: string }
   | { t: 'ping' };
 
 export type ServerMsg =
-  | { t: 'hello'; joined: boolean; suggestedName: string; worldName: string; players: number }
+  | { t: 'hello'; joined: boolean; suggestedName: string; worldName: string; players: number; admin?: boolean }
   | { t: 'public'; rev: number; world: World }
   | { t: 'private'; packet: PrivatePacket }
   | { t: 'result'; id: number; result: ActionResult }

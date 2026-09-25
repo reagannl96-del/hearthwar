@@ -78,6 +78,14 @@ export class RemoteHost extends HostBase {
     return local;
   }
 
+  /** Only for the realm's admin: wipe the realm and open a fresh one. */
+  get admin(): boolean {
+    return this.conn.admin;
+  }
+  adminReset(confirm: string): void {
+    this.conn.send({ t: 'adminReset', confirm });
+  }
+
   respawn(name: string): boolean {
     this.conn.send({ t: 'respawn', village: name });
     return true;
@@ -103,6 +111,8 @@ export class Connection {
   private watchdog: ReturnType<typeof setInterval> | null = null;
   private lastMsgAt = 0;
   private up = false;
+  /** this account runs the realm (the server says so in its hello) */
+  admin = false;
 
   /** report the connection state, once per change */
   private setUp(up: boolean) {
@@ -140,6 +150,7 @@ export class Connection {
           return;
         }
         if (greeted) this.setUp(true);
+        if (m.t === 'hello') this.admin = !!m.admin;
         if (m.t === 'hello' && !greeted) {
           greeted = true;
           this.setUp(true);
