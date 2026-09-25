@@ -216,7 +216,7 @@ function AdminReset() {
   const name = h.world.name;
   return (
     <Section title="Admin: restart the realm" class="admin-danger">
-      <p class="muted">Only you can see this. It wipes <b>{name}</b> completely, for everyone: every ruler, village, tribe, report and the round history. A brand-new realm opens and everyone founds a new village.</p>
+      <p class="muted">Only you can see this. It ends <b>{name}</b> now and wipes it for everyone: every ruler, village, tribe and report. The round is recorded in the realm's history, and the best human ruler is honoured as its <b>champion</b> (a trophy that follows their account into every new realm). A brand-new realm opens and everyone founds a new village.</p>
       {!open ? (
         <Btn variant="danger" onClick={() => setOpen(true)}>Restart the realm…</Btn>
       ) : (

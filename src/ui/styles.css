@@ -2279,3 +2279,7 @@ button.realm-row:hover { background: var(--surface-2); border-color: var(--line)
 .realm-cache-live { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 6px 0; padding: 7px 10px; border-radius: 5px; border: 1px solid #c79a3a; background: linear-gradient(rgba(255, 226, 140, 0.55), rgba(230, 180, 70, 0.28)); }
 .map-hover.is-cache .countdown, .banner-cache .countdown, .cache-clock .countdown, .map-cache-time .countdown, .realm-cache-live .countdown { min-width: 0; }
 .target-card .countdown { min-width: 0; }
+
+/* honours from earlier realms: a small gold trophy by the name, a proper badge on the profile */
+.honour { display: inline-flex; align-items: center; gap: 3px; margin-left: 5px; font-size: 0.85rem; filter: drop-shadow(0 0 3px rgba(233, 184, 58, 0.8)); cursor: help; }
+.honour.is-big { margin: 0 6px 0 0; padding: 2px 10px; border-radius: 999px; font-weight: 800; font-size: 0.82rem; color: #3a2410; background: linear-gradient(#f7df8e, #d9a441); border: 1px solid #a8741a; filter: none; box-shadow: 0 0 8px rgba(233, 184, 58, 0.55); }

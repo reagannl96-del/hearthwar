@@ -402,6 +402,8 @@ export type DailyKind = 'attacker' | 'defender' | 'supporter' | 'looter' | 'conq
 export interface DailyAward { kind: DailyKind; day: number; score: number; runnerUp: number | null }
 
 export interface Player {
+  /** honours this ruler's account has won in earlier realms */
+  honours?: Honour[];
   id: number;
   name: string;
   kind: 'human' | 'ai';
@@ -540,6 +542,8 @@ export interface World {
   round?: boolean;
   /** how many barbarian villages the realm holds when full; lost ones are slowly replaced up to this */
   barbTarget?: number;
+  /** honours won in earlier realms, by account (they follow a player into every new realm) */
+  honours?: Record<string, Honour[]>;
   /** the resource cache being fought over, and when the next one turns up */
   cacheVid?: number;
   nextCacheAt?: number;
@@ -554,6 +558,9 @@ export interface ActionResult {
   error?: string;
   data?: unknown;
 }
+
+/** A lasting honour on a player's account, carried from realm to realm (e.g. a round won). */
+export interface Honour { title: string; realm: string; at: number; points?: number }
 
 export interface RoundResult {
   world: string;

@@ -22,6 +22,7 @@ import { privatePacket, publicSnapshot } from '../src/engine/shadow';
 import { invalidateSpatial } from '../src/engine/spatial';
 import type { Difficulty, RoundResult, World } from '../src/engine/types';
 import { recomputeCounters, recomputePlayerPoints } from '../src/engine/village';
+import { finishRound, honourChampion } from '../src/engine/round';
 import { SIZE_PRESETS, WORLD_VERSION, createWorld, defaultConfig, migrateWorld, reinforceRulers, respawnHuman, welcomeWave, spawnPlayer } from '../src/engine/world';
 import type { ClientMsg, ServerMsg } from '../src/net/protocol';
 
@@ -143,7 +144,9 @@ async function openNewRealm(past: RoundResult[]): Promise<void> {
   resetting = true;
   try {
     await saveArchive(world);
+    const honours = world.honours;
     world = freshWorld(past);
+    world.honours = honours;
     clockBase = Date.now() - world.now;
     invalidateSpatial();
     pubCache = null;
@@ -262,7 +265,11 @@ function handle(c: Client, m: ClientMsg) {
     if (!c.admin) return send(c, { t: 'error', message: 'Only the realm\'s admin can do that.' });
     if (String(m.confirm ?? '') !== world.name) return send(c, { t: 'error', message: 'Type the realm\'s exact name to confirm.' });
     console.log(`The admin reset the realm "${world.name}".`);
-    void openNewRealm([]);
+    // the round ends here: its standings are recorded and its best player is honoured as champion
+    finishRound(world);
+    const champ = honourChampion(world);
+    if (champ) console.log(`${champ} is honoured as champion of "${world.name}".`);
+    void openNewRealm([...(world.pastRounds ?? []), ...(world.finished ? [world.finished] : [])]);
     return;
   }
   if (m.t === 'join') {
@@ -271,6 +278,9 @@ function handle(c: Client, m: ClientMsg) {
     const p = spawnPlayer(world, String(m.name ?? ''), String(m.village ?? ''));
     if (!p) return send(c, { t: 'error', message: 'The realm is full.' });
     world.accounts![c.userId] = p.id;
+    // honours won in earlier realms follow the player
+    const won = world.honours?.[c.userId];
+    if (won?.length) p.honours = [...won];
     c.pid = p.id;
     invalidateSpatial();
     sendPublic(c, true);

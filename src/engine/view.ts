@@ -530,6 +530,8 @@ export function playerProfile(w: World, pid: number, viewer?: number) {
     today: dayOf(w),
     /** the banner this ruler flies (unset: they never made one) */
     flag: p.flag ? { ...p.flag } as FlagDesign : undefined,
+    /** honours won in earlier realms (a round's champion...) */
+    honours: p.honours ? p.honours.map((h) => ({ ...h })) : undefined,
     /** when they came to the realm (world time) */
     joinedAt: p.createdAt,
     protectedUntil: p.protectedUntil,

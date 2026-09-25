@@ -1,3 +1,4 @@
+import { Honours } from '../components/common';
 // A ruler's profile: their banner, where they stand, what you can do about them
 // (invite, remove, rights, diplomacy, mark them on the map), their villages with
 // quick attack and support buttons, and their honours.
@@ -103,6 +104,7 @@ function ProfileHeader({ p }: { p: ProfileData }) {
           </div>
         </div>
         <ul class="ph-meta">
+          {p.honours?.length ? <li class="ph-honours"><Honours list={p.honours} big /></li> : null}
           {p.eliminated
             ? <li class="bad-text">Fallen: lost every village</li>
             : <li title="Time in this realm">{days >= 1 ? `In the realm ${days} ${days === 1 ? 'day' : 'days'}` : 'New to the realm'}</li>}

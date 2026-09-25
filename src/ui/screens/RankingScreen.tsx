@@ -1,3 +1,4 @@
+import { Honours } from '../components/common';
 import { useState } from 'preact/hooks';
 import { Empty, Section, Tabs } from '../components/common';
 import { QUADRANT_NAME, fmt, quadrant, type Quadrant } from '../format';
@@ -58,6 +59,7 @@ export function RankingScreen({ player }: { player?: number }) {
                       <button type="button" class="link" onClick={() => pane.go({ name: 'ranking', player: p.id })}>
                         <i class="sw" style={{ background: p.id === me ? 'var(--me)' : p.color }} /> {p.name}
                       </button>
+                      <Honours list={host.value?.world.players[p.id]?.honours} />
                       {p.personality && <span class="muted small"> · {PERSONA[p.personality]}</span>}
                     </td>
                     <td>{p.tribe && p.tribeId != null && <button type="button" class="pill link" onClick={(e) => { e.stopPropagation(); pane.go({ name: 'tribe', id: p.tribeId! }); }}>{p.tribe}</button>}</td>

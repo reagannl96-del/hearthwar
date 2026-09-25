@@ -7,7 +7,7 @@
 
 import { news } from './commands';
 import { pushEvent } from './events';
-import type { RoundResult, World } from './types';
+import type { Honour, RoundResult, World } from './types';
 
 export const DOMINATION = 0.6;
 const DAY = 86_400_000;
@@ -87,4 +87,20 @@ export function finishRound(w: World): void {
     ? `The round is over! ${top.name}${top.tag ? ` [${top.tag}]` : ''} wins the realm with ${top.points.toLocaleString('en-US')} points.`
       + (lead ? ` [${lead.tag}] ${lead.name} ${lead.share >= DOMINATION ? 'dominates' : 'leads'} the tribes with ${Math.round(lead.share * 100)}% of its villages.` : '')
     : 'The round is over. Nobody holds the realm.', 'world');
+}
+
+/**
+ * The realm's best human ruler is its champion: their account is honoured, and the
+ * honour follows them into every realm after this one. Returns the champion's name.
+ */
+export function honourChampion(w: World): string | null {
+  const humans = Object.values(w.players).filter((p) => p.kind === 'human' && !p.eliminated).sort((a, b) => b.points - a.points);
+  const top = humans[0];
+  if (!top || !w.accounts) return null;
+  const account = Object.keys(w.accounts).find((k) => w.accounts![k] === top.id);
+  if (!account) return null;
+  const h: Honour = { title: 'Champion', realm: w.name, at: Date.now(), points: top.points };
+  (w.honours ??= {})[account] = [...(w.honours[account] ?? []), h];
+  (top.honours ??= []).push(h);
+  return top.name;
 }

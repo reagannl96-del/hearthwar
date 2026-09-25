@@ -58,6 +58,7 @@ function publicPlayer(p: Player): Player {
     ai: p.ai ? ({ personality: p.ai.personality } as Player['ai']) : undefined,
     dailyAwards: p.dailyAwards,
     flag: p.flag,
+    honours: p.honours,
   };
 }
 
@@ -85,6 +86,7 @@ export function publicSnapshot(w: World): PublicSnapshot {
       accounts: undefined,
       // when the next resource cache turns up is nobody's business
       nextCacheAt: undefined,
+      honours: undefined,
       news: w.news.slice(0, 60),
     },
   };

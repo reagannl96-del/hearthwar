@@ -301,3 +301,17 @@ export function RegionChip({ r, children, class: cls, title }: { r: Region; chil
     </span>
   );
 }
+
+/** A trophy for each honour a ruler won in an earlier realm (e.g. champion of a round). */
+export function Honours({ list, big }: { list?: { title: string; realm: string; points?: number }[]; big?: boolean }) {
+  if (!list?.length) return null;
+  return (
+    <>
+      {list.map((h) => (
+        <span class={`honour ${big ? 'is-big' : ''}`} title={`${h.title} of ${h.realm}${h.points ? ` (${h.points.toLocaleString('en-US')} points)` : ''}`}>
+          <span aria-hidden="true">🏆</span>{big && <> {h.title} of {h.realm}</>}
+        </span>
+      ))}
+    </>
+  );
+}
