@@ -165,7 +165,7 @@ export abstract class HostBase {
   recruitTime(vid: number, u: UnitId) {
     const v = this.world.villages[vid];
     const b = UNITS[u].building;
-    return b ? recruitTime(u, v.buildings[b], this.world.config.speed, v.bonus) : 0;
+    return b ? recruitTime(u, v.buildings[b], this.world.config.speed * (this.world.config.recruitBoost ?? 1), v.bonus) : 0;
   }
 
   travelTime(fromVid: number, toVid: number, units: Units, support = false): number {

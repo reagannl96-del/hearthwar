@@ -39,6 +39,8 @@ export interface WorldConfig {
   luck: number;
   /** Beginner protection in game-hours at speed 1 (scaled by speed). */
   protectionHours: number;
+  /** troops train this many times faster than the economy speed alone gives (1 if unset) */
+  recruitBoost?: number;
   /** how many real days a round of this realm lasts (14 if unset) */
   roundDays?: number;
   /** testing: AI rulers never sleep or take breaks */

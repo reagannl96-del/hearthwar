@@ -123,13 +123,16 @@ function freshWorld(pastRounds: RoundResult[] = []): World {
       speed: Math.round(Number(env.WORLD_SPEED || 150) * ROUND_PACE),
       unitSpeed: Math.round(Number(env.WORLD_UNIT_SPEED || 80) * Math.min(4, ROUND_PACE)),
       size,
-      aiCount: AI_RULERS,
+      // a short round opens with its full company of rulers (a long one fills up over the first days)
+      aiCount: ROUND_PACE > 1 ? AI_TARGET : AI_RULERS,
       difficulty: (env.WORLD_DIFFICULTY as Difficulty) || 'normal',
       roundDays: ROUND_DAYS,
+      // troops train twice as fast again as the economy on a short round
+      recruitBoost: Number(env.RECRUIT_BOOST || (ROUND_PACE > 1 ? 2 : 1)),
     },
   });
   w.accounts = {};
-  // it opens with AI_RULERS; newcomers fill it up to its usual size over the first days
+  // its usual size: newcomers keep it there (a long round opens smaller and fills up to it)
   w.config.aiCount = AI_TARGET;
   w.pastRounds = pastRounds;
   if (pastRounds.length > 0) w.name = `${env.WORLD_NAME || 'The Ashen Marches'} (round ${pastRounds.length + 1})`;

@@ -6,7 +6,7 @@
 import { advance } from '../src/engine/game';
 import { createWorld, defaultConfig } from '../src/engine/world';
 
-const w = createWorld({ worldName: 'P', playerName: 'P', villageName: 'Home', seed: 9, multiplayer: true, config: { ...defaultConfig(), speed: 1050, unitSpeed: 320, roundDays: 2, aiCount: 60, size: 200 } });
+const w = createWorld({ worldName: 'P', playerName: 'P', villageName: 'Home', seed: 9, multiplayer: true, config: { ...defaultConfig(), speed: 1050, unitSpeed: 320, roundDays: 2, recruitBoost: 2, aiCount: 150, size: 240 } });
 w.accounts = {};
 const start = w.now;
 let caches = 0, last = -1;

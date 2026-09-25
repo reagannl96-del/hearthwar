@@ -231,7 +231,7 @@ function manageArmy(w: World, p: Player, v: Village, t: ArmyTemplate, reserve: R
     const rb = d.building as RecruitBuilding | undefined;
     if (!rb || used.has(rb) || v.buildings[rb] < 1) continue;
     if (recruitQueueEnd(w, v, rb) - w.now > RECRUIT_AHEAD) continue;
-    const per = recruitTime(u, v.buildings[rb], w.config.speed, v.bonus);
+    const per = recruitTime(u, v.buildings[rb], w.config.speed * (w.config.recruitBoost ?? 1), v.bonus);
     let n = Math.min(short, Math.floor(RECRUIT_AHEAD / Math.max(1, per)), Math.floor(pop / Math.max(1, d.pop)));
     for (const k of RES_KEYS) if (d.cost[k] > 0) n = Math.min(n, Math.floor(Math.max(0, spare[k]) / d.cost[k]));
     if (n < 1) continue;

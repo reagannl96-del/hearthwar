@@ -291,7 +291,7 @@ function recruit(w: World, pid: number, vid: number, u: UnitId, count: number): 
   if (!chk.ok) return fail(chk.reason!);
   const cost = res(d.cost.wood * count, d.cost.clay * count, d.cost.iron * count);
   if (!pay(v, cost)) return fail('Not enough resources.');
-  const per = recruitTime(u, v.buildings[d.building], w.config.speed, v.bonus);
+  const per = recruitTime(u, v.buildings[d.building], w.config.speed * (w.config.recruitBoost ?? 1), v.bonus);
   const start = recruitQueueEnd(w, v, d.building);
   v.recruit[d.building].push({ id: w.nextId++, unit: u, count, done: 0, start, per, cost: { ...d.cost } });
   if (isHero(u)) v.heroKind = u;

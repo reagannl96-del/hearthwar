@@ -501,7 +501,7 @@ function recruit(w: World, p: Player, v: Village): void {
     const rb = d.building!;
     if (usedBuildings.has(rb)) continue;
     if (recruitQueueEnd(w, v, rb) - w.now > horizon) continue;
-    const per = recruitTime(u, v.buildings[rb], w.config.speed, v.bonus);
+    const per = recruitTime(u, v.buildings[rb], w.config.speed * (w.config.recruitBoost ?? 1), v.bonus);
     let n = Math.floor(horizon / per);
     for (const k of RES_KEYS) if (d.cost[k] > 0) n = Math.min(n, Math.floor(budget[k] / d.cost[k]));
     const chk = recruitCheck(w, v, u, 1);
