@@ -104,6 +104,10 @@ async function loadWorld(): Promise<World> {
 }
 
 /** A brand-new realm, as configured by the environment. */
+/** A two-day round by default; the round length sets how much faster than a two-week round it runs. */
+const ROUND_DAYS = Number(env.ROUND_DAYS || 2);
+const ROUND_PACE = Math.max(1, 14 / ROUND_DAYS);
+
 function freshWorld(pastRounds: RoundResult[] = []): World {
   const size = Math.max(Number(env.WORLD_SIZE || 0), SIZE_PRESETS.medium.size);
   const w = createWorld({
@@ -113,14 +117,15 @@ function freshWorld(pastRounds: RoundResult[] = []): World {
     multiplayer: true,
     config: {
       ...defaultConfig(),
-      // a two-day round: the economy runs 7x a standard two-week round's speed, marches 4x
-      // (at the full 7x an attack ten fields off would land in twenty seconds: nobody could answer it)
-      speed: Number(env.WORLD_SPEED || 1050),
-      unitSpeed: Number(env.WORLD_UNIT_SPEED || 320),
+      // WORLD_SPEED / WORLD_UNIT_SPEED are a standard two-week round's speeds; a shorter round
+      // runs faster by the same ratio (economy in full, marches at most 4x: at 7x an attack ten
+      // fields off would land in twenty seconds and nobody could answer it)
+      speed: Math.round(Number(env.WORLD_SPEED || 150) * ROUND_PACE),
+      unitSpeed: Math.round(Number(env.WORLD_UNIT_SPEED || 80) * Math.min(4, ROUND_PACE)),
       size,
       aiCount: AI_RULERS,
       difficulty: (env.WORLD_DIFFICULTY as Difficulty) || 'normal',
-      roundDays: Number(env.ROUND_DAYS || 2),
+      roundDays: ROUND_DAYS,
     },
   });
   w.accounts = {};
