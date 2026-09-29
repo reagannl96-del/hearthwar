@@ -250,6 +250,21 @@ function HorsePanel({ v }: { v: VillageView }) {
   );
 }
 
+/** Wood, clay and iron as picture buttons, with what the village holds of each. */
+function ResPicker({ id, value, onChange, res }: { id: string; value: ResKey; onChange: (k: ResKey) => void; res: Record<ResKey, number> }) {
+  return (
+    <div id={id} class="res-pick" role="radiogroup">
+      {KEYS.map((k) => (
+        <button type="button" role="radio" aria-checked={value === k} class={`res-opt ${value === k ? 'is-on' : ''}`} title={k} onClick={() => onChange(k)}>
+          <Icon name={k} size={26} />
+          <span class="res-opt-name">{k}</span>
+          <span class="num small muted">{fmt(Math.floor(res[k]))}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function Exchange() {
   const pane = usePane();
   const v = pane.village.value!;
@@ -278,20 +293,16 @@ function Exchange() {
       <Section title="Trade with the post">
         <p class="muted">The trading post always buys and sells. Prices follow its stock: the more of something it holds, the less it pays for it. Its fee is steep: at balanced stock you get about {fmt(EXCHANGE_RATE * 1000)} for every 1,000 you give.</p>
         <div class="exchange">
-          <label class="field">
+          <div class="field">
             <span>Give</span>
-            <select id="ex-give" value={give} onChange={(e) => setGive((e.currentTarget as HTMLSelectElement).value as ResKey)}>
-              {KEYS.map((k) => <option value={k}>{k}</option>)}
-            </select>
-          </label>
+            <ResPicker id="ex-give" value={give} onChange={setGive} res={res} />
+          </div>
           <NumInput id="ex-amount" value={amount} max={max} onInput={setAmount} />
           <span aria-hidden="true">→</span>
-          <label class="field">
+          <div class="field">
             <span>Receive</span>
-            <select id="ex-get" value={get} onChange={(e) => setGet((e.currentTarget as HTMLSelectElement).value as ResKey)}>
-              {KEYS.map((k) => <option value={k}>{k}</option>)}
-            </select>
-          </label>
+            <ResPicker id="ex-get" value={get} onChange={setGet} res={res} />
+          </div>
         </div>
         <p>
           You receive <b class="num">{fmt(give === get ? 0 : q.receive)}</b> {get} <span class="muted">(rate {q.rate.toFixed(2)})</span>
