@@ -1412,7 +1412,7 @@ function VillagePanel({ v, data, onClose }: { v: MapVillage; data: MapData; onCl
         <>
           <div class="row gap wrap">
             <Btn small variant="danger" onClick={() => { rallyTarget.value = { x: v.x, y: v.y, kind: 'attack' }; pane.go({ name: 'building', id: 'rally', tab: 'send' }); }}><Icon name="attack" size={14} /> Attack</Btn>
-            {(owner || (v.ownerId === null && !info.cache)) && <Btn small variant="ghost" title={owner ? undefined : 'Station troops here so raiders have to fight them (spiking)'} onClick={() => { rallyTarget.value = { x: v.x, y: v.y, kind: 'support' }; pane.go({ name: 'building', id: 'rally', tab: 'send' }); }}><Icon name="support" size={14} /> {owner ? 'Support' : 'Spike'}</Btn>}
+            {(owner || (v.ownerId === null && !info.cache)) && <Btn small variant="ghost" onClick={() => { rallyTarget.value = { x: v.x, y: v.y, kind: 'support' }; pane.go({ name: 'building', id: 'rally', tab: 'send' }); }}><Icon name="support" size={14} /> Support</Btn>}
             <Btn small variant="ghost" disabled={(cur.units.scout ?? 0) < 1} onClick={() => act({ type: 'send', vid: cur.id, target: v.id, kind: 'attack', units: { scout: Math.min(cur.units.scout ?? 0, owner ? 5 : 1) } }, 'Scouts are riding out.')}>
               <Icon name="scout" size={14} /> Scout
             </Btn>
