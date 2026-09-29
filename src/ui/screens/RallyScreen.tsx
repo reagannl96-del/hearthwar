@@ -213,6 +213,109 @@ function SendTroops({ v }: { v: VillageView }) {
 const ESCORT_UNITS: UnitId[] = ['axe', 'light', 'heavy', 'spear', 'sword', 'marcher'];
 
 function NobleTrain({ v }: { v: VillageView }) {
+  const [mode, setMode] = useState<'real' | 'fake'>('real');
+  return (
+    <div class="stack">
+      <div class="chips" role="group" aria-label="Train type">
+        <button type="button" class={`chip ${mode === 'real' ? 'is-on' : ''}`} aria-pressed={mode === 'real'} onClick={() => setMode('real')}>👑 Real noble train</button>
+        <button type="button" class={`chip ${mode === 'fake' ? 'is-on' : ''}`} aria-pressed={mode === 'fake'} onClick={() => setMode('fake')}>🎭 Fake noble train</button>
+      </div>
+      {mode === 'real' ? <RealTrain v={v} /> : <FakeTrain v={v} />}
+    </div>
+  );
+}
+
+/** Token units for fakes, slowest first so the waves march at a siege/noble-like pace. */
+const FAKE_UNITS: UnitId[] = ['catapult', 'ram', 'sword', 'spear', 'axe', 'archer', 'heavy', 'light', 'marcher', 'scout'];
+
+/**
+ * A fake train: the same back-to-back waves as a real one, but each wave is a
+ * token force with no nobleman — to the defender it lands like a train, so they
+ * have to guess which of your trains is the real one. Several targets at once.
+ */
+function FakeTrain({ v }: { v: VillageView }) {
+  const h = host.value!;
+  const avail = FAKE_UNITS.filter((u) => (v.units[u] ?? 0) > 0);
+  const [unit, setUnit] = useState<UnitId | ''>('');
+  const u = (unit && avail.includes(unit) ? unit : avail[0]) as UnitId | undefined;
+  const [per, setPer] = useState(1);
+  const [count, setCount] = useState(4);
+  const [list, setList] = useState(draftTarget.value);
+  const waves = Math.max(2, Math.min(6, count));
+  const size = Math.max(1, per);
+  const targets = (list.match(/\d+\s*\|\s*\d+/g) ?? [])
+    .map((t) => parseCoords(t))
+    .map((xy) => (xy ? h.villageAt(xy[0], xy[1]) : undefined))
+    .filter((id, i, a): id is number => id !== undefined && a.indexOf(id) === i)
+    .map((id) => h.villageInfo(id, v.id)!)
+    .filter((i) => i && !i.own);
+  const needPer = waves * size;
+  const have = u ? v.units[u] ?? 0 : 0;
+  const canDo = u ? Math.min(targets.length, Math.floor(have / needPer)) : 0;
+  const sendAll = () => {
+    if (!u) return;
+    let sent = 0;
+    for (const t of targets.slice(0, canDo)) {
+      const w: Units[] = Array.from({ length: waves }, () => ({ [u]: size }));
+      if (!act({ type: 'train', vid: v.id, target: t.id, waves: w })) break;
+      sent++;
+    }
+    if (sent) toast(`${sent} fake ${sent === 1 ? 'train' : 'trains'} of ${waves} waves on the way.`, 'good');
+  };
+  return (
+    <div class="grid-send">
+      <Section title="Fake waves">
+        <p class="muted small">
+          Each fake lands {waves} tiny attacks 100 ms apart, just like a real train, but without noblemen. Mix them in
+          with a real train so the defender can't tell which village to stack.
+        </p>
+        {!u ? <Empty>No troops at home to fake with.</Empty> : (
+          <div class="row gap wrap">
+            <label class="field">
+              <span>Unit per wave</span>
+              <select id="fake-unit" value={u} onChange={(e) => setUnit((e.currentTarget as HTMLSelectElement).value as UnitId)}>
+                {avail.map((x) => <option value={x}>{unitName(x, true)} ({fmt(v.units[x] ?? 0)} home)</option>)}
+              </select>
+            </label>
+            <label class="field">
+              <span>How many per wave</span>
+              <input id="fake-per" type="number" min={1} value={per} style={{ width: '80px' }} onInput={(e) => setPer(Math.max(1, Number(e.currentTarget.value) || 1))} />
+            </label>
+            <label class="field">
+              <span>Waves (2–6)</span>
+              <input id="fake-waves" type="number" min={2} max={6} value={count} style={{ width: '80px' }} onInput={(e) => setCount(Number(e.currentTarget.value) || 2)} />
+            </label>
+          </div>
+        )}
+        <p class="small muted">Tip: catapults or rams march slowly, so the fake arrives on a pace close to a real noble train.</p>
+      </Section>
+      <Section title="Targets">
+        <label class="field">
+          <span>Coordinates — one or more, e.g. 500|500 502|498</span>
+          <textarea id="fake-targets" rows={3} placeholder="x|y x|y …" value={list} onInput={(e) => setList(e.currentTarget.value)} />
+        </label>
+        {targets.length > 0 && (
+          <ul class="train-list">
+            {targets.map((t, i) => (
+              <li class={i < canDo ? '' : 'muted'}>
+                <b>{t.name}</b> <span class="muted">({coords(t.x, t.y)}) · {t.ownerName}</span>
+                {u && <> · lands <Clock t={now.value + h.travelTime(v.id, t.id, { [u]: size })} /></>}
+              </li>
+            ))}
+          </ul>
+        )}
+        {u && targets.length > 0 && canDo < targets.length && (
+          <p class="reason">Enough {unitName(u, true).toLowerCase()} for {canDo} of {targets.length} ({needPer} per target, {fmt(have)} at home).</p>
+        )}
+        <Btn variant="danger" disabled={!u || canDo === 0} onClick={sendAll}>
+          🎭 Send {canDo || ''} fake {canDo === 1 ? 'train' : 'trains'}
+        </Btn>
+      </Section>
+    </div>
+  );
+}
+
+function RealTrain({ v }: { v: VillageView }) {
   const h = host.value!;
   const pre = rallyTarget.value;
   if (pre) draftTarget.value = coords(pre.x, pre.y);
