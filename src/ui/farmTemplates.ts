@@ -50,3 +50,12 @@ export function loadFarmTemplates(guessA: Units = { light: 5 }): FarmTemplate[] 
 export function saveFarmTemplates(list: FarmTemplate[]) {
   lsSet(KEY, JSON.stringify(list));
 }
+
+/** One-tap starting mixes for a template, shown while editing. */
+export const FARM_PRESETS: { name: string; units: Units; hint: string }[] = [
+  { name: 'Light raid', units: { light: 5 }, hint: 'Fast, carries a lot' },
+  { name: 'Axe raid', units: { axe: 20 }, hint: 'Cheap, hits hard' },
+  { name: 'Spear raid', units: { spear: 15 }, hint: 'Early game' },
+  { name: 'Mixed foot', units: { spear: 20, axe: 10 }, hint: 'Walls up? Bring more' },
+  { name: 'Scout', units: { scout: 1 }, hint: 'See what is inside first' },
+];
