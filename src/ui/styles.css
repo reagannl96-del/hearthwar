@@ -2321,3 +2321,11 @@ button.realm-row:hover { background: var(--surface-2); border-color: var(--line)
 .farm-table tbody tr:hover td { background: var(--accent-soft); }
 .farm .chip:focus-visible, .farm .btn:focus-visible, .farm input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 @media (max-width: 520px) { .farm-stat { min-width: 0; flex: 1 1 40%; } .farm-summary .btn { margin-left: 0; width: 100%; } }
+
+/* trading post resource picker */
+.res-pick { display: flex; gap: 6px; }
+.res-opt { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 64px; padding: 6px 8px; border: 2px solid var(--line); border-radius: 6px; background: var(--parch-hi); color: var(--ink); cursor: pointer; font: inherit; text-transform: capitalize; }
+.res-opt:hover { border-color: var(--line-strong); }
+.res-opt.is-on { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent) inset; }
+.res-opt:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.res-opt-name { font-weight: 700; font-size: 0.85rem; }
