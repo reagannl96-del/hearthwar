@@ -146,10 +146,13 @@ export function sendTroops(w: World, o: SendOpts): ActionResult {
     if (o.kind === 'support' && cacheGuarded(to)) return { ok: false, error: 'The cache is still guarded: win an attack there before you send it support.' };
   }
   if (o.kind === 'support') {
-    if (to.ownerId === null && !to.cache) return { ok: false, error: 'You cannot support barbarian villages.' };
     if (units.noble) return { ok: false, error: 'Noblemen can only be sent in attacks.' };
   } else {
     if (to.ownerId === o.ownerId) return { ok: false, error: 'You cannot attack your own village.' };
+    // a spiked barbarian village: your own troops stand there, and would fight your raid
+    if (to.ownerId === null && !to.cache && to.support.some((s) => s.ownerId === o.ownerId)) {
+      return { ok: false, error: 'Your own troops are stationed there. Withdraw them before you attack it.' };
+    }
     if (to.ownerId !== null && isProtected(w, to.ownerId)) {
       return { ok: false, error: `${playerName(w, to.ownerId)} is still under beginner protection.` };
     }
@@ -355,7 +358,7 @@ function arriveSupport(w: World, c: Command): void {
   const to = w.villages[c.toVid];
   const home = w.villages[c.fromVid];
   const expectedOwner = c.targetOwner;
-  if (!to || (to.ownerId === null && !to.cache) || (expectedOwner !== undefined && to.ownerId !== expectedOwner)) {
+  if (!to || (expectedOwner !== undefined && to.ownerId !== expectedOwner)) {
     // the village changed hands while the troops were marching: turn around
     if (!home) return;
     const back: Command = {
@@ -377,9 +380,11 @@ function arriveSupport(w: World, c: Command): void {
     addReport(w, c.ownerId, {
       kind: 'support', color: 'blue', vid: to.id,
       title: `Your support reached ${to.name} (${to.x}|${to.y})`,
-      text: to.cache ? `${unitsCount(c.units)} troops are now stationed at the resource cache.${to.cache.claims.includes(c.ownerId) ? " You hold a claim: the most troops there when time runs out wins it." : " You have no claim yet: win an attack here for your troops to count."}` : `${unitsCount(c.units)} troops are now defending ${playerName(w, to.ownerId)}.`,
+      text: to.cache ? `${unitsCount(c.units)} troops are now stationed at the resource cache.${to.cache.claims.includes(c.ownerId) ? " You hold a claim: the most troops there when time runs out wins it." : " You have no claim yet: win an attack here for your troops to count."}`
+        : to.ownerId === null ? `${unitsCount(c.units)} troops now spike this barbarian village: anyone who raids it has to fight them.`
+        : `${unitsCount(c.units)} troops are now defending ${playerName(w, to.ownerId)}.`,
     });
-    addReport(w, to.ownerId, {
+    if (to.ownerId !== null) addReport(w, to.ownerId, {
       kind: 'support', color: 'blue', vid: to.id,
       title: `${playerName(w, c.ownerId)} sent support to ${to.name}`,
       text: `${unitsCount(c.units)} troops arrived to defend your village.`,
