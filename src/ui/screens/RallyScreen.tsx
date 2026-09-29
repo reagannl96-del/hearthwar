@@ -9,9 +9,9 @@ import type { BuildingId, UnitId, Units } from '../../engine/types';
 import type { CommandView, VillageView } from '../../engine/view';
 import { Icon } from '../art/icons';
 import { Btn, Clock, Cost, Countdown, Empty, NumInput, Progress, Section, Tabs, UnitList, UnitTable, VillageLink, UnitIcon, unitName } from '../components/common';
-import { MAX_TEMPLATES, TEMPLATE_NAME_MAX, defaultTplName, loadFarmTemplates, saveFarmTemplates, tplName, type FarmTemplate } from '../farmTemplates';
+import { FARM_PRESETS, MAX_TEMPLATES, TEMPLATE_NAME_MAX, defaultTplName, loadFarmTemplates, saveFarmTemplates, tplName, type FarmTemplate } from '../farmTemplates';
 import { coords, fmt, fmtAgo, fmtDur, parseCoords } from '../format';
-import { act, host, now, rallyTarget, view, warp, usePane } from '../store';
+import { act, host, now, rallyTarget, toast, view, warp, usePane } from '../store';
 import { Simulator } from './Simulator';
 import { cacheSupport } from '../caches';
 
@@ -32,6 +32,7 @@ export function RallyScreen({ tab }: { tab?: string }) {
   const pv = view.value!;
   const v = pane.village.value!;
   const incoming = pv.incoming.filter((c) => c.kind === 'attack').length;
+  const farming = pv.commands.filter((c) => c.repeat && c.fromVid === v.id).length;
   return (
     <div class="stack">
       <Tabs<Tab>
@@ -42,7 +43,7 @@ export function RallyScreen({ tab }: { tab?: string }) {
           { id: 'train', label: 'Noble train' },
           { id: 'troops', label: 'Troops' },
           { id: 'commands', label: 'Movements', badge: incoming },
-          { id: 'farm', label: 'Farm assistant' },
+          { id: 'farm', label: <>🌾 Farm assistant</>, badge: farming },
           { id: 'scavenge', label: 'Scavenging' },
           { id: 'sim', label: 'Simulator' },
         ]}
@@ -212,6 +213,109 @@ function SendTroops({ v }: { v: VillageView }) {
 const ESCORT_UNITS: UnitId[] = ['axe', 'light', 'heavy', 'spear', 'sword', 'marcher'];
 
 function NobleTrain({ v }: { v: VillageView }) {
+  const [mode, setMode] = useState<'real' | 'fake'>('real');
+  return (
+    <div class="stack">
+      <div class="chips" role="group" aria-label="Train type">
+        <button type="button" class={`chip ${mode === 'real' ? 'is-on' : ''}`} aria-pressed={mode === 'real'} onClick={() => setMode('real')}>👑 Real noble train</button>
+        <button type="button" class={`chip ${mode === 'fake' ? 'is-on' : ''}`} aria-pressed={mode === 'fake'} onClick={() => setMode('fake')}>🎭 Fake noble train</button>
+      </div>
+      {mode === 'real' ? <RealTrain v={v} /> : <FakeTrain v={v} />}
+    </div>
+  );
+}
+
+/** Token units for fakes, slowest first so the waves march at a siege/noble-like pace. */
+const FAKE_UNITS: UnitId[] = ['catapult', 'ram', 'sword', 'spear', 'axe', 'archer', 'heavy', 'light', 'marcher', 'scout'];
+
+/**
+ * A fake train: the same back-to-back waves as a real one, but each wave is a
+ * token force with no nobleman — to the defender it lands like a train, so they
+ * have to guess which of your trains is the real one. Several targets at once.
+ */
+function FakeTrain({ v }: { v: VillageView }) {
+  const h = host.value!;
+  const avail = FAKE_UNITS.filter((u) => (v.units[u] ?? 0) > 0);
+  const [unit, setUnit] = useState<UnitId | ''>('');
+  const u = (unit && avail.includes(unit) ? unit : avail[0]) as UnitId | undefined;
+  const [per, setPer] = useState(1);
+  const [count, setCount] = useState(4);
+  const [list, setList] = useState(draftTarget.value);
+  const waves = Math.max(2, Math.min(6, count));
+  const size = Math.max(1, per);
+  const targets = (list.match(/\d+\s*\|\s*\d+/g) ?? [])
+    .map((t) => parseCoords(t))
+    .map((xy) => (xy ? h.villageAt(xy[0], xy[1]) : undefined))
+    .filter((id, i, a): id is number => id !== undefined && a.indexOf(id) === i)
+    .map((id) => h.villageInfo(id, v.id)!)
+    .filter((i) => i && !i.own);
+  const needPer = waves * size;
+  const have = u ? v.units[u] ?? 0 : 0;
+  const canDo = u ? Math.min(targets.length, Math.floor(have / needPer)) : 0;
+  const sendAll = () => {
+    if (!u) return;
+    let sent = 0;
+    for (const t of targets.slice(0, canDo)) {
+      const w: Units[] = Array.from({ length: waves }, () => ({ [u]: size }));
+      if (!act({ type: 'train', vid: v.id, target: t.id, waves: w })) break;
+      sent++;
+    }
+    if (sent) toast(`${sent} fake ${sent === 1 ? 'train' : 'trains'} of ${waves} waves on the way.`, 'good');
+  };
+  return (
+    <div class="grid-send">
+      <Section title="Fake waves">
+        <p class="muted small">
+          Each fake lands {waves} tiny attacks 100 ms apart, just like a real train, but without noblemen. Mix them in
+          with a real train so the defender can't tell which village to stack.
+        </p>
+        {!u ? <Empty>No troops at home to fake with.</Empty> : (
+          <div class="row gap wrap">
+            <label class="field">
+              <span>Unit per wave</span>
+              <select id="fake-unit" value={u} onChange={(e) => setUnit((e.currentTarget as HTMLSelectElement).value as UnitId)}>
+                {avail.map((x) => <option value={x}>{unitName(x, true)} ({fmt(v.units[x] ?? 0)} home)</option>)}
+              </select>
+            </label>
+            <label class="field">
+              <span>How many per wave</span>
+              <input id="fake-per" type="number" min={1} value={per} style={{ width: '80px' }} onInput={(e) => setPer(Math.max(1, Number(e.currentTarget.value) || 1))} />
+            </label>
+            <label class="field">
+              <span>Waves (2–6)</span>
+              <input id="fake-waves" type="number" min={2} max={6} value={count} style={{ width: '80px' }} onInput={(e) => setCount(Number(e.currentTarget.value) || 2)} />
+            </label>
+          </div>
+        )}
+        <p class="small muted">Tip: catapults or rams march slowly, so the fake arrives on a pace close to a real noble train.</p>
+      </Section>
+      <Section title="Targets">
+        <label class="field">
+          <span>Coordinates — one or more, e.g. 500|500 502|498</span>
+          <textarea id="fake-targets" rows={3} placeholder="x|y x|y …" value={list} onInput={(e) => setList(e.currentTarget.value)} />
+        </label>
+        {targets.length > 0 && (
+          <ul class="train-list">
+            {targets.map((t, i) => (
+              <li class={i < canDo ? '' : 'muted'}>
+                <b>{t.name}</b> <span class="muted">({coords(t.x, t.y)}) · {t.ownerName}</span>
+                {u && <> · lands <Clock t={now.value + h.travelTime(v.id, t.id, { [u]: size })} /></>}
+              </li>
+            ))}
+          </ul>
+        )}
+        {u && targets.length > 0 && canDo < targets.length && (
+          <p class="reason">Enough {unitName(u, true).toLowerCase()} for {canDo} of {targets.length} ({needPer} per target, {fmt(have)} at home).</p>
+        )}
+        <Btn variant="danger" disabled={!u || canDo === 0} onClick={sendAll}>
+          🎭 Send {canDo || ''} fake {canDo === 1 ? 'train' : 'trains'}
+        </Btn>
+      </Section>
+    </div>
+  );
+}
+
+function RealTrain({ v }: { v: VillageView }) {
   const h = host.value!;
   const pre = rallyTarget.value;
   if (pre) draftTarget.value = coords(pre.x, pre.y);
@@ -546,10 +650,15 @@ function FarmAssistant({ v }: { v: VillageView }) {
   const [tpls, setTpls] = useState<FarmTemplate[]>(() => loadFarmTemplates(guessFarmUnits(v)));
   const [radius, setRadius] = useState(12);
   const [hideRed, setHideRed] = useState(true);
-  const [edit, setEdit] = useState(false);
+  const [onlyFree, setOnlyFree] = useState(false);
+  const [editId, setEditId] = useState<number | null>(null);
   const saveTpls = (list: FarmTemplate[]) => { setTpls(list); saveFarmTemplates(list); };
   const patchTpl = (id: number, p: Partial<FarmTemplate>) => saveTpls(tpls.map((t) => (t.id === id ? { ...t, ...p } : t)));
-  const addTpl = () => saveTpls([...tpls, { id: Math.max(0, ...tpls.map((t) => t.id)) + 1, name: '', units: {} }]);
+  const addTpl = () => {
+    const id = Math.max(0, ...tpls.map((t) => t.id)) + 1;
+    saveTpls([...tpls, { id, name: '', units: {} }]);
+    setEditId(id);
+  };
   const first = tpls[0];
   const firstName = tplName(first, 0);
   const map = h.map();
@@ -564,14 +673,19 @@ function FarmAssistant({ v }: { v: VillageView }) {
     if (t !== undefined) repeating.add(t);
   }
   const stopRepeats = (target?: number) => act({ type: 'stopRepeats', vid: v.id, target }, target === undefined ? 'Every repeating raid from here is stopped. The troops come home and stay.' : 'Repeat stopped. The troops come home and stay.');
-  const rows = map.villages
+  const allRows = map.villages
     .filter((m) => m.ownerId === null && !m.cache)
     .map((m) => ({ m, d: distance(v.x, v.y, m.x, m.y) }))
     .filter((r) => r.d <= radius)
     .sort((a, b) => a.d - b.d)
     .slice(0, 60)
-    .map((r) => ({ ...r, info: h.villageInfo(r.m.id, v.id)! }))
-    .filter((r) => !(hideRed && r.info.intel?.lastColor === 'red'));
+    .map((r) => ({ ...r, info: h.villageInfo(r.m.id, v.id)! }));
+  const isFree = (id: number) => !busy.has(id) && !returning.has(id) && !repeating.has(id);
+  const rows = allRows
+    .filter((r) => !(hideRed && r.info.intel?.lastColor === 'red'))
+    .filter((r) => !onlyFree || isFree(r.m.id));
+  // targets a sweep would hit: free, and not lost last time
+  const ready = allRows.filter((r) => isFree(r.m.id) && r.info.intel?.lastColor !== 'red');
   const canSend = (u: Units) => hasUnits(u) && Object.entries(u).every(([k, n]) => (v.units[k as UnitId] ?? 0) >= (n ?? 0));
   // how many times a template can go out with the troops at home, and what it is short of when it can't
   const sendsLeft = (u: Units) => {
@@ -584,73 +698,125 @@ function FarmAssistant({ v }: { v: VillageView }) {
     .map(([k, n]) => `${unitName(k as UnitId, true)} ${v.units[k as UnitId] ?? 0}/${n}`)
     .join(', ');
   const send = (vid: number, u: Units, repeat = false) => act({ type: 'send', vid: v.id, target: vid, kind: 'attack', units: u, repeat });
+  // send a template to the nearest ready targets, as many times as the troops at home allow
+  const sweep = (t: FarmTemplate, i: number) => {
+    const n = Math.min(sendsLeft(t.units), ready.length);
+    let sent = 0;
+    for (const r of ready.slice(0, n)) { if (!send(r.m.id, t.units)) break; sent++; }
+    if (sent) toast(`${tplName(t, i)} sent to ${sent} ${sent === 1 ? 'village' : 'villages'}.`, 'good');
+  };
+  const setupNeeded = !tpls.some((t) => hasUnits(t.units));
+  const unitsShown = FARM_UNITS.filter((u) => pv.config.archers || (u !== 'archer' && u !== 'marcher'));
+  const homeFarm = unitsShown.filter((u) => (v.units[u] ?? 0) > 0);
+  const bestIdx = tpls.findIndex((t) => canSend(t.units));
   return (
-    <div class="stack">
-      <Section title="Templates" actions={<Btn small variant="ghost" onClick={() => setEdit(!edit)}>{edit ? 'Done' : 'Edit'}</Btn>}>
-        <div class="grid-2">
-          {tpls.map((t, i) => (
-            <div class="template" key={t.id}>
-              {edit ? (
-                <div class="tpl-head">
-                  <input
-                    id={`tpl-name-${t.id}`}
-                    class="tpl-name"
-                    type="text"
-                    maxLength={TEMPLATE_NAME_MAX}
-                    placeholder={defaultTplName(i)}
-                    value={t.name}
-                    aria-label="Template name"
-                    onInput={(e) => patchTpl(t.id, { name: e.currentTarget.value.slice(0, TEMPLATE_NAME_MAX) })}
-                  />
-                  {i > 0 && <Btn small variant="quiet" onClick={() => saveTpls([tpls[i], ...tpls.filter((x) => x.id !== t.id)])} title="Move to first place (the one Repeat sends)">↑ First</Btn>}
-                  <Btn small variant="quiet" disabled={tpls.length <= 1} onClick={() => saveTpls(tpls.filter((x) => x.id !== t.id))} title="Delete this template">Delete</Btn>
-                </div>
-              ) : <b class="tpl-key">{tplName(t, i)}</b>}
-              {edit ? (
-                <div class="unit-inputs compact">
-                  {FARM_UNITS.filter((u) => pv.config.archers || (u !== 'archer' && u !== 'marcher')).map((u) => (
-                    <label class="unit-input" title={unitName(u)}>
-                      <span class="uname"><UnitIcon u={u} size={18} /></span>
-                      <NumInput id={`tpl-${t.id}-${u}`} value={t.units[u] || ''} onInput={(n) => patchTpl(t.id, { units: { ...t.units, [u]: n === '' ? 0 : n } })} />
-                    </label>
-                  ))}
-                </div>
-              ) : (
-                <span><UnitList units={t.units} empty="empty" /> <span class="muted small">carries {fmt(unitsCarry(t.units))}</span></span>
-              )}
-              {!hasUnits(t.units) ? <span class="small muted">Empty: tap Edit to set it up.</span>
-                : canSend(t.units) ? <span class="small good-text">{sendsLeft(t.units)} {sendsLeft(t.units) === 1 ? 'send' : 'sends'} possible</span>
-                : <span class="small bad-text">Not enough at home: {short(t.units)}</span>}
-            </div>
-          ))}
-        </div>
-        {edit && tpls.length < MAX_TEMPLATES && <Btn small variant="ghost" class="tpl-add" onClick={addTpl}>+ Add template</Btn>}
-        <p class="small farm-home"><span class="muted">At home:</span> <UnitList units={v.units} empty="nobody" /></p>
-        <p class="muted small">
-          <b>Repeat</b> (↻) sends your first template, {firstName}, again every time the troops come home, as long as the raids come back without losses.
-          {tpls.length > 1 && ' Use ↑ First in Edit to change which one that is.'}
-        </p>
-      </Section>
-      {repeating.size > 0 && (
-        <div class="farm-repeating">
-          <span>↻ <b>{repeating.size}</b> {repeating.size === 1 ? 'raid is' : 'raids are'} repeating from this village.</span>
-          <Btn small variant="ghost" onClick={() => stopRepeats()}>Stop all repeats</Btn>
+    <div class="stack farm">
+      <div class="farm-summary" role="status">
+        <div class="farm-stat"><span class="farm-stat-n num">{ready.length}</span><span class="farm-stat-l">ready to raid</span></div>
+        <div class="farm-stat"><span class="farm-stat-n num">{allRows.length}</span><span class="farm-stat-l">barbarians within {radius}</span></div>
+        <div class="farm-stat"><span class="farm-stat-n num">{busy.size + returning.size}</span><span class="farm-stat-l">raids out</span></div>
+        <div class={`farm-stat ${repeating.size ? 'is-live' : ''}`}><span class="farm-stat-n num">↻ {repeating.size}</span><span class="farm-stat-l">repeating</span></div>
+        {repeating.size > 0 && <Btn small variant="ghost" onClick={() => stopRepeats()}>Stop all repeats</Btn>}
+      </div>
+
+      {setupNeeded && (
+        <div class="farm-guide">
+          <h4>Set up farming in three steps</h4>
+          <ol>
+            <li><b>Pick a troop mix.</b> Tap a preset on a template below, or tap <i>Edit</i> to type numbers.</li>
+            <li><b>Send it.</b> Tap a template's name next to a barbarian village, or <i>Raid all nearby</i>.</li>
+            <li><b>Let it repeat.</b> The ↻ button keeps sending your ★ template every time the troops come home.</li>
+          </ol>
         </div>
       )}
-      <Section
-        title="Barbarian villages nearby"
-        actions={
-          <div class="row gap">
-            <label class="toggle small"><input type="checkbox" checked={hideRed} onChange={(e) => setHideRed(e.currentTarget.checked)} /> hide lost raids</label>
-            <label class="small">within <input id="farm-radius" class="tiny" type="number" min={2} max={60} value={radius} onInput={(e) => setRadius(Math.max(2, Math.min(60, Number(e.currentTarget.value) || 12)))} /> fields</label>
+
+      <Section title="Your raid templates" actions={tpls.length < MAX_TEMPLATES ? <Btn small variant="ghost" onClick={addTpl}>+ New template</Btn> : undefined}>
+        <p class="small farm-home"><span class="muted">At home:</span> {homeFarm.length ? homeFarm.map((u) => <span class="farm-unit" title={unitName(u)}><UnitIcon u={u} size={18} /><span class="num">{fmt(v.units[u] ?? 0)}</span></span>) : <span class="muted">no raiders</span>}</p>
+        <div class="farm-tpls">
+          {tpls.map((t, i) => {
+            const editing = editId === t.id || !hasUnits(t.units);
+            const left = sendsLeft(t.units);
+            const ok = canSend(t.units);
+            return (
+              <div class={`template farm-tpl ${i === 0 ? 'is-first' : ''} ${ok ? 'is-ok' : hasUnits(t.units) ? 'is-short' : 'is-empty'}`} key={t.id}>
+                <div class="tpl-head">
+                  {editId === t.id ? (
+                    <input id={`tpl-name-${t.id}`} class="tpl-name" type="text" maxLength={TEMPLATE_NAME_MAX} placeholder={defaultTplName(i)} value={t.name} aria-label="Template name"
+                      onInput={(e) => patchTpl(t.id, { name: e.currentTarget.value.slice(0, TEMPLATE_NAME_MAX) })} />
+                  ) : <b class="tpl-key">{tplName(t, i)}</b>}
+                  {i === 0
+                    ? <span class="pill farm-star" title="Repeat (↻) sends this template">★ repeats</span>
+                    : <Btn small variant="quiet" onClick={() => saveTpls([t, ...tpls.filter((x) => x.id !== t.id)])} title="Make this the template Repeat sends">☆ Use for repeat</Btn>}
+                  <span class="farm-grow" />
+                  <Btn small variant="quiet" onClick={() => setEditId(editId === t.id ? null : t.id)} aria-expanded={editId === t.id}>{editId === t.id ? 'Done' : 'Edit'}</Btn>
+                  {tpls.length > 1 && <Btn small variant="quiet" onClick={() => { saveTpls(tpls.filter((x) => x.id !== t.id)); if (editId === t.id) setEditId(null); }} title="Delete this template" aria-label={`Delete template ${tplName(t, i)}`}>✕</Btn>}
+                </div>
+                {hasUnits(t.units) && (
+                  <div class="farm-mix">
+                    {Object.entries(t.units).filter(([, n]) => (n ?? 0) > 0).map(([u, n]) => (
+                      <span class={`farm-unit ${(v.units[u as UnitId] ?? 0) < n! ? 'is-short' : ''}`} title={unitName(u as UnitId)}><UnitIcon u={u as UnitId} size={20} /><span class="num">{fmt(n!)}</span></span>
+                    ))}
+                    <span class="muted small">carries <b class="num">{fmt(unitsCarry(t.units))}</b></span>
+                  </div>
+                )}
+                {editing && (
+                  <div class="farm-edit">
+                    <div class="chips" role="group" aria-label="Quick fill">
+                      {FARM_PRESETS.filter((p) => Object.keys(p.units).every((u) => unitsShown.includes(u as UnitId))).map((p) => (
+                        <button type="button" class="chip" title={p.hint} onClick={() => patchTpl(t.id, { units: { ...p.units }, name: t.name || p.name.slice(0, TEMPLATE_NAME_MAX) })}>{p.name}</button>
+                      ))}
+                    </div>
+                    {editId === t.id && (
+                      <div class="unit-inputs compact">
+                        {unitsShown.map((u) => (
+                          <label class="unit-input" title={unitName(u)}>
+                            <span class="uname"><UnitIcon u={u} size={18} /></span>
+                            <NumInput id={`tpl-${t.id}-${u}`} value={t.units[u] || ''} onInput={(n) => patchTpl(t.id, { units: { ...t.units, [u]: n === '' ? 0 : n } })} />
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {!hasUnits(t.units) ? <span class="small muted">Empty — pick a preset above to get going.</span>
+                  : ok ? (
+                    <div class="farm-foot">
+                      <span class="small good-text">✓ {left} {left === 1 ? 'send' : 'sends'} possible</span>
+                      <Btn small disabled={!ready.length} onClick={() => sweep(t, i)} title={`Send ${tplName(t, i)} to the nearest ${Math.min(left, ready.length)} ready villages`}>
+                        Raid all nearby ({Math.min(left, ready.length)})
+                      </Btn>
+                    </div>
+                  )
+                  : <span class="small bad-text">Not enough at home: {short(t.units)}</span>}
+              </div>
+            );
+          })}
+        </div>
+      </Section>
+
+      <Section title="Barbarian villages nearby">
+        <div class="farm-filters">
+          <label class="farm-radius small">
+            Range <input type="range" min={2} max={60} value={radius} onInput={(e) => setRadius(Number(e.currentTarget.value))} aria-label="Search range in fields" />
+            <input id="farm-radius" class="tiny" type="number" min={2} max={60} value={radius} onInput={(e) => setRadius(Math.max(2, Math.min(60, Number(e.currentTarget.value) || 12)))} aria-label="Search range in fields" /> fields
+          </label>
+          <div class="chips">
+            <button type="button" class={`chip ${hideRed ? 'is-on' : ''}`} aria-pressed={hideRed} onClick={() => setHideRed(!hideRed)}>Hide lost raids</button>
+            <button type="button" class={`chip ${onlyFree ? 'is-on' : ''}`} aria-pressed={onlyFree} onClick={() => setOnlyFree(!onlyFree)}>Only idle targets</button>
           </div>
-        }
-      >
-        {rows.length === 0 ? <Empty>No barbarian villages in range.</Empty> : (
+        </div>
+        <p class="farm-legend small muted">
+          <span><span class="dot dot-green" /> clean win</span>
+          <span><span class="dot dot-yellow" /> losses</span>
+          <span><span class="dot dot-red" /> lost</span>
+          <span><span class="dot" /> never raided</span>
+          <span><b>full</b> = troops came home full, send more</span>
+        </p>
+        {rows.length === 0 ? <Empty>No barbarian villages match. Try a bigger range.</Empty> : (
           <div class="table-scroll">
             <table class="farm-table">
               <thead>
-                <tr><th /><th>Village</th><th class="right">Dist.</th><th class="right">Points</th><th>Last raid</th><th class="right">Wall</th><th class="right">Known res.</th><th /></tr>
+                <tr><th /><th>Village</th><th class="right">Dist.</th><th class="right">Points</th><th>Last raid</th><th class="right">Wall</th><th class="right">Known res.</th><th class="right">Send</th></tr>
               </thead>
               <tbody>
                 {rows.map(({ m, d, info }) => {
@@ -659,8 +825,8 @@ function FarmAssistant({ v }: { v: VillageView }) {
                   const known = it?.res ? it.res.wood + it.res.clay + it.res.iron : undefined;
                   const onWay = busy.has(m.id);
                   return (
-                    <tr key={m.id}>
-                      <td>{it?.lastColor ? <span class={`dot dot-${it.lastColor}`} title={`last report ${it.lastColor}`} /> : <span class="dot" />}</td>
+                    <tr key={m.id} class={`farm-row farm-${it?.lastColor ?? 'none'}`}>
+                      <td>{it?.lastColor ? <span class={`dot dot-${it.lastColor}`} title={`last report ${it.lastColor}`} /> : <span class="dot" title="never raided" />}</td>
                       <td class="nowrap">
                         <button type="button" class="link" onClick={() => pane.go({ name: 'map', focus: m.id })}>{coords(m.x, m.y)}</button>
                         {m.bonus && <span class="pill" title="Bonus village">bonus</span>}
@@ -676,11 +842,11 @@ function FarmAssistant({ v }: { v: VillageView }) {
                       <td class="right farm-send">
                         <div class="farm-btns">
                           {tpls.map((t, i) => (
-                            <Btn small disabled={!canSend(t.units)} onClick={() => send(m.id, t.units)} title={`Send template ${tplName(t, i)}`}><span class="trunc">{tplName(t, i)}</span></Btn>
+                            <Btn small variant={i === bestIdx ? 'primary' : 'ghost'} disabled={!canSend(t.units)} onClick={() => send(m.id, t.units)} title={`Send template ${tplName(t, i)}`}><span class="trunc">{tplName(t, i)}</span></Btn>
                           ))}
                           {repeating.has(m.id)
-                            ? <Btn small variant="ghost" onClick={() => stopRepeats(m.id)} title="Stop repeating raids on this village">■ ↻</Btn>
-                            : <Btn small variant="ghost" disabled={!canSend(first.units)} onClick={() => send(m.id, first.units, true)} title={`Send ${firstName} and keep repeating`}><span class="trunc">{firstName}</span>↻</Btn>}
+                            ? <Btn small variant="ghost" onClick={() => stopRepeats(m.id)} title="Stop repeating raids on this village" aria-label="Stop repeating">■ ↻</Btn>
+                            : <Btn small variant="ghost" disabled={!canSend(first.units)} onClick={() => send(m.id, first.units, true)} title={`Send ${firstName} and keep repeating`} aria-label={`Send ${firstName} and repeat`}>↻</Btn>}
                         </div>
                       </td>
                     </tr>
