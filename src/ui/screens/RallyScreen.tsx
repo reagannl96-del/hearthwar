@@ -198,7 +198,7 @@ function SendTroops({ v }: { v: VillageView }) {
           <Btn variant="danger" disabled={!any || tid === undefined || info?.own} onClick={() => send('attack')}>
             <Icon name="attack" size={16} /> Attack
           </Btn>
-          <Btn variant="ghost" disabled={!any || tid === undefined || !info || (info.ownerId === null && !cacheOk?.ok) || (chosen.noble ?? 0) > 0} title={cacheOk && !cacheOk.ok ? cacheOk.reason : undefined} onClick={() => send('support')}>
+          <Btn variant="ghost" disabled={!any || tid === undefined || !info || (!!info.cache && !cacheOk?.ok) || (chosen.noble ?? 0) > 0} title={cacheOk && !cacheOk.ok ? cacheOk.reason : undefined} onClick={() => send('support')}>
             <Icon name="support" size={16} /> Support
           </Btn>
         </div>
