@@ -254,10 +254,22 @@ function Exchange() {
   const pane = usePane();
   const v = pane.village.value!;
   const h = host.value!;
-  const [give, setGive] = useState<ResKey>('iron');
-  const [get, setGet] = useState<ResKey>('wood');
-  const [amount, setAmount] = useState<number | ''>(1000);
   const res = liveRes(v);
+  // start by trading what this village has most of for what it has least of
+  const suggest = () => {
+    const r = liveRes(v);
+    const sorted = [...KEYS].sort((a, b) => r[b] - r[a]);
+    const hi = sorted[0], lo = sorted[sorted.length - 1];
+    const cap = h.exchangeQuote(v.id, hi, lo, 1).maxAmount;
+    const amt = Math.max(0, Math.min(Math.floor((r[hi] - r[lo]) / 2 / 100) * 100, cap, Math.floor(r[hi])));
+    return { give: hi, get: lo, amount: amt || '' as const };
+  };
+  const [give, setGive] = useState<ResKey>(() => suggest().give);
+  const [get, setGet] = useState<ResKey>(() => suggest().get);
+  const [amount, setAmount] = useState<number | ''>(() => suggest().amount);
+  const applySuggest = () => { const x = suggest(); setGive(x.give); setGet(x.get); setAmount(x.amount); };
+  useEffect(applySuggest, [v.id]);
+  const sug = suggest();
   const q = h.exchangeQuote(v.id, give, get, Number(amount || 0));
   const stock = h.exchangeStock();
   const max = Math.min(Math.floor(res[give]), q.maxAmount);
@@ -284,7 +296,11 @@ function Exchange() {
         <p>
           You receive <b class="num">{fmt(give === get ? 0 : q.receive)}</b> {get} <span class="muted">(rate {q.rate.toFixed(2)})</span>
         </p>
-        <Btn disabled={give === get || !amount || Number(amount) > max} onClick={() => act({ type: 'exchange', vid: v.id, give, get, amount: Number(amount) }, 'Trade complete.')}>Trade</Btn>
+        <div class="row gap wrap">
+          <Btn disabled={give === get || !amount || Number(amount) > max} onClick={() => act({ type: 'exchange', vid: v.id, give, get, amount: Number(amount) }, 'Trade complete.')}>Trade</Btn>
+          <Btn variant="ghost" onClick={applySuggest} title="Trade your most plentiful resource for your scarcest, about half the gap">⚖ Balance my stock</Btn>
+        </div>
+        {sug.give === give && sug.get === get && give !== get && <p class="small muted">Suggested: {give} is your most plentiful resource here and {get} your scarcest.</p>}
         {Number(amount) > q.maxAmount && <p class="reason small">Your free merchants can haul at most {fmt(q.maxAmount)}.</p>}
       </Section>
       <Section title="Post stock">
