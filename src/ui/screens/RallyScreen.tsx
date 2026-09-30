@@ -195,7 +195,7 @@ function SendTroops({ v }: { v: VillageView }) {
           </label>
         )}
         <div class="row gap">
-          <Btn variant="danger" disabled={!any || tid === undefined || info?.own} onClick={() => send('attack')}>
+          <Btn variant="danger" disabled={!any || tid === undefined} onClick={() => send('attack')}>
             <Icon name="attack" size={16} /> Attack
           </Btn>
           <Btn variant="ghost" disabled={!any || tid === undefined || !info || (!!info.cache && !cacheOk?.ok) || (chosen.noble ?? 0) > 0} title={cacheOk && !cacheOk.ok ? cacheOk.reason : undefined} onClick={() => send('support')}>
@@ -416,7 +416,7 @@ function RealTrain({ v }: { v: VillageView }) {
         )}
         <Btn
           variant="danger"
-          disabled={tid === undefined || waves.length < 2 || n === 0 || info?.own}
+          disabled={tid === undefined || waves.length < 2 || n === 0}
           onClick={() => {
             if (tid !== undefined && act({ type: 'train', vid: v.id, target: tid, waves, catTarget: cat || undefined }, `Noble train of ${waves.length} waves is on its way.`)) setClear({});
           }}

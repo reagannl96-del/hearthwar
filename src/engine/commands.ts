@@ -150,13 +150,12 @@ export function sendTroops(w: World, o: SendOpts): ActionResult {
   if (o.kind === 'support') {
     if (units.noble) return { ok: false, error: 'Noblemen can only be sent in attacks.' };
   } else {
-    if (to.ownerId === o.ownerId) return { ok: false, error: 'You cannot attack your own village.' };
-    if (to.ownerId !== null && isProtected(w, to.ownerId)) {
+    if (to.ownerId !== null && to.ownerId !== o.ownerId && isProtected(w, to.ownerId)) {
       return { ok: false, error: `${playerName(w, to.ownerId)} is still under beginner protection.` };
     }
   }
   // attacking a real player ends your own beginner protection
-  if (o.kind === 'attack' && to.ownerId !== null) {
+  if (o.kind === 'attack' && to.ownerId !== null && to.ownerId !== o.ownerId) {
     const me = w.players[o.ownerId];
     if (me.protectedUntil > w.now) me.protectedUntil = w.now;
   }
