@@ -151,16 +151,8 @@ export function sendTroops(w: World, o: SendOpts): ActionResult {
     if (units.noble) return { ok: false, error: 'Noblemen can only be sent in attacks.' };
   } else {
     if (to.ownerId === o.ownerId) return { ok: false, error: 'You cannot attack your own village.' };
-    // a spiked barbarian village: your own troops stand there, and would fight your raid
-    if (to.ownerId === null && !to.cache && to.support.some((s) => s.ownerId === o.ownerId)) {
-      return { ok: false, error: 'Your own troops are stationed there. Withdraw them before you attack it.' };
-    }
     if (to.ownerId !== null && isProtected(w, to.ownerId)) {
       return { ok: false, error: `${playerName(w, to.ownerId)} is still under beginner protection.` };
-    }
-    const me = w.players[o.ownerId];
-    if (to.ownerId !== null && me.tribeId !== null && w.players[to.ownerId]?.tribeId === me.tribeId) {
-      return { ok: false, error: 'You cannot attack a member of your own tribe.' };
     }
   }
   // attacking a real player ends your own beginner protection

@@ -38,12 +38,12 @@ describe('tribes', () => {
     ok(c.id, { type: 'tribeDecline', tribe: tid });
     expect(tribeHome(w, c.id).invitations).toEqual([]);
 
-    // tribe members cannot attack each other
+    // tribe members may attack each other: the choice is theirs
     const bv = w.villages[b.villages[0]];
     w.villages[a.villages[0]].buildings.rally = 1;
     w.villages[a.villages[0]].units = { axe: 10 };
     a.protectedUntil = 0; b.protectedUntil = 0;
-    expect(applyAction(w, a.id, { type: 'send', vid: a.villages[0], target: bv.id, kind: 'attack', units: { axe: 10 } }).ok).toBe(false);
+    expect(applyAction(w, a.id, { type: 'send', vid: a.villages[0], target: bv.id, kind: 'attack', units: { axe: 10 } }).ok).toBe(true);
 
     // diplomacy
     const other = ok(c.id, { type: 'tribeCreate', name: 'Ash Crows', tag: 'ASH' }).data as number;

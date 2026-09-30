@@ -36,11 +36,11 @@ describe('spiking barbarian villages', () => {
     expect(me.reports.some((r) => r.title.includes('was attacked'))).toBe(true);
   });
 
-  it('will not let you raid a village you are spiking yourself', () => {
+  it('still lets you attack a village you are spiking yourself', () => {
     const { w, me, v, barb } = setup();
     v.units = { spear: 50, axe: 10 };
     sendTroops(w, { ownerId: me.id, fromVid: v.id, toVid: barb.id, kind: 'support', units: { spear: 50 } });
     advance(w, w.now + 2 * HOUR);
-    expect(sendTroops(w, { ownerId: me.id, fromVid: v.id, toVid: barb.id, kind: 'attack', units: { axe: 10 } }).ok).toBe(false);
+    expect(sendTroops(w, { ownerId: me.id, fromVid: v.id, toVid: barb.id, kind: 'attack', units: { axe: 10 } }).ok).toBe(true);
   });
 });
