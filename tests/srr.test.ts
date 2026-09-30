@@ -4,7 +4,7 @@ import { advance } from '../src/engine/game';
 import { HOUR } from '../src/engine/formulas';
 import { invalidateSpatial } from '../src/engine/spatial';
 import { createWorld, defaultConfig } from '../src/engine/world';
-import { isSrr } from '../src/ui/reportFilters';
+import { applyAction, isSrr } from '../src/engine/actions';
 
 describe('successful raid reports', () => {
   it('are recognised for a clean raid (scouts along included) on a barbarian village', () => {
@@ -21,5 +21,10 @@ describe('successful raid reports', () => {
     const r = me.reports.find((x) => x.kind === 'attack')!;
     expect(r.color).toBe('green');
     expect(isSrr(r)).toBe(true);
+    // and swept away by the SRR delete, archived ones kept
+    me.reports.push({ ...r, id: 99999, archived: true });
+    expect(applyAction(w, me.id, { type: 'deleteReport', id: 'srr' }).ok).toBe(true);
+    expect(me.reports.some((x) => x.id === r.id)).toBe(false);
+    expect(me.reports.some((x) => x.id === 99999)).toBe(true);
   });
 });

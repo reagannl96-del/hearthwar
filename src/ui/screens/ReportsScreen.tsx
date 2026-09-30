@@ -11,8 +11,7 @@ import { fmt, fmtAgo, fmtClock, fmtDur } from '../format';
 import { currentCache } from '../caches';
 import { act, battleReplay, host, now, rallyTarget, view, warp, usePane } from '../store';
 import { AttackViewer } from './AttackViewer';
-import { lsGet, lsSet } from '../../host/storage';
-import { isSrr } from '../reportFilters';
+import { hideSrrs, isSrr, setHideSrrs } from '../reportFilters';
 
 type Filter = 'all' | 'attack' | 'defense' | 'support' | 'trade' | 'other';
 /** The inbox, or the archive where kept reports wait (sweeping the inbox never touches it). */
@@ -20,7 +19,6 @@ type Box = 'inbox' | 'archive';
 
 const FILTER_LABEL: Record<Filter, string> = { all: 'All', attack: 'Attacks', defense: 'Defense', support: 'Support', trade: 'Trade', other: 'Other' };
 const inFilter = (r: Report, f: Filter) => f === 'all' || (f === 'other' ? ['info', 'conquest', 'lost'].includes(r.kind) : r.kind === f);
-const SRR_KEY = 'hw-hide-srr';
 const inBox = (r: Report, b: Box) => !!r.archived === (b === 'archive');
 
 /** A box with an arrow: into it (archive) or out of it (back to the inbox). */
@@ -53,13 +51,18 @@ export function ReportsScreen({ id }: { id?: number }) {
   const reports = h.reports();
   const [filter, setFilter] = useState<Filter>('all');
   const [box, setBox] = useState<Box>('inbox');
-  const [hideSrr, setHideSrrState] = useState(() => lsGet(SRR_KEY) === '1');
-  const setHideSrr = (on: boolean) => { setHideSrrState(on); lsSet(SRR_KEY, on ? '1' : '0'); };
+  const [hideSrr, setHideSrrState] = useState(hideSrrs);
+  const setHideSrr = (on: boolean) => {
+    setHideSrrState(on); setHideSrrs(on);
+    // turning it on clears the SRRs already in the inbox
+    if (on && srrInbox > 0) act({ type: 'deleteReport', id: 'srr' }, `${fmt(srrInbox)} successful raid ${srrInbox === 1 ? 'report' : 'reports'} deleted.`);
+  };
   const open = id !== undefined ? reports.find((r) => r.id === id) : undefined;
   if (open) {
     if (!open.read) queueMicrotask(() => act({ type: 'readReport', id: open.id }));
     return <ReportView r={open} onBox={setBox} />;
   }
+  const srrInbox = reports.filter((r) => !r.archived && isSrr(r)).length;
   const boxed = reports.filter((r) => inBox(r, box));
   const shelf = hideSrr ? boxed.filter((r) => !isSrr(r)) : boxed;
   const srrHidden = boxed.length - shelf.length;
@@ -100,12 +103,12 @@ export function ReportsScreen({ id }: { id?: number }) {
           <ArchiveGlyph size={15} /> Archive <span class="num archive-count">({fmt(archived)})</span>
         </button>
       </div>
-      <label class={`srr-filter ${hideSrr ? 'is-on' : ''}`} title="Filter out successful raid reports: raids on barbarian villages where none of your troops were lost">
+      <label class={`srr-filter ${hideSrr ? 'is-on' : ''}`} title="Filter out successful raid reports: raids on barbarian villages where none of your troops were lost. They are deleted as they arrive (archived reports are kept).">
         <input type="checkbox" checked={hideSrr} onChange={(e) => setHideSrr(e.currentTarget.checked)} />
         <span class="srr-icon" aria-hidden="true">🌾</span>
         <span class="srr-text">
           <b>Filter SRRs</b>
-          <span class="small muted">Hide successful raid reports: barbarian raids with no troops lost</span>
+          <span class="small muted">Delete successful raid reports as they arrive: barbarian raids with no troops lost</span>
         </span>
         {hideSrr && srrHidden > 0 && <span class="pill srr-count">{fmt(srrHidden)} hidden</span>}
       </label>
