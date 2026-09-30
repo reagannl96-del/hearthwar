@@ -103,13 +103,10 @@ export function ReportsScreen({ id }: { id?: number }) {
           <ArchiveGlyph size={15} /> Archive <span class="num archive-count">({fmt(archived)})</span>
         </button>
       </div>
-      <label class={`srr-filter ${hideSrr ? 'is-on' : ''}`} title="Filter out successful raid reports: raids on barbarian villages where none of your troops were lost. They are deleted as they arrive (archived reports are kept).">
+      <label class={`srr-filter ${hideSrr ? 'is-on' : ''}`} title="SRR = successful raid report: a raid on a barbarian village where none of your troops were lost. When checked, they are filtered out and deleted as they arrive (archived reports are kept).">
         <input type="checkbox" checked={hideSrr} onChange={(e) => setHideSrr(e.currentTarget.checked)} />
         <span class="srr-icon" aria-hidden="true">🌾</span>
-        <span class="srr-text">
-          <b>Filter SRRs</b>
-          <span class="small muted">Delete successful raid reports as they arrive: barbarian raids with no troops lost</span>
-        </span>
+        <b>Filter SRRs</b>
         {hideSrr && srrHidden > 0 && <span class="pill srr-count">{fmt(srrHidden)} hidden</span>}
       </label>
       <Section>
