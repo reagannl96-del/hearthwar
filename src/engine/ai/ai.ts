@@ -1731,19 +1731,26 @@ function tribeLife(w: World, p: Player): void {
   // invitations waiting for us
   for (const inv of invitesFor(w, p.id)) {
     const appeal = tribeAppeal(w, p, inv.tribe);
+    // a great tribe on the doorstep is hard to say no to
+    const greatCall = greatTribes(w).has(inv.tribe.id) && (!t0 || !greatTribes(w).has(t0.id));
+    if (greatCall && (!t0 || (t0.founderId !== p.id && w.now - ai.tribeSince! > 6 * HOUR_MS && appeal > tribeAppeal(w, p, t0)))) {
+      if (t0) leaveTribe(w, p.id);
+      if (acceptInvite(w, p.id, inv.tribe.id).ok) { ai.tribeSince = w.now; return; }
+    }
     if (!t0) {
       if (appeal >= 0.6 || nextRandom(w) < 0.25) {
         if (acceptInvite(w, p.id, inv.tribe.id).ok) { ai.tribeSince = w.now; return; }
       }
       if (nextRandom(w) < 0.3) declineInvite(w, p.id, inv.tribe.id);
-    } else if (settled > realmDayMs(w) && appeal > tribeAppeal(w, p, t0) * 1.8 + 0.5 && !(t0.founderId === p.id && t0.members.length > 1)) {
+    } else if (settled > realmDayMs(w) && !greatTribes(w).has(t0.id) && appeal > tribeAppeal(w, p, t0) * 1.8 + 0.5 && !(t0.founderId === p.id && t0.members.length > 1)) {
       // a much better offer close by: say goodbye and go
       leaveTribe(w, p.id);
       if (acceptInvite(w, p.id, inv.tribe.id).ok) { ai.tribeSince = w.now; return; }
     } else if (nextRandom(w) < 0.2) declineInvite(w, p.id, inv.tribe.id);
   }
   // a tribe that no longer makes sense: alone in it for days, or every tribe mate lives far away
-  if (t0 && settled > 2 * realmDayMs(w)) {
+  // (nobody walks out of a great tribe: it is the realm's power, and its members know it)
+  if (t0 && settled > 2 * realmDayMs(w) && !greatTribes(w).has(t0.id)) {
     const mates = t0.members.filter((m) => m !== p.id && !w.players[m]?.eliminated);
     const lonely = mates.length === 0;
     const scattered = mates.length > 0 && tribeAppeal(w, p, t0) < Math.min(5, tribePoints(w, t0) / Math.max(1, myPts)) + 0.3;
@@ -1951,11 +1958,13 @@ export function aiTribeTarget(w: World, t?: Tribe): number {
   const days = w.now / realmDayMs(w);
   const usual = Math.min(TRIBE_MAX_MEMBERS, 6 + Math.floor(days * 1.5));
   // the realm's great tribes aim for ten to fifteen members early on
-  return t && greatTribes(w).has(t.id) ? Math.max(usual, Math.min(15, 10 + Math.floor(days * 2.5))) : usual;
+  return t && greatTribes(w).has(t.id) ? Math.max(usual, Math.min(TRIBE_MAX_MEMBERS, GREAT_MIN + 1 + Math.floor(days))) : usual;
 }
 
 /** How many great tribes a realm has: the strongest tribes led by AI rulers, which grow bigger and faster. */
 export const GREAT_TRIBES = 2;
+/** A great tribe keeps recruiting hard until it has at least this many members. */
+export const GREAT_MIN = 14;
 
 let greatCache: { w: World; at: number; ids: Set<number> } | null = null;
 /** The ids of the realm's great tribes (the strongest AI-led tribes by points). */
@@ -2001,7 +2010,8 @@ function tribeRecruiting(w: World, p: Player): void {
   if (!aiLed) return;
   // invitations nobody answered for two days lapse, so they do not block the tribe
   for (const inv of [...(t.invites ?? [])]) if (inv.by === p.id && w.now - inv.t > 2 * realmDayMs(w)) cancelInvite(w, p.id, inv.pid);
-  if (!t.recruiting || w.now - (ai.lastRecruit ?? -Infinity) < (great ? RECRUIT_GAP / 3 : RECRUIT_GAP)) return;
+  const short = great && t.members.length < GREAT_MIN;
+  if (!t.recruiting || w.now - (ai.lastRecruit ?? -Infinity) < (short ? RECRUIT_GAP / 8 : great ? RECRUIT_GAP / 3 : RECRUIT_GAP)) return;
   if (t.members.length + (t.invites?.length ?? 0) >= target) return;
   const home = w.villages[p.villages[0]];
   if (!home) return;
@@ -2010,18 +2020,22 @@ function tribeRecruiting(w: World, p: Player): void {
   for (const k in ai.invited) if (w.now - ai.invited[k] > 2 * realmDayMs(w)) delete ai.invited[k];
   let best: Player | null = null, bestScore = -Infinity;
   const seen = new Set<number>();
-  for (const v of villagesNear(w, home.x, home.y, 30)) {
+  // a great tribe grows outward from its members: anyone close to one of them will do
+  const memberHomes = great ? t.members.map((m) => w.villages[w.players[m]?.villages[0] ?? -1]).filter((x): x is Village => !!x) : [];
+  const nearMember = (x: number, y: number) => Math.min(...memberHomes.map((h) => distance(h.x, h.y, x, y)));
+  const pool = great ? memberHomes.flatMap((h) => villagesNear(w, h.x, h.y, 18)) : villagesNear(w, home.x, home.y, 30);
+  for (const v of pool) {
     const o = v.ownerId !== null ? w.players[v.ownerId] : null;
     if (!o || seen.has(o.id)) continue;
     seen.add(o.id);
     // a great tribe also courts close neighbours from tiny tribes (not their founders)
     const poachable = great && o.kind === 'ai' && o.tribeId != null && o.tribeId !== t.id
-      && (w.tribes[o.tribeId]?.members.length ?? 99) <= 3 && w.tribes[o.tribeId]?.founderId !== o.id;
+      && !greatTribes(w).has(o.tribeId)
+      && (w.tribes[o.tribeId]?.members.length ?? 99) <= (short ? 5 : 3) && w.tribes[o.tribeId]?.founderId !== o.id;
     if (o.id === p.id || (o.tribeId != null && !poachable) || o.eliminated || ai.invited[o.id] !== undefined) continue;
-    if (great && distance(home.x, home.y, v.x, v.y) > 22) continue;
     if (t.invites?.some((i) => i.pid === o.id)) continue;
     if (o.points < avg * 0.08) continue;
-    const d = distance(home.x, home.y, v.x, v.y);
+    const d = great ? nearMember(v.x, v.y) : distance(home.x, home.y, v.x, v.y);
     // people get an invitation only from fairly close neighbours, and only now and then: a
     // person hears from a tribe of rulers once every few days at most, and not often even then
     if (o.kind === 'human') {
