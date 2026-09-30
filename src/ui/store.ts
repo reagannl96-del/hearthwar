@@ -11,6 +11,7 @@ import type { HostBase } from '../host/base';
 import { lsGet, lsSet } from '../host/storage';
 import { interpRes } from './format';
 import { setSoundEnabled, sfx } from './sound';
+import { hideSrrs, isSrr, shownReports } from './reportFilters';
 
 export type Route =
   | { name: 'village' }
@@ -327,10 +328,13 @@ function diff(prev: PlayerView | null, next: PlayerView) {
     if (!next.villages.some((x) => x.id === v.id)) toast(`${v.name} has been conquered!`, 'bad');
   }
   if (!next.villages.some((x) => x.id === vid.value) && next.villages[0]) vid.value = next.villages[0].id;
+  // filtered SRRs are swept away as they come in (the archive is left alone)
+  if (hideSrrs() && h.reports().some((r) => !r.archived && isSrr(r))) h.act({ type: 'deleteReport', id: 'srr' });
   // new reports
   if (next.unreadReports > 0) {
     const reps = h.reports();
-    const fresh = reps.filter((r) => r.id > lastReportId && !r.read);
+    // (filtered SRRs arrive quietly: no pop-up, no sound)
+    const fresh = shownReports(reps).filter((r) => r.id > lastReportId && !r.read);
     if (fresh.length && lastReportId > 0) {
       const r = fresh[0];
       const kind = r.color === 'red' ? 'bad' : r.color === 'yellow' ? 'warn' : r.color === 'green' ? 'good' : 'info';

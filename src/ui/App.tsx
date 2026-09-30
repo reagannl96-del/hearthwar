@@ -5,6 +5,7 @@ import { Icon } from './art/icons';
 import { Clock, Countdown, CopyButton, NewPosts, unitName } from './components/common';
 import { cacheSupport, currentCache, firstSight, type CacheView } from './caches';
 import { QUADRANT_NAME, coords, fmt, fmtDur, quadrant } from './format';
+import { hideSrrs, shownReports } from './reportFilters';
 import { BuildingScreen } from './screens/BuildingScreen';
 import { MapScreen } from './screens/MapScreen';
 import { NewsScreen } from './screens/NewsScreen';
@@ -340,7 +341,7 @@ function Nav() {
     { r: { name: 'village' }, icon: 'village', label: 'Village', key: 'village' },
     { r: { name: 'map' }, icon: 'map', label: 'Map', key: 'map' },
     { r: { name: 'building', id: 'rally' }, icon: 'flag', label: 'Rally point', key: 'rally', badge: v.incoming.filter((c) => c.kind === 'attack').length },
-    { r: { name: 'reports' }, icon: 'report', label: 'Reports', key: 'reports', badge: v.unreadReports },
+    { r: { name: 'reports' }, icon: 'report', label: 'Reports', key: 'reports', badge: hideSrrs() ? shownReports(host.value!.reports()).filter((x) => !x.read).length : v.unreadReports },
     { r: { name: 'quests' }, icon: 'quest', label: 'Quests', key: 'quests', badge: claimable },
     { r: { name: 'overviews' }, icon: 'overview', label: 'Overview', key: 'overviews' },
     { r: { name: 'manager' }, icon: 'manager', label: 'Manager', key: 'manager' },

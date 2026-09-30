@@ -13,7 +13,7 @@ import {
   COIN_COST, SCAVENGE_TIERS, buildCost, buildPopDelta, buildTime, coinsForNoble, noblesFromCoins, recruitTime,
   res, resGte, researchCost, researchSmithyReq, researchTime, scavengeDuration, scavengeLoot, unitsCarry, unitsPop,
 } from './formulas';
-import type { ActionResult, FarmMode, HeroGear, Player, BuildingId, Diplomacy, RecruitBuilding, Res, TribeRight, UnitId, Units, Village, World } from './types';
+import type { ActionResult, FarmMode, Report, HeroGear, Player, BuildingId, Diplomacy, RecruitBuilding, Res, TribeRight, UnitId, Units, Village, World } from './types';
 import { RES_KEYS } from './types';
 import {
   canBuildReq, farmMax, popFree, queuedLevel, rechainRecruit, recruitQueueEnd, storageOf, unitAvailable, updateVillage,
@@ -57,7 +57,7 @@ export type Action =
   | { type: 'scavenge'; vid: number; tier: number; units: Units }
   | { type: 'claimQuest'; quest: string; vid?: number }
   | { type: 'readReport'; id: number | 'all' }
-  | { type: 'deleteReport'; id: number | 'all' | 'read' }
+  | { type: 'deleteReport'; id: number | 'all' | 'read' | 'srr' }
   /** keep a report (or every read one) in the archive, or take it back out */
   | { type: 'archiveReport'; id: number | 'read'; archived?: boolean }
   | { type: 'note'; vid: number; text: string }
@@ -540,7 +540,7 @@ export function applyAction(w: World, pid: number, a: Action): ActionResult {
     }
     case 'deleteReport': {
       // sweeping the inbox ("all", "read") leaves the archive alone; one report goes wherever it is
-      p.reports = p.reports.filter((r) => !((a.id === 'all' && !r.archived) || (a.id === 'read' && r.read && !r.archived) || r.id === a.id));
+      p.reports = p.reports.filter((r) => !((a.id === 'all' && !r.archived) || (a.id === 'read' && r.read && !r.archived) || (a.id === 'srr' && !r.archived && isSrr(r)) || r.id === a.id));
       return { ok: true };
     }
     case 'archiveReport': {
@@ -614,4 +614,9 @@ export function renamePlayer(w: World, pid: number, raw: unknown): ActionResult 
   p.renamedAt = Date.now();
   w.mapRev++;
   return { ok: true };
+}
+
+/** A successful raid report: an attack on a barbarian village that came home without losing anyone. */
+export function isSrr(r: Report): boolean {
+  return r.kind === 'attack' && r.color === 'green' && !!r.battle && r.battle.defender.playerId == null && !r.battle.cache;
 }
