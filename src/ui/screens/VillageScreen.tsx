@@ -221,8 +221,18 @@ function TroopMovements({ vid }: { vid: number }) {
   const inc = pv.incoming.filter((c) => c.toVid === vid && (c.kind === 'attack' || c.kind === 'support')).sort((a, b) => a.arrive - b.arrive);
   const groups: [string, typeof out][] = [['Incoming', inc], ['Attacks & support', out], ['Returning', back]];
   const total = out.length + back.length + inc.length;
+  const repeating = pv.commands.filter((c) => c.fromVid === vid && c.repeat).length;
   return (
-    <Section title="Troop movements" actions={<Btn small variant="ghost" onClick={() => pane.go({ name: 'building', id: 'rally', tab: 'commands' })}>Rally point</Btn>}>
+    <Section title="Troop movements" actions={
+      <div class="row gap">
+        {repeating > 0 && (
+          <Btn small variant="ghost" title="Stop every repeating raid from this village. The troops come home and stay." onClick={() => act({ type: 'stopRepeats', vid }, 'Every repeating raid from here is stopped. The troops come home and stay.')}>
+            ■ Stop all repeats ({repeating})
+          </Btn>
+        )}
+        <Btn small variant="ghost" onClick={() => pane.go({ name: 'building', id: 'rally', tab: 'commands' })}>Rally point</Btn>
+      </div>
+    }>
       {total === 0 ? <Empty>No armies are on the road from this village.</Empty> : groups.filter(([, list]) => list.length > 0).map(([title, list]) => (
         <div class="move-group">
           <h4>{title} <span class="muted small">({list.length})</span></h4>

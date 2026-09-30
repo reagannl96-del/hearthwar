@@ -622,6 +622,12 @@ function CommandsTab() {
       <div class="row gap">
         <Btn small variant={scope === 'all' ? 'primary' : 'ghost'} onClick={() => setScope('all')}>All villages</Btn>
         <Btn small variant={scope === 'village' ? 'primary' : 'ghost'} onClick={() => setScope('village')}>This village</Btn>
+        {out.some((c) => c.repeat) && (
+          <Btn small variant="ghost" title={scope === 'all' ? 'Stop every repeating raid from all your villages' : 'Stop every repeating raid from this village'}
+            onClick={() => act({ type: 'stopRepeats', vid: scope === 'all' ? undefined : v.id }, 'Repeating raids stopped. The troops come home and stay.')}>
+            ■ Stop all repeats ({out.filter((c) => c.repeat).length})
+          </Btn>
+        )}
       </div>
       <Section title={`Incoming (${inc.length})`}>
         {inc.length === 0 ? <Empty>Nothing is marching toward you.</Empty> : <ul class="cmd-list">{inc.map((c) => <CommandRow c={c} />)}</ul>}
