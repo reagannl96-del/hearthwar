@@ -83,7 +83,7 @@ export const QUESTS: QuestDef[] = [
   { id: 'mines10', title: 'Industry', text: 'Raise all three resource buildings to level 10.', reward: r(2500, 2500, 2500), requires: 'mines6', progress: (w, p) => [Math.min(10, minMines(w, p)), 10] },
   { id: 'scav2', title: 'Scavengers', text: 'Unlock the second scavenging option at the rally point.', reward: r(1000, 1000, 1000), requires: 'rally1', progress: (w, p) => [p.villages.some((v) => (w.villages[v]?.scavengeUnlocked ?? 0) >= 2) ? 1 : 0, 1] },
   { id: 'paladin', title: 'A champion rises', text: 'Build the Statue and train a hero: a Paladin, Sorcerer, Druid, Goblin Chief, Necromancer or Orc King (and the wilds have heroes of their own).', reward: r(1500, 1500, 1500), requires: 'main10', progress: (w, p) => [heroCount(w, p) > 0 ? 1 : 0, 1] },
-  { id: 'heroes2', title: 'Hall of heroes', text: 'Keep heroes in two of your villages.', reward: r(6000, 6000, 6000), requires: 'paladin', progress: (w, p) => [Math.min(2, heroCount(w, p)), 2] },
+  { id: 'heroes2', title: 'Hall of heroes', text: 'Keep heroes in two of your villages.', reward: r(6000, 6000, 6000), requires: 'v2', progress: (w, p) => [Math.min(2, heroCount(w, p)), 2] },
   { id: 'loot100k', title: 'Master raider', text: 'Plunder a total of 100,000 resources.', reward: r(8000, 8000, 7000), requires: 'loot10k', progress: (w, p) => [Math.min(100000, p.stats.loot), 100000] },
   bq('workshop1', 'Siegecraft', 'Build a Workshop (needs HQ 10, Smithy 10).', 'workshop', 1, r(3000, 2500, 3000), 'stable1'),
   bq('wall10', 'Bulwark', 'Raise the Wall to level 10.', 'wall', 10, r(3000, 5000, 2000), 'wall3'),

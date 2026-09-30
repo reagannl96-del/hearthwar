@@ -58,7 +58,8 @@ describe('an Orc King player', () => {
     expect(v.units.orc).toBe(1);
     expect(questStatus(w, p).find((q) => q.id === 'paladin')?.done).toBe(true);
     expect(act({ type: 'claimQuest', quest: 'paladin' }).ok).toBe(true);
-    expect(questStatus(w, p).some((q) => q.id === 'heroes2')).toBe(true);
+    // Hall of heroes waits until there is a second village to keep a hero in
+    expect(questStatus(w, p).some((q) => q.id === 'heroes2')).toBe(false);
   });
 
   it('finds, equips and puts away the Orc King\'s own items', () => {
