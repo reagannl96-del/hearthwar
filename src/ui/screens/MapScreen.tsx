@@ -647,14 +647,17 @@ export function MapScreen({ focus, at }: { focus?: number; at?: [number, number]
             <button type="button" class="icon-btn" aria-label="Zoom in" onClick={() => setZoomAround(zoom * 1.4)}>+</button>
           </div>
           <span class="muted small num">{coords(Math.floor(center[0]), Math.floor(center[1]))} · {quadrant(Math.floor(center[0]), Math.floor(center[1]), data.size)}</span>
-          <label class="map-lines muted small" title="Which of your own troop movements the map draws. Incoming attacks always show.">
-            Lines
-            <select value={prefs.value.mapLines ?? 'all'} onChange={(e) => setPrefs({ mapLines: (e.currentTarget as HTMLSelectElement).value as 'all' | 'noFarm' | 'off' })}>
-              <option value="all">All movements</option>
-              <option value="noFarm">Hide farm runs</option>
-              <option value="off">Only incoming</option>
-            </select>
-          </label>
+          <div class="row gap map-lines" role="group" aria-label="Your troop movements on the map (incoming attacks always show)">
+            {(() => {
+              const m = prefs.value.mapLines ?? 'all';
+              return (
+                <>
+                  <button type="button" class={`chip ${m === 'noFarm' ? 'is-on' : ''}`} aria-pressed={m === 'noFarm'} title="Hide raids on barbarian villages and their returns" onClick={() => setPrefs({ mapLines: m === 'noFarm' ? 'all' : 'noFarm' })}>🌾 Hide farm trips</button>
+                  <button type="button" class={`chip ${m === 'off' ? 'is-on' : ''}`} aria-pressed={m === 'off'} title="Hide all your own movements; incoming attacks still show" onClick={() => setPrefs({ mapLines: m === 'off' ? 'all' : 'off' })}>Only incoming</button>
+                </>
+              );
+            })()}
+          </div>
         </div>
         <div class="map-wrap" ref={wrap}>
           <canvas
