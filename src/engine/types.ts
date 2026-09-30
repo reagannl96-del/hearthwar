@@ -144,6 +144,8 @@ export interface Command {
   catTarget?: BuildingId;
   /** farm helper: automatically re-send when troops come home */
   repeat?: boolean;
+  /** a repeating raid that came home without a full haul: stop, or move on to another barbarian village */
+  farmMode?: FarmMode;
   /** for returns: which village the troops came back from */
   origin?: number;
   /** ai bookkeeping */
@@ -580,3 +582,6 @@ export interface RoundResult {
   tribes: { name: string; tag: string; share: number }[];
   topRuler: { name: string; tag: string | null; points: number } | null;
 }
+
+/** What a repeating raid does when it comes home without a full haul (unset: keep raiding). */
+export type FarmMode = 'stop' | 'switch';

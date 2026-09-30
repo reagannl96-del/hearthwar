@@ -13,7 +13,7 @@ import {
   COIN_COST, SCAVENGE_TIERS, buildCost, buildPopDelta, buildTime, coinsForNoble, noblesFromCoins, recruitTime,
   res, resGte, researchCost, researchSmithyReq, researchTime, scavengeDuration, scavengeLoot, unitsCarry, unitsPop,
 } from './formulas';
-import type { ActionResult, HeroGear, Player, BuildingId, Diplomacy, RecruitBuilding, Res, TribeRight, UnitId, Units, Village, World } from './types';
+import type { ActionResult, FarmMode, HeroGear, Player, BuildingId, Diplomacy, RecruitBuilding, Res, TribeRight, UnitId, Units, Village, World } from './types';
 import { RES_KEYS } from './types';
 import {
   canBuildReq, farmMax, popFree, queuedLevel, rechainRecruit, recruitQueueEnd, storageOf, unitAvailable, updateVillage,
@@ -37,7 +37,7 @@ export type Action =
   | { type: 'cancelRecruit'; vid: number; building: RecruitBuilding; job: number }
   | { type: 'research'; vid: number; unit: UnitId }
   | { type: 'cancelResearch'; vid: number; job: number }
-  | { type: 'send'; vid: number; target: number; kind: 'attack' | 'support'; units: Units; catTarget?: BuildingId; repeat?: boolean }
+  | { type: 'send'; vid: number; target: number; kind: 'attack' | 'support'; units: Units; catTarget?: BuildingId; repeat?: boolean; farmMode?: FarmMode }
   | { type: 'train'; vid: number; target: number; waves: Units[]; catTarget?: BuildingId }
   | { type: 'cancelCommand'; id: number }
   | { type: 'stopRepeat'; id: number }
@@ -495,7 +495,7 @@ export function applyAction(w: World, pid: number, a: Action): ActionResult {
     case 'cancelRecruit': return cancelRecruit(w, pid, a.vid, a.building, a.job);
     case 'research': return research(w, pid, a.vid, a.unit);
     case 'cancelResearch': return cancelResearch(w, pid, a.vid, a.job);
-    case 'send': return sendTroops(w, { ownerId: pid, fromVid: a.vid, toVid: a.target, kind: a.kind, units: a.units, catTarget: a.catTarget, repeat: a.repeat });
+    case 'send': return sendTroops(w, { ownerId: pid, fromVid: a.vid, toVid: a.target, kind: a.kind, units: a.units, catTarget: a.catTarget, repeat: a.repeat, farmMode: a.farmMode === 'stop' || a.farmMode === 'switch' ? a.farmMode : undefined });
     case 'train': return sendTrain(w, pid, a.vid, a.target, a.waves, a.catTarget);
     case 'cancelCommand': return cancelCommand(w, pid, a.id);
     case 'stopRepeat': {
@@ -610,10 +610,8 @@ export function renamePlayer(w: World, pid: number, raw: unknown): ActionResult 
     const mins = Math.ceil((wait - since) / 60_000);
     return fail(`You can change your name again in ${mins >= 60 ? `${Math.ceil(mins / 60)} h` : `${mins} min`}.`);
   }
-  const old = p.name;
   p.name = name;
   p.renamedAt = Date.now();
   w.mapRev++;
-  news(w, `${old} is now known as ${name}.`, 'player');
   return { ok: true };
 }

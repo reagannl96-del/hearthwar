@@ -11,7 +11,8 @@ import { handleArrival, addReport, type ArrivalHooks, sendTroops, updateIntel } 
 import { BUILDINGS } from './data/buildings';
 import { HEROES, ITEM_BY_ID, UNITS, itemsFor } from './data/units';
 import { peekEvent, popEvent, pushEvent } from './events';
-import { addUnits, unitsPop } from './formulas';
+import { HOUR, addUnits, distance, unitsPop } from './formulas';
+import { villagesNear } from './spatial';
 import { replenishExchange } from './market';
 import { dropFromTribe } from './tribes';
 import { runManager } from './manager';
@@ -20,6 +21,35 @@ import type { BuildingId, Command, GameEvent, Player, UnitId, Village, World } f
 import { RES_KEYS } from './types';
 import { refreshPoints, storageOf, updateVillage } from './village';
 import { BARB_BUILDINGS, ITEM_FIND_CHANCE, aiThinkInterval, barbInterval, itemInterval, realmGrowth, sampleInterval } from './world';
+
+/**
+ * Where a repeating raid goes when its village runs dry: the nearest barbarian village
+ * within 20 fields of home that the player is not already raiding or spiking, whose last
+ * raid (if any) came back clean, and that has not come up short within the last hour.
+ */
+function nextFarm(w: World, owner: Player, c: Command): Village | null {
+  const home = w.villages[c.fromVid];
+  if (!home) return null;
+  const busy = new Set<number>();
+  for (const id in w.commands) {
+    const o = w.commands[id];
+    if (o.ownerId !== owner.id) continue;
+    busy.add(o.toVid);
+    if (o.origin !== undefined) busy.add(o.origin);
+  }
+  let best: Village | null = null, bestD = Infinity;
+  for (const v of villagesNear(w, home.x, home.y, 20)) {
+    if (v.ownerId !== null || v.cache || v.id === c.origin || busy.has(v.id)) continue;
+    if (v.support.some((s) => s.ownerId === owner.id)) continue;
+    const it = owner.intel[v.id];
+    if (it?.lastColor && it.lastColor !== 'green') continue;
+    // ran dry within the last hour: give it time to fill up again
+    if (it?.lastCapacity && w.now - (it.lastAttackT ?? 0) < HOUR && (it.lastLoot ?? 0) < it.lastCapacity * 0.95) continue;
+    const d = distance(home.x, home.y, v.x, v.y);
+    if (d < bestD) { bestD = d; best = v; }
+  }
+  return best;
+}
 
 const hooks: ArrivalHooks = {
   onConquest(w, v, oldOwner, newOwner) {
@@ -49,9 +79,23 @@ const hooks: ArrivalHooks = {
       return;
     }
     if (target.ownerId !== null && owner.kind === 'human') return;
+    // the raid came home with room to spare: this village is running dry
+    const dry = !!intel?.lastCapacity && (intel.lastLoot ?? 0) < intel.lastCapacity * 0.95;
+    let next = target;
+    if (dry && c.farmMode) {
+      const alt = c.farmMode === 'switch' ? nextFarm(w, owner, c) : null;
+      addReport(w, owner.id, {
+        kind: 'info', color: 'grey', vid: target.id,
+        title: alt ? `Repeat raid moved from ${target.name} to ${alt.name}` : `Repeat raid on ${target.name} stopped`,
+        text: `The last raid brought home ${(intel?.lastLoot ?? 0).toLocaleString()} of ${(intel?.lastCapacity ?? 0).toLocaleString()} it could carry${alt ? ', so your troops try a fresh village.' : c.farmMode === 'switch' ? ', and there was no other barbarian village nearby to try, so your troops stayed home.' : ', so your troops stayed home.'}`,
+        read: false,
+      });
+      if (!alt) return;
+      next = alt;
+    }
     sendTroops(w, {
-      ownerId: c.ownerId, fromVid: c.fromVid, toVid: target.id, kind: 'attack', units: c.units, repeat: true,
-      catTarget: c.catTarget, tag: c.tag,
+      ownerId: c.ownerId, fromVid: c.fromVid, toVid: next.id, kind: 'attack', units: c.units, repeat: true,
+      catTarget: c.catTarget, tag: c.tag, farmMode: c.farmMode,
     });
   },
 };

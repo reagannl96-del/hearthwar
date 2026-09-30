@@ -15,7 +15,8 @@ describe('changing your ruler name', () => {
     expect(r('Barbarians').ok).toBe(false);
     expect(r('  Iron  Duke ').ok).toBe(true);
     expect(me.name).toBe('Iron Duke');
-    expect(w.news[0].text).toBe('Old Name is now known as Iron Duke.');
+    // renames are private: nothing is announced to the realm
+    expect(w.news.some((n) => n.text.includes('now known as'))).toBe(false);
     expect(r('Another Name').ok).toBe(false); // too soon
     me.renamedAt = Date.now() - 13 * 3_600_000;
     expect(r('Another Name').ok).toBe(true);

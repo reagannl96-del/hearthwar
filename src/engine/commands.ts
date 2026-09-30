@@ -17,6 +17,7 @@ import { villageName } from './data/names';
 import type {
   ActionResult, BattleData, BuildingId, Command, Intel, Player, Report, ReportColor, Res, SideInfo, UnitId, Units,
   Village, World,
+  FarmMode,
 } from './types';
 import { RES_KEYS } from './types';
 import { moraleFight, popFree, refreshPoints, storageOf, updateVillage, villageMorale } from './village';
@@ -116,6 +117,7 @@ export interface SendOpts {
   units: Units;
   catTarget?: BuildingId;
   repeat?: boolean;
+  farmMode?: FarmMode;
   tag?: string;
   /** force the arrival time (noble trains line up their waves) */
   arriveAt?: number;
@@ -183,6 +185,7 @@ export function sendTroops(w: World, o: SendOpts): ActionResult {
   };
   if (o.catTarget && units.catapult) c.catTarget = to.cache ? 'wall' : o.catTarget;
   if (o.repeat) c.repeat = true;
+  if (o.repeat && o.farmMode) c.farmMode = o.farmMode;
   if (o.tag) c.tag = o.tag;
   c.targetOwner = to.ownerId;
   addCommand(w, c);
@@ -866,6 +869,7 @@ function resolveAttack(w: World, c: Command, hooks: ArrivalHooks): void {
     };
     if (hasUnits(result.attLost)) back.losses = true;
     if (c.repeat) back.repeat = true;
+    if (c.farmMode) back.farmMode = c.farmMode;
     if (c.tag) back.tag = c.tag;
     if (c.catTarget) back.catTarget = c.catTarget;
     addCommand(w, back);
