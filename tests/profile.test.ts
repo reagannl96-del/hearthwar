@@ -61,7 +61,8 @@ describe('player profile', () => {
     expect(mate.relation).toBe('own');
     expect(mate.kick).toEqual({ ok: true });
     expect(mate.rights).toMatchObject({ ok: true, current: [], grantable: ['lead', 'invite', 'diplomacy', 'forum', 'internal'] });
-    expect(mate.attack).toEqual({ ok: false, reason: 'You cannot attack a member of your own tribe.' });
+    // tribe mates are not off limits (only beginner protection holds an attack back)
+    expect(mate.attack.reason).not.toContain('own tribe');
     expect(mate.invite).toBeNull();
 
     // a plain member sees no management at all, and nobody can remove the founder

@@ -470,9 +470,7 @@ export function profileActions(w: World, target: Player, viewer: number): Profil
   };
   if (self) return out;
   const gone = !!target.eliminated;
-  if (!gone && theirs && mine && theirs.id === mine.id) {
-    out.attack = { ok: false, reason: 'You cannot attack a member of your own tribe.' };
-  } else if (!gone && target.protectedUntil > w.now) {
+  if (!gone && target.protectedUntil > w.now) {
     out.attack = { ok: false, reason: `${target.name} is still under beginner protection.` };
   }
   if (!mine || gone) return out;

@@ -1449,6 +1449,8 @@ function lastHitOn(w: World, humanId: number): number {
 
 /** May this ruler attack (or scout for an attack on) this village's owner right now? */
 function mayHit(w: World, p: Player, ownerId: number | null, campaign = false): boolean {
+  // people may hit their own tribe; rulers never do
+  if (ownerId !== null && p.tribeId !== null && w.players[ownerId]?.tribeId === p.tribeId) return false;
   if (ownerId === null || w.players[ownerId]?.kind !== 'human') return true;
   if (campaign) return true;
   const last = lastHitOn(w, ownerId);
