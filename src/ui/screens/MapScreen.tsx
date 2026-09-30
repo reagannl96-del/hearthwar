@@ -9,7 +9,7 @@ import { inRealm, regionAt } from '../../engine/world';
 import { Icon } from '../art/icons';
 import { Btn, CopyButton, Countdown, UnitList, UnitIcon, unitName } from '../components/common';
 import { cacheIntel, cacheSupport } from '../caches';
-import { loadFarmTemplates, tplName } from '../farmTemplates';
+import { loadFarmMode, loadFarmTemplates, tplName } from '../farmTemplates';
 import { coords, fmt, fmtAgo, fmtDur, parseCoords, quadrant } from '../format';
 import { TribeTag } from './TribeScreen';
 import { MARK_COLORS, markFor, marks, setMark, useWorldMarks, type Marks } from '../mapMarks';
@@ -1422,7 +1422,7 @@ function VillagePanel({ v, data, onClose }: { v: MapVillage; data: MapData; onCl
               {tpls.map((t, i) => (
                 <Btn small class="farm-quick" disabled={!canSend(t.units)} title={`Send farm template ${tplName(t, i)}`} onClick={() => act({ type: 'send', vid: cur.id, target: v.id, kind: 'attack', units: t.units }, 'Raid sent.')}><span class="trunc">Farm {tplName(t, i)}</span></Btn>
               ))}
-              <Btn small variant="ghost" class="farm-quick" disabled={!canSend(tpls[0].units)} title={`Send ${tplName(tpls[0], 0)} and keep repeating`} onClick={() => act({ type: 'send', vid: cur.id, target: v.id, kind: 'attack', units: tpls[0].units, repeat: true }, 'Repeating raid sent.')}><span class="trunc">{tplName(tpls[0], 0)}</span> ↻ repeat</Btn>
+              <Btn small variant="ghost" class="farm-quick" disabled={!canSend(tpls[0].units)} title={`Send ${tplName(tpls[0], 0)} and keep repeating`} onClick={() => act({ type: 'send', vid: cur.id, target: v.id, kind: 'attack', units: tpls[0].units, repeat: true, farmMode: loadFarmMode() || undefined }, 'Repeating raid sent.')}><span class="trunc">{tplName(tpls[0], 0)}</span> ↻ repeat</Btn>
             </div>
           )}
           {owner && <Btn small variant="quiet" onClick={() => { marketTarget.value = { x: v.x, y: v.y }; pane.go({ name: 'building', id: 'market', tab: 'send' }); }}>Send resources</Btn>}

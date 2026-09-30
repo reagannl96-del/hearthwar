@@ -59,3 +59,12 @@ export const FARM_PRESETS: { name: string; units: Units; hint: string }[] = [
   { name: 'Mixed foot', units: { spear: 20, axe: 10 }, hint: 'Walls up? Bring more' },
   { name: 'Scout', units: { scout: 1 }, hint: 'See what is inside first' },
 ];
+
+/** What repeating raids do when they come home without a full haul ('' = keep raiding). Saved on this device. */
+export type FarmModeChoice = '' | 'stop' | 'switch';
+const MODE_KEY = 'hw-farm-mode';
+export function loadFarmMode(): FarmModeChoice {
+  const m = lsGet(MODE_KEY);
+  return m === 'stop' || m === 'switch' ? m : '';
+}
+export function saveFarmMode(m: FarmModeChoice) { lsSet(MODE_KEY, m); }

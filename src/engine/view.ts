@@ -284,7 +284,8 @@ export function buildView(w: World, pid: number): PlayerView {
     incoming,
     unreadReports: p.reports.reduce((n, r) => n + (r.read ? 0 : 1), 0),
     quests: questStatus(w, p),
-    news: w.news.slice(0, 40),
+    // (renames are private; older saves may still hold the announcements)
+    news: w.news.filter((n) => !n.text.includes(' is now known as ')).slice(0, 40),
   };
 }
 

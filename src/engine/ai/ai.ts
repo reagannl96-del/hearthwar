@@ -1917,14 +1917,17 @@ function tribeDiplomacy(w: World, p: Player, t: Tribe, tp: number): void {
  * their own tribe). About one chance in a day or so per small tribe.
  */
 function seekMerger(w: World, p: Player, t: Tribe, tp: number): boolean {
-  if (nextRandom(w) > 0.04) return false;
-  if (w.now - (t.createdAt ?? 0) < 2 * realmDayMs(w)) return false;
+  // a great tribe nearby pulls small ones in sooner and more often
+  if (nextRandom(w) > 0.12) return false;
+  if (w.now - (t.createdAt ?? 0) < realmDayMs(w)) return false;
   if (t.members.some((m) => w.players[m]?.kind !== 'ai')) return false;
-  const target = aiTribeTarget(w);
+  if (greatTribes(w).has(t.id)) return false;
   let best: Tribe | null = null, bestScore = 0;
   for (const id in w.tribes) {
     const o = w.tribes[id];
-    if (o.id === t.id || o.members.length + t.members.length > target) continue;
+    const great = greatTribes(w).has(o.id);
+    if (!great && (nextRandom(w) > 1 / 3 || w.now - (t.createdAt ?? 0) < 2 * realmDayMs(w))) continue;
+    if (o.id === t.id || o.members.length + t.members.length > aiTribeTarget(w, o)) continue;
     if (w.players[o.founderId ?? -1]?.kind !== 'ai') continue;
     if (t.diplomacy?.[o.id] === 'enemy' || o.diplomacy?.[t.id] === 'enemy') continue;
     const op = tribePoints(w, o);
@@ -1932,8 +1935,9 @@ function seekMerger(w: World, p: Player, t: Tribe, tp: number): boolean {
     // how many of theirs live close to ours
     const appeal = tribeAppeal(w, p, o);
     const near = appeal - Math.min(5, op / Math.max(1, p.points));
-    if (near < 1) continue;
-    const score = near + Math.min(3, op / Math.max(1, tp));
+    // a great tribe only takes in tribes that live among its own members
+    if (near < (great ? 1.8 : 1)) continue;
+    const score = near + Math.min(3, op / Math.max(1, tp)) + (great ? 2 : 0);
     if (score > bestScore) { bestScore = score; best = o; }
   }
   return !!best && mergeTribes(w, t.id, best.id);
@@ -1943,8 +1947,25 @@ function seekMerger(w: World, p: Player, t: Tribe, tp: number): boolean {
  * How big a tribe led by AI rulers aims to be: small at first, growing with the
  * realm, so tribes fill up steadily over the round instead of all at once.
  */
-export function aiTribeTarget(w: World): number {
-  return Math.min(TRIBE_MAX_MEMBERS, 6 + Math.floor((w.now / realmDayMs(w)) * 1.5));
+export function aiTribeTarget(w: World, t?: Tribe): number {
+  const days = w.now / realmDayMs(w);
+  const usual = Math.min(TRIBE_MAX_MEMBERS, 6 + Math.floor(days * 1.5));
+  // the realm's great tribes aim for ten to fifteen members early on
+  return t && greatTribes(w).has(t.id) ? Math.max(usual, Math.min(15, 10 + Math.floor(days * 2.5))) : usual;
+}
+
+/** How many great tribes a realm has: the strongest tribes led by AI rulers, which grow bigger and faster. */
+export const GREAT_TRIBES = 2;
+
+let greatCache: { w: World; at: number; ids: Set<number> } | null = null;
+/** The ids of the realm's great tribes (the strongest AI-led tribes by points). */
+export function greatTribes(w: World): Set<number> {
+  if (greatCache && greatCache.w === w && greatCache.at === w.now) return greatCache.ids;
+  const led = Object.values(w.tribes).filter((t) => w.players[t.founderId ?? -1]?.kind === 'ai' && t.members.length > 0);
+  led.sort((a, b) => tribePoints(w, b) - tribePoints(w, a));
+  const ids = new Set(led.slice(0, GREAT_TRIBES).map((t) => t.id));
+  greatCache = { w, at: w.now, ids };
+  return ids;
 }
 /** A recruiting tribe sends out an invitation about this often (while its recruiter is online). */
 const RECRUIT_GAP = 75 * 60_000;
@@ -1962,7 +1983,8 @@ function tribeRecruiting(w: World, p: Player): void {
   // a tribe run by AI rulers manages its own doors; once a person is among its recruiters, they decide
   const aiLed = w.players[t.founderId ?? -1]?.kind === 'ai'
     && !t.members.some((m) => w.players[m]?.kind === 'human' && hasRight(t, m, 'invite'));
-  const target = aiLed ? aiTribeTarget(w) : TRIBE_MAX_MEMBERS;
+  const target = aiLed ? aiTribeTarget(w, t) : TRIBE_MAX_MEMBERS;
+  const great = aiLed && greatTribes(w).has(t.id);
   if (aiLed) t.recruiting = t.members.length < target;
   const avg = tribePoints(w, t) / Math.max(1, t.members.length);
   // requests to join: read, then answered (a ruler that just raided the tribe need not ask)
@@ -1979,7 +2001,7 @@ function tribeRecruiting(w: World, p: Player): void {
   if (!aiLed) return;
   // invitations nobody answered for two days lapse, so they do not block the tribe
   for (const inv of [...(t.invites ?? [])]) if (inv.by === p.id && w.now - inv.t > 2 * realmDayMs(w)) cancelInvite(w, p.id, inv.pid);
-  if (!t.recruiting || w.now - (ai.lastRecruit ?? -Infinity) < RECRUIT_GAP) return;
+  if (!t.recruiting || w.now - (ai.lastRecruit ?? -Infinity) < (great ? RECRUIT_GAP / 3 : RECRUIT_GAP)) return;
   if (t.members.length + (t.invites?.length ?? 0) >= target) return;
   const home = w.villages[p.villages[0]];
   if (!home) return;
@@ -1992,7 +2014,11 @@ function tribeRecruiting(w: World, p: Player): void {
     const o = v.ownerId !== null ? w.players[v.ownerId] : null;
     if (!o || seen.has(o.id)) continue;
     seen.add(o.id);
-    if (o.id === p.id || o.tribeId != null || o.eliminated || ai.invited[o.id] !== undefined) continue;
+    // a great tribe also courts close neighbours from tiny tribes (not their founders)
+    const poachable = great && o.kind === 'ai' && o.tribeId != null && o.tribeId !== t.id
+      && (w.tribes[o.tribeId]?.members.length ?? 99) <= 3 && w.tribes[o.tribeId]?.founderId !== o.id;
+    if (o.id === p.id || (o.tribeId != null && !poachable) || o.eliminated || ai.invited[o.id] !== undefined) continue;
+    if (great && distance(home.x, home.y, v.x, v.y) > 22) continue;
     if (t.invites?.some((i) => i.pid === o.id)) continue;
     if (o.points < avg * 0.08) continue;
     const d = distance(home.x, home.y, v.x, v.y);

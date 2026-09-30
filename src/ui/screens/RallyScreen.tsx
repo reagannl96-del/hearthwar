@@ -9,7 +9,7 @@ import type { BuildingId, UnitId, Units } from '../../engine/types';
 import type { CommandView, VillageView } from '../../engine/view';
 import { Icon } from '../art/icons';
 import { Btn, Clock, Cost, Countdown, Empty, NumInput, Progress, Section, Tabs, UnitList, UnitTable, VillageLink, UnitIcon, unitName } from '../components/common';
-import { FARM_PRESETS, MAX_TEMPLATES, TEMPLATE_NAME_MAX, defaultTplName, loadFarmTemplates, saveFarmTemplates, tplName, type FarmTemplate } from '../farmTemplates';
+import { FARM_PRESETS, loadFarmMode, saveFarmMode, type FarmModeChoice, MAX_TEMPLATES, TEMPLATE_NAME_MAX, defaultTplName, loadFarmTemplates, saveFarmTemplates, tplName, type FarmTemplate } from '../farmTemplates';
 import { coords, fmt, fmtAgo, fmtDur, parseCoords } from '../format';
 import { act, host, now, rallyTarget, toast, view, warp, usePane } from '../store';
 import { Simulator } from './Simulator';
@@ -652,6 +652,8 @@ function FarmAssistant({ v }: { v: VillageView }) {
   const [hideRed, setHideRed] = useState(true);
   const [onlyFree, setOnlyFree] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
+  const [mode, setModeState] = useState<FarmModeChoice>(loadFarmMode);
+  const setMode = (m: FarmModeChoice) => { setModeState(m); saveFarmMode(m); };
   const saveTpls = (list: FarmTemplate[]) => { setTpls(list); saveFarmTemplates(list); };
   const patchTpl = (id: number, p: Partial<FarmTemplate>) => saveTpls(tpls.map((t) => (t.id === id ? { ...t, ...p } : t)));
   const addTpl = () => {
@@ -673,8 +675,12 @@ function FarmAssistant({ v }: { v: VillageView }) {
     if (t !== undefined) repeating.add(t);
   }
   const stopRepeats = (target?: number) => act({ type: 'stopRepeats', vid: v.id, target }, target === undefined ? 'Every repeating raid from here is stopped. The troops come home and stay.' : 'Repeat stopped. The troops come home and stay.');
+  // barbarian villages we spike (troops stationed there, or on the way) are not farms
+  const spiked = new Set<number>();
+  for (const hv of pv.villages) for (const st of hv.stationed) spiked.add(st.hostVid);
+  for (const c of pv.commands) if (c.kind === 'support') spiked.add(c.toVid);
   const allRows = map.villages
-    .filter((m) => m.ownerId === null && !m.cache)
+    .filter((m) => m.ownerId === null && !m.cache && !spiked.has(m.id))
     .map((m) => ({ m, d: distance(v.x, v.y, m.x, m.y) }))
     .filter((r) => r.d <= radius)
     .sort((a, b) => a.d - b.d)
@@ -697,7 +703,7 @@ function FarmAssistant({ v }: { v: VillageView }) {
     .filter(([k, n]) => (n ?? 0) > (v.units[k as UnitId] ?? 0))
     .map(([k, n]) => `${unitName(k as UnitId, true)} ${v.units[k as UnitId] ?? 0}/${n}`)
     .join(', ');
-  const send = (vid: number, u: Units, repeat = false) => act({ type: 'send', vid: v.id, target: vid, kind: 'attack', units: u, repeat });
+  const send = (vid: number, u: Units, repeat = false) => act({ type: 'send', vid: v.id, target: vid, kind: 'attack', units: u, repeat, farmMode: repeat && mode ? mode : undefined });
   // send a template to the nearest ready targets, as many times as the troops at home allow
   const sweep = (t: FarmTemplate, i: number) => {
     const n = Math.min(sendsLeft(t.units), ready.length);
@@ -792,6 +798,19 @@ function FarmAssistant({ v }: { v: VillageView }) {
             );
           })}
         </div>
+      </Section>
+
+      <Section title="When a repeating raid doesn't come home full">
+        <div class="chips" role="radiogroup" aria-label="When a repeating raid doesn't come home full">
+          {([['', 'Keep raiding', 'Send the same raid again regardless'], ['stop', 'Stop', 'Troops stay home and you get a report'], ['switch', 'Move to another barb', 'Try the nearest free barbarian village with clean reports']] as const).map(([m, label, hint]) => (
+            <button type="button" role="radio" aria-checked={mode === m} class={`chip ${mode === m ? 'is-on' : ''}`} title={hint} onClick={() => setMode(m)}>{label}</button>
+          ))}
+        </div>
+        <p class="small muted">
+          {mode === 'switch' ? 'A village that runs dry is left for the nearest other barbarian village within 20 fields you are not already raiding or spiking.'
+            : mode === 'stop' ? 'A raid that brings back less than it can carry stops repeating.'
+            : 'Repeats go on as long as raids come back without losses.'} Applies to ↻ raids you send from now on.
+        </p>
       </Section>
 
       <Section title="Barbarian villages nearby">
