@@ -292,6 +292,11 @@ function Header() {
             {fmt(cur.popUsed)}/{fmt(cur.popMax)}
           </span>
         </div>
+        <div class="resbar-item resbar-points" title={`Your total points across all ${v.villages.length} ${v.villages.length === 1 ? 'village' : 'villages'}${v.me.rank ? ` · rank #${fmt(v.me.rank)}` : ''}`}>
+          <Icon name="rank" size={18} />
+          <span class="num">{fmt(v.me.points)}</span>
+          {v.me.rank ? <span class="rate num">#{fmt(v.me.rank)}</span> : null}
+        </div>
       </div>
       {host.value!.multiplayer ? <OnlineBadge /> : <TimeControl />}
     </header>
