@@ -44,3 +44,21 @@ describe('spiking barbarian villages', () => {
     expect(sendTroops(w, { ownerId: me.id, fromVid: v.id, toVid: barb.id, kind: 'attack', units: { axe: 10 } }).ok).toBe(true);
   });
 });
+
+describe('attacking your own village', () => {
+  it('is allowed, and the troops simply station there while it is still yours', () => {
+    const w = createWorld({ worldName: 'O', playerName: 'P', villageName: 'Home', seed: 4, config: { ...defaultConfig(), difficulty: 'peaceful', aiCount: 3, size: 90 } });
+    const me = w.players[w.humanId];
+    const v = w.villages[me.villages[0]];
+    v.buildings.rally = 1;
+    // a second village of ours nearby
+    const other = Object.values(w.villages).find((x) => x.ownerId === null && !x.cache)!;
+    other.ownerId = me.id; me.villages.push(other.id);
+    other.x = v.x + 2; other.y = v.y;
+    invalidateSpatial();
+    v.units = { axe: 30 };
+    expect(sendTroops(w, { ownerId: me.id, fromVid: v.id, toVid: other.id, kind: 'attack', units: { axe: 30 } }).ok).toBe(true);
+    advance(w, w.now + 2 * HOUR);
+    expect(other.support.find((s) => s.ownerId === me.id)?.units.axe).toBe(30);
+  });
+});
