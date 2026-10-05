@@ -13,6 +13,7 @@ import { createHash } from 'node:crypto';
 //   DEV_NO_AUTH=yes             LOCAL TESTING ONLY: no Supabase; fake sign-in, world saved to ./world-dev.json
 
 import { createServer } from 'node:http';
+import { gunzipSync, gzipSync } from 'node:zlib';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { createClient } from '@supabase/supabase-js';
 import { WebSocketServer, type WebSocket } from 'ws';
@@ -37,19 +38,52 @@ if (!DEV && (!SUPABASE_URL || !SERVICE_KEY)) {
   process.exit(1);
 }
 if (DEV) console.warn('DEV_NO_AUTH is on: anyone can sign in as anyone. Never use this in production.');
-const sb = DEV ? null : createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
+/** A request to the database that hangs gives up after this long (a stuck save must not block the next one). */
+const DB_TIMEOUT = 60_000;
+const sb = DEV ? null : createClient(SUPABASE_URL, SERVICE_KEY, {
+  auth: { persistSession: false },
+  global: { fetch: (input, init) => fetch(input, { ...init, signal: AbortSignal.timeout(DB_TIMEOUT) }) },
+});
+/** How often the world is saved (and once more on shutdown). Every save rewrites the whole row, so not too often. */
+const SAVE_EVERY = Math.max(30_000, Number(env.SAVE_EVERY_MS || 120_000));
 const DEV_FILE = 'world-dev.json';
 
 async function readStored(): Promise<World | undefined> {
   if (!sb) return existsSync(DEV_FILE) ? (JSON.parse(readFileSync(DEV_FILE, 'utf8')) as World) : undefined;
   const { data, error } = await sb.from('world_state').select('data').eq('id', 1).maybeSingle();
   if (error) throw new Error(`Could not load the world: ${error.message}`);
-  return data?.data as World | undefined;
+  return data?.data ? unpack(data.data) : undefined;
+}
+
+/**
+ * The world goes into the database gzipped ({ gz: base64 }), about a sixth of its plain
+ * size: every save rewrites the whole row, and a small database chokes on rewriting
+ * megabytes of JSON again and again. Saves from before are plain JSON and still load.
+ */
+function pack(w: World): { gz: string } {
+  return { gz: gzipSync(JSON.stringify(w), { level: 6 }).toString('base64') };
+}
+function unpack(data: unknown): World {
+  const gz = (data as { gz?: unknown }).gz;
+  return typeof gz === 'string' ? (JSON.parse(gunzipSync(Buffer.from(gz, 'base64')).toString('utf8')) as World) : (data as World);
+}
+
+/** Load the stored world, waiting out a database that is slow or down instead of giving up (never starts a fresh world over it). */
+async function readStoredPatiently(): Promise<World | undefined> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await readStored();
+    } catch (e) {
+      const wait = Math.min(60_000, 5_000 * attempt);
+      console.error(`${(e as Error).message} (attempt ${attempt}; trying again in ${wait / 1000}s)`);
+      await new Promise((ok) => setTimeout(ok, wait));
+    }
+  }
 }
 
 async function writeStored(w: World): Promise<void> {
   if (!sb) return writeFileSync(DEV_FILE, JSON.stringify(w));
-  const { error } = await sb.from('world_state').upsert({ id: 1, data: w, updated_at: new Date().toISOString() });
+  const { error } = await sb.from('world_state').upsert({ id: 1, data: pack(w), updated_at: new Date().toISOString() });
   if (error) console.error('Save failed:', error.message);
 }
 
@@ -84,7 +118,7 @@ let clockBase = 0; // world.now = Date.now() - clockBase
 
 async function loadWorld(): Promise<World> {
   if (env.RESET_WORLD !== 'yes') {
-    const w = await readStored();
+    const w = await readStoredPatiently();
     if (w && w.version === WORLD_VERSION) {
       recomputeCounters(w);
       migrateWorld(w);
@@ -178,7 +212,7 @@ async function saveArchive(w: World): Promise<void> {
     writeFileSync('world-dev-previous.json', JSON.stringify(w));
     return;
   }
-  const { error } = await sb.from('world_state').upsert({ id: 2, data: w, updated_at: new Date().toISOString() });
+  const { error } = await sb.from('world_state').upsert({ id: 2, data: pack(w), updated_at: new Date().toISOString() });
   if (error) console.error('Could not archive the finished round:', error.message);
 }
 
@@ -188,6 +222,8 @@ async function saveWorld(force = false): Promise<void> {
   saving = true;
   try {
     await writeStored(world);
+  } catch (e) {
+    console.error('Save failed:', (e as Error).message);
   } finally {
     saving = false;
   }
@@ -385,7 +421,7 @@ async function main() {
     const m = process.memoryUsage();
     console.log(`health: heap ${Math.round(m.heapUsed / 1e6)} MB, rss ${Math.round(m.rss / 1e6)} MB, ${clients.size} connections`);
   }, 10 * 60_000);
-  setInterval(() => void saveWorld(), 30_000);
+  setInterval(() => void saveWorld(), SAVE_EVERY);
 
   // Free hosts (like Render) put servers to sleep after 15 idle minutes, which
   // would freeze the world. Knocking on our own front door keeps it awake.
