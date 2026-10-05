@@ -15,6 +15,9 @@ function setup() {
   const barbs = Object.values(w.villages).filter((x) => x.ownerId === null && !x.cache).slice(0, 2);
   // everything else far away, so these two are the only choices
   for (const x of Object.values(w.villages)) if (x.ownerId === null && !barbs.includes(x)) { x.x = v.x + 40; x.y = v.y + 40; }
+  // AI rulers far out of reach: their online hours follow the real clock, and one wandering by
+  // to raid or take these villages would make the test depend on the time of day it runs
+  for (const p of Object.values(w.players)) if (p.kind === 'ai') for (const id of p.villages) { w.villages[id].x = v.x > 45 ? 3 : 86; w.villages[id].y = v.y > 45 ? 3 : 86; }
   barbs.forEach((b, i) => { b.x = v.x + 2 + i; b.y = v.y; b.units = {}; b.res = { wood: 0, clay: 0, iron: 0 }; b.buildings.wall = 0; });
   invalidateSpatial();
   return { w, me, v, a: barbs[0], b: barbs[1] };

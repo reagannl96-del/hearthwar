@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'preact/hooks';
 import type { Difficulty } from '../../engine/types';
 import { SIZE_PRESETS, SPEED_PRESETS, defaultConfig } from '../../engine/world';
-import { LocalHost, deleteSave, importSave, listSaves, type SaveMeta } from '../../host/local';
+import { LocalHost, deleteSave, importSave, listSaves, storeFromCloud, type SaveMeta } from '../../host/local';
+import { listCloud, pullCloud } from '../../host/cloud';
+import { onSessionChange } from '../../net/supabase';
 import { Icon } from '../art/icons';
 import { Btn } from '../components/common';
 import { fmt } from '../format';
@@ -36,11 +38,22 @@ export function TitleScreen() {
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
+  // realms kept in the cloud (signed in with Google): newer there than here, or not on this device at all
+  const [cloud, setCloud] = useState<SaveMeta[]>([]);
   const refresh = () => listSaves().then((s) => {
     setSaves(s);
     if (s.length === 0 && !onlineEnabled) setMode('new');
   });
-  useEffect(() => { void refresh(); }, []);
+  const refreshCloud = () => listCloud().then(setCloud).catch(() => setCloud([]));
+  useEffect(() => { void refresh(); void refreshCloud(); return onSessionChange(() => void refreshCloud()); }, []);
+  const cloudById = new Map(cloud.map((c) => [c.id, c]));
+  const shown: (SaveMeta & { where: 'here' | 'cloud' | 'both' })[] = [
+    ...(saves ?? []).map((s) => {
+      const c = cloudById.get(s.id);
+      return c && c.savedAt > s.savedAt + 5_000 ? { ...c, where: 'cloud' as const } : { ...s, where: c ? 'both' as const : 'here' as const };
+    }),
+    ...cloud.filter((c) => !(saves ?? []).some((s) => s.id === c.id)).map((c) => ({ ...c, where: 'cloud' as const })),
+  ].sort((a, b) => b.savedAt - a.savedAt);
   // coming back after a refresh: straight into the realm the player was in
   useEffect(() => {
     const r = resumeTarget();
@@ -51,6 +64,15 @@ export function TitleScreen() {
     setError(null);
     setLoading({ label: 'Opening the gates…', p: 0 });
     try {
+      // the cloud has a newer copy (played on another device): bring it down first
+      const c = cloudById.get(id);
+      const local = (saves ?? []).find((s) => s.id === id);
+      if (c && (!local || c.savedAt > local.savedAt + 5_000)) {
+        setLoading({ label: 'Fetching your realm from the cloud…', p: 0 });
+        const blob = await pullCloud(id);
+        if (blob) await storeFromCloud(blob, c);
+        else if (!local) throw new Error('Could not fetch that realm from the cloud. Try again in a moment.');
+      }
       const h = await LocalHost.load(id, (done, total) => setLoading({ label: 'The realm moved on while you were away…', p: total > 0 ? done / total : 1 }));
       startHost(h);
     } catch (e) {
@@ -94,10 +116,17 @@ export function TitleScreen() {
               </div>
             </div>
             <ul class="save-list">
-              {saves.map((s) => (
+              {shown.map((s) => (
                 <li class="save">
                   <button type="button" class="save-open" onClick={() => open(s.id)}>
-                    <span class="save-name">{s.name}</span>
+                    <span class="save-name">
+                      {s.name}
+                      {s.where !== 'here' && (
+                        <span class="pill save-cloud" title={s.where === 'cloud' ? 'Saved in the cloud from another device: opening it brings it here' : 'Also saved in the cloud: it carries on on your other devices'}>
+                          ☁ {s.where === 'cloud' ? 'from the cloud' : 'synced'}
+                        </span>
+                      )}
+                    </span>
                     <span class="save-meta">
                       {s.playerName} · <span class="num">{fmt(s.points)}</span> points · {s.villages} {s.villages === 1 ? 'village' : 'villages'} · speed {s.speed}×
                     </span>
@@ -105,7 +134,7 @@ export function TitleScreen() {
                   </button>
                   {confirmDelete === s.id ? (
                     <span class="row gap">
-                      <Btn variant="danger" small onClick={async () => { await deleteSave(s.id); setConfirmDelete(null); void refresh(); }}>Delete forever</Btn>
+                      <Btn variant="danger" small onClick={async () => { await deleteSave(s.id); setConfirmDelete(null); void refresh(); void refreshCloud(); }}>Delete forever</Btn>
                       <Btn variant="ghost" small onClick={() => setConfirmDelete(null)}>Keep</Btn>
                     </span>
                   ) : (
