@@ -8,6 +8,7 @@ import { recomputeCounters, recomputePlayerPoints } from '../engine/village';
 import { createWorld, migrateWorld, respawnHuman, WORLD_VERSION, type NewWorldOptions } from '../engine/world';
 import { HostBase } from './base';
 import { idbDel, idbGet, idbSet } from './storage';
+import { deleteCloud, pushCloud } from './cloud';
 
 export interface SaveMeta {
   id: string;
@@ -21,7 +22,7 @@ export interface SaveMeta {
   gameTime: number;
 }
 
-interface SaveBlob {
+export interface SaveBlob {
   world: World;
   savedAt: number;
   offline: boolean;
@@ -29,6 +30,8 @@ interface SaveBlob {
 
 const INDEX_KEY = 'index';
 const MAX_OFFLINE_MS = 14 * 24 * 3600_000;
+/** How often a signed-in player's realm is copied to the cloud while they play (and always when the page is hidden). */
+const CLOUD_EVERY = 3 * 60_000;
 
 export async function listSaves(): Promise<SaveMeta[]> {
   const idx = (await idbGet<SaveMeta[]>(INDEX_KEY)) ?? [];
@@ -37,6 +40,7 @@ export async function listSaves(): Promise<SaveMeta[]> {
 
 export async function deleteSave(id: string): Promise<void> {
   await idbDel(`world:${id}`);
+  await deleteCloud(id).catch(() => {});
   const idx = (await listSaves()).filter((m) => m.id !== id);
   await idbSet(INDEX_KEY, idx);
 }
@@ -44,11 +48,18 @@ export async function deleteSave(id: string): Promise<void> {
 export class LocalHost extends HostBase {
   private lastReal = Date.now();
   private lastSave = Date.now();
+  private lastCloud = 0;
   saving = false;
 
   private constructor(world: World) {
     super(world, world.humanId);
     invalidateSpatial();
+    // leaving the page (closing the tab, switching apps on a phone): save, and copy it to the cloud
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') void this.save(true);
+      });
+    }
   }
 
   static async create(opts: NewWorldOptions): Promise<LocalHost> {
@@ -155,7 +166,7 @@ export class LocalHost extends HostBase {
     };
   }
 
-  async save(): Promise<void> {
+  async save(toCloud = false): Promise<void> {
     if (this.saving) return;
     this.saving = true;
     this.lastSave = Date.now();
@@ -167,6 +178,10 @@ export class LocalHost extends HostBase {
       const i = idx.findIndex((m) => m.id === meta.id);
       if (i >= 0) idx[i] = meta; else idx.push(meta);
       await idbSet(INDEX_KEY, idx);
+      if (toCloud || Date.now() - this.lastCloud > CLOUD_EVERY) {
+        this.lastCloud = Date.now();
+        void pushCloud(meta, blob);
+      }
     } finally {
       this.saving = false;
     }
@@ -189,4 +204,16 @@ export async function importSave(text: string): Promise<string> {
   const h = await LocalHost.fromBlob({ ...blob, offline: false });
   await h.save();
   return blob.world.id;
+}
+
+/**
+ * Bring a realm down from the cloud into this browser (when it is not here, or the
+ * cloud copy is newer), so it opens like any other save.
+ */
+export async function storeFromCloud(blob: SaveBlob, meta: SaveMeta): Promise<void> {
+  await idbSet(`world:${meta.id}`, blob);
+  const idx = (await idbGet<SaveMeta[]>(INDEX_KEY)) ?? [];
+  const i = idx.findIndex((m) => m.id === meta.id);
+  if (i >= 0) idx[i] = meta; else idx.push(meta);
+  await idbSet(INDEX_KEY, idx);
 }

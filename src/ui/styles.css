@@ -2339,3 +2339,4 @@ button.realm-row:hover { background: var(--surface-2); border-color: var(--line)
 .srr-icon { font-size: 1.3rem; line-height: 1; }
 .srr-text { display: flex; flex-direction: column; line-height: 1.25; min-width: 0; }
 .srr-count { margin-left: 4px; }
+.save-cloud { margin-left: 8px; font-size: 0.75rem; vertical-align: 2px; }
